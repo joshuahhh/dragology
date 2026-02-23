@@ -3,6 +3,16 @@ import _ from "lodash";
 import { assert, assertWarning, clamp } from "../utils";
 import { Vec2, Vec2able } from "./vec2";
 
+export class CoincidentPointsError extends Error {
+  constructor(
+    public readonly indexA: number,
+    public readonly indexB: number,
+  ) {
+    super(`Coincident points at indices ${indexA} and ${indexB}`);
+    this.name = "CoincidentPointsError";
+  }
+}
+
 // We use our own Delaunay class so 1. we can be careful about the
 // 1-point case, which the d3-delaunay library doesn't handle well,
 // and 2. we can add our own methods.
@@ -11,6 +21,25 @@ export class Delaunay {
 
   constructor(points: Vec2able[]) {
     this._inner = D3Delaunay.from(points.map((p) => Vec2(p).arr()));
+    // d3-delaunay sets inedges[i] = -1 for points it considers coincident
+    // (they get no incoming halfedge because they're excluded from
+    // triangulation). Use this as the signal, then find the partner by
+    // coordinate match.
+    const inedges: Int32Array = (this._inner as any).inedges;
+    const pts = this._inner.points;
+    const n = pts.length / 2;
+    for (let i = 0; i < n; i++) {
+      if (inedges[i] !== -1) continue;
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        if (pts[2 * i] === pts[2 * j] && pts[2 * i + 1] === pts[2 * j + 1]) {
+          throw new CoincidentPointsError(Math.min(i, j), Math.max(i, j));
+        }
+      }
+      throw new Error(
+        `Point ${i} was excluded from triangulation for unknown reasons`,
+      );
+    }
   }
 
   point(idx: number): Vec2 {

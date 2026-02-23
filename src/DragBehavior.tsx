@@ -1,7 +1,9 @@
+import { PrettyPrint } from "@joshuahhh/pretty-print";
 import _ from "lodash";
 import { Draggable } from "./draggable";
 import { Chaining, DragSpecData } from "./DragSpec";
-import { Delaunay } from "./math/delaunay";
+import { ErrorWithJSX } from "./ErrorBoundary";
+import { CoincidentPointsError, Delaunay } from "./math/delaunay";
 import { minimize } from "./math/minimize";
 import { Vec2 } from "./math/vec2";
 import { getAtPath, setAtPath } from "./paths";
@@ -638,7 +640,37 @@ function betweenBehavior<T extends object>(
     const layered = renderStateReadOnly(ctx, state);
     return { state, layered, position: getElementPosition(ctx, layered) };
   });
-  const delaunay = new Delaunay(renderedStates.map((rs) => rs.position));
+  let delaunay;
+  try {
+    delaunay = new Delaunay(renderedStates.map((rs) => rs.position));
+  } catch (e) {
+    if (e instanceof CoincidentPointsError) {
+      throw new ErrorWithJSX(
+        "Coincident targets detected in d.between",
+        <>
+          <p className="mb-2">
+            In order to use <span className="font-mono">d.between</span>, the
+            dragged element must move to distinct locations in the different
+            states provided.
+          </p>
+          <p className="mb-2">
+            Here, we are dragging element{" "}
+            <span className="font-mono">{ctx.draggedPath}</span>. Two states put
+            it at the point [{renderedStates[e.indexA].position.str(", ")}]:
+          </p>
+          <div className="mb-2">
+            <PrettyPrint value={renderedStates[e.indexA].state} />
+            <PrettyPrint value={renderedStates[e.indexB].state} />
+          </div>
+          <p>
+            (This is just the first pair of overlaps – other states may also
+            cause overlap.)
+          </p>
+        </>,
+      );
+    }
+    throw new Error(`Failed to create Delaunay triangulation: ${e}`);
+  }
 
   return (frame) => {
     const projection = delaunay.projectOntoConvexHull(frame.pointer);

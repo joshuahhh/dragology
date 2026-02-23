@@ -62,4 +62,5 @@ export const demoList = [
   "study-slider",
   "study-rotary-dial",
   "study-timeline",
+  "error-study-reorderable-list",
 ];
