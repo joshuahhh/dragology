@@ -420,3 +420,8 @@ export function lessThan(a: number, b: number): number {
 export function moreThan(a: number, b: number): number {
   return b - a;
 }
+
+/** Constraint helper: combine multiple numeric constraints */
+export function and(...constraints: number[]): number[] {
+  return constraints;
+}
