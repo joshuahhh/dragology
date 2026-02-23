@@ -205,6 +205,11 @@ export default demo(
     </div>
   ),
   {
-    tags: ["d.floating", "d.vary", "spec.withBackground", "discrete on top of continuous"],
+    tags: [
+      "d.floating",
+      "d.vary",
+      "spec.withBackground",
+      "discrete on top of continuous",
+    ],
   },
 );

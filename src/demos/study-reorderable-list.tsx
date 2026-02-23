@@ -83,33 +83,36 @@ function makeDraggable(
   );
 }
 
-export default demo(() => {
-  const [useFloating, setUseFloating] = useState(false);
-  const [useSnapRadius, setUseSnapRadius] = useState(false);
-  const draggable = useMemo(
-    () => makeDraggable(useFloating, useSnapRadius),
-    [useFloating, useSnapRadius],
-  );
-  return (
-    <div className="flex flex-col md:flex-row gap-4 items-start">
-      <DemoDraggable
-        draggable={draggable}
-        initialState={initialState}
-        width={220}
-        height={230}
-      />
-      <ConfigPanel>
-        <ConfigCheckbox
-          label="Use d.floating"
-          value={useFloating}
-          onChange={setUseFloating}
+export default demo(
+  () => {
+    const [useFloating, setUseFloating] = useState(false);
+    const [useSnapRadius, setUseSnapRadius] = useState(false);
+    const draggable = useMemo(
+      () => makeDraggable(useFloating, useSnapRadius),
+      [useFloating, useSnapRadius],
+    );
+    return (
+      <div className="flex flex-col md:flex-row gap-4 items-start">
+        <DemoDraggable
+          draggable={draggable}
+          initialState={initialState}
+          width={220}
+          height={230}
         />
-        <ConfigCheckbox
-          label="Use withSnapRadius"
-          value={useSnapRadius}
-          onChange={setUseSnapRadius}
-        />
-      </ConfigPanel>
-    </div>
-  );
-}, { tags: ["d.between", "d.floating", "reordering", "control"] });
+        <ConfigPanel>
+          <ConfigCheckbox
+            label="Use d.floating"
+            value={useFloating}
+            onChange={setUseFloating}
+          />
+          <ConfigCheckbox
+            label="Use withSnapRadius"
+            value={useSnapRadius}
+            onChange={setUseSnapRadius}
+          />
+        </ConfigPanel>
+      </div>
+    );
+  },
+  { tags: ["d.between", "d.floating", "reordering", "control"] },
+);

@@ -175,5 +175,12 @@ export default demo(
       />
     </div>
   ),
-  { tags: ["d.switchToStateAndFollow", "d.floating", "d.dropTarget", "spec.withBackground"] },
+  {
+    tags: [
+      "d.switchToStateAndFollow",
+      "d.floating",
+      "d.dropTarget",
+      "spec.withBackground",
+    ],
+  },
 );

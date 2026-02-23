@@ -210,23 +210,27 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   );
 };
 
-export default demo(() => (
-  <div>
-    <DemoNotes>
-      Drag the endpoints (red) or control points (yellow) orrrrr the curve (??).
-      {" – "}
-      <a
-        href="https://www.orionreed.com/"
-        className="hover:text-gray-700 hover:underline"
-      >
-        Orion Reed
-      </a>
-    </DemoNotes>
-    <DemoDraggable
-      draggable={draggable}
-      initialState={state2}
-      width={400}
-      height={250}
-    />
-  </div>
-), { tags: ["d.vary"] });
+export default demo(
+  () => (
+    <div>
+      <DemoNotes>
+        Drag the endpoints (red) or control points (yellow) orrrrr the curve
+        (??).
+        {" – "}
+        <a
+          href="https://www.orionreed.com/"
+          className="hover:text-gray-700 hover:underline"
+        >
+          Orion Reed
+        </a>
+      </DemoNotes>
+      <DemoDraggable
+        draggable={draggable}
+        initialState={state2}
+        width={400}
+        height={250}
+      />
+    </div>
+  ),
+  { tags: ["d.vary"] },
+);

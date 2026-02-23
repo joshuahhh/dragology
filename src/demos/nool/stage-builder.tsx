@@ -1263,5 +1263,14 @@ export default demo(
       height={800}
     />
   ),
-  { tags: ["spec.andThen", "setState", "d.between", "keyboard", "d.floating", "spec.withBackground"] },
+  {
+    tags: [
+      "spec.andThen",
+      "setState",
+      "d.between",
+      "keyboard",
+      "d.floating",
+      "spec.withBackground",
+    ],
+  },
 );

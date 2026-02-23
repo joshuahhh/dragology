@@ -251,17 +251,20 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   );
 };
 
-export default demo(() => (
-  <div>
-    <DemoNotes>
-      Like canvas of lists, but with recursively nested rows. Tiles and rows can
-      be dragged between any level.
-    </DemoNotes>
-    <DemoDraggable
-      draggable={draggable}
-      initialState={initialState}
-      width={600}
-      height={400}
-    />
-  </div>
-), { tags: ["d.floating", "d.vary", "spec.withBackground"] });
+export default demo(
+  () => (
+    <div>
+      <DemoNotes>
+        Like canvas of lists, but with recursively nested rows. Tiles and rows
+        can be dragged between any level.
+      </DemoNotes>
+      <DemoDraggable
+        draggable={draggable}
+        initialState={initialState}
+        width={600}
+        height={400}
+      />
+    </div>
+  ),
+  { tags: ["d.floating", "d.vary", "spec.withBackground"] },
+);
