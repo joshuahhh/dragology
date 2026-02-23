@@ -231,7 +231,7 @@ export function DemoSettingsBar({
     : settingsEntries;
   return (
     <div className="sticky bottom-0 flex justify-center pointer-events-none">
-      <div className="pointer-events-auto bg-white py-2 px-4 rounded-t-xl border border-b-0 border-gray-200 flex gap-1.5 items-center shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+      <div className="pointer-events-auto bg-white py-2 px-3 rounded-t-3xl border border-b-0 border-gray-200 flex gap-1.5 items-center shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
         {entries.map(({ key, label, mobileHidden }) => {
           const active = settings[key];
           const colors = settingsActiveColors[key];
