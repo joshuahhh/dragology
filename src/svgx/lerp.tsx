@@ -1,6 +1,6 @@
 import { prettyLog, PrettyPrint } from "@joshuahhh/pretty-print";
 import { rgb } from "d3-color";
-import { interpolateCubehelix } from "d3-interpolate";
+import * as d3Interpolate from "d3-interpolate";
 import { interpolatePath } from "d3-interpolate-path";
 import React, { cloneElement } from "react";
 import { shouldRecurseIntoChildren, Svgx } from ".";
@@ -24,6 +24,15 @@ const COLOR_PROPS = new Set([
   "borderColor",
   "outlineColor",
 ]);
+
+// Color interpolator must be chosen carefully. When we do three-way
+// interpolation (via `lerpLayered3`), interpolators like
+// `interpolateCubehelix` which do "shortest path between hues"
+// behave erratically. `interpolateCubehelixLong` is ok, and keeps
+// things vibrant, but it means you go through blue on the way from
+// red to green. `interpolateLab` might be safest.
+// - TODO: Someday this should be configurable!
+const interpolateColor = d3Interpolate.interpolateLab;
 
 const NO_LERP_PROPS = new Set(["pointerEvents"]);
 
@@ -136,11 +145,11 @@ function lerpValue(key: string, valA: any, valB: any, t: number): any {
 
       // Interpolate between transparent and opaque
       const colorInterp = isANone
-        ? interpolateCubehelix(
+        ? interpolateColor(
             transparentColor.formatRgb(),
             opaqueColor.formatRgb(),
           )
-        : interpolateCubehelix(
+        : interpolateColor(
             opaqueColor.formatRgb(),
             transparentColor.formatRgb(),
           );
@@ -148,7 +157,7 @@ function lerpValue(key: string, valA: any, valB: any, t: number): any {
       return colorInterp(t);
     }
 
-    const colorInterp = interpolateCubehelix(valA, valB);
+    const colorInterp = interpolateColor(valA, valB);
     return colorInterp(t);
   } else if (typeof valA === "string" && typeof valB === "string") {
     // Try to parse both as numbers
