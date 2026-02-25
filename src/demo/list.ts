@@ -64,4 +64,5 @@ export const demoList = [
   "study-rotary-dial",
   "study-timeline",
   "error-study-reorderable-list",
+  "chess"
 ];
