@@ -36,8 +36,6 @@ This defines a "draggable" – a particular kind of function that returns React 
 
 But this draggable doesn't actually do anything. Let's fix that. For a diagram to be interactive, it must have multiple states it can be in. So we will define a state type and an initial state to start at.
 
-(Note: This text-editor gadget doesn't have real TypeScript support so we will only provide types when we feel like it. You'll want to use TypeScript while editing! Copy an existing project from the repo for that.)
-
 <LiveEditor
   code={`
     type State = {
@@ -46,7 +44,7 @@ But this draggable doesn't actually do anything. Let's fix that. For a diagram t
 
     export const initialState = { status: "off" };
 
-    export const draggable = ({ state, d }) => (
+    export const draggable: Draggable<State> = ({ state, d }) => (
       <circle
         transform={translate(state.status === "off" ? [100, 100] : [200, 100])}
         r={50}
@@ -94,7 +92,6 @@ With this knowledge we can take on a more involved example: reordering objects.
 
     export const draggable: Draggable<State> = ({
       state,
-      drag,
       d,
       draggedId,
     }) => (
@@ -175,7 +172,7 @@ The most novel part of Draggable Diagrams is the "drag between discrete states" 
 
     export const initialState = { angle: 0 };
 
-    export const draggable = ({ state, d }) => (
+    export const draggable: Draggable<State> = ({ state, d }) => (
       <g transform={translate(150, 150)}>
         <g transform={rotateDeg(state.angle)}>
           <line
