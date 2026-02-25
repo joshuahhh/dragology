@@ -5,6 +5,7 @@ import { demo } from "../demo";
 import {
   ConfigCheckbox,
   ConfigPanel,
+  ConfigSlider,
   DemoDraggable,
   DemoNotes,
 } from "../demo/ui";
@@ -249,36 +250,25 @@ export default demo(
           />
         </div>
         <ConfigPanel>
-          <div className="flex flex-col gap-1">
-            <ConfigCheckbox
-              value={config.snappyMode}
-              onChange={(v) => setConfig((c) => ({ ...c, snappyMode: v }))}
-            >
-              Snappy mode
-            </ConfigCheckbox>
-            <ConfigCheckbox
-              value={config.mazeMode}
-              onChange={(v) => setConfig((c) => ({ ...c, mazeMode: v }))}
-            >
-              Maze mode
-            </ConfigCheckbox>
-            <label className="flex items-center gap-2 text-xs">
-              <span>Board level: {config.boardLevel}</span>
-              <input
-                type="range"
-                min={1}
-                max={4}
-                value={config.boardLevel}
-                onChange={(e) =>
-                  setConfig((c) => ({
-                    ...c,
-                    boardLevel: Number(e.target.value),
-                  }))
-                }
-                className="w-20"
-              />
-            </label>
-          </div>
+          <ConfigCheckbox
+            value={config.snappyMode}
+            onChange={(v) => setConfig((c) => ({ ...c, snappyMode: v }))}
+          >
+            Snappy mode
+          </ConfigCheckbox>
+          <ConfigCheckbox
+            value={config.mazeMode}
+            onChange={(v) => setConfig((c) => ({ ...c, mazeMode: v }))}
+          >
+            Maze mode
+          </ConfigCheckbox>
+          <ConfigSlider
+            label="Board level"
+            value={config.boardLevel}
+            onChange={(v) => setConfig((c) => ({ ...c, boardLevel: v }))}
+            min={1}
+            max={4}
+          />
         </ConfigPanel>
       </div>
     );

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { demo } from "../demo";
-import { ConfigPanel, DemoDraggable } from "../demo/ui";
+import { ConfigPanel, ConfigSlider, DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
 import { translate } from "../svgx/helpers";
 
@@ -210,74 +210,62 @@ function makeDraggable(
   };
 }
 
-const Scene3D = () => {
-  const [az, setAz] = useState(35);
-  const [el, setEl] = useState(28);
-  const [fov, setFov] = useState(60);
-  const [camDist, setCamDist] = useState(10);
-  const draggable = useMemo(
-    () => makeDraggable(az, el, fov, camDist),
-    [az, el, fov, camDist],
-  );
+const degrees = (v: number) => `${v}°`;
 
-  return (
-    <div className="flex flex-col md:flex-row gap-4 items-start">
-      <DemoDraggable
-        draggable={draggable}
-        initialState={initialState}
-        width={W}
-        height={H}
-      />
-      <ConfigPanel>
-        <label className="flex flex-col gap-1 text-sm">
-          <span>Azimuth: {az}°</span>
-          <input
-            type="range"
+export default demo(
+  () => {
+    const [az, setAz] = useState(35);
+    const [el, setEl] = useState(28);
+    const [fov, setFov] = useState(60);
+    const [camDist, setCamDist] = useState(10);
+    const draggable = useMemo(
+      () => makeDraggable(az, el, fov, camDist),
+      [az, el, fov, camDist],
+    );
+
+    return (
+      <div className="flex flex-col md:flex-row gap-4 items-start">
+        <DemoDraggable
+          draggable={draggable}
+          initialState={initialState}
+          width={W}
+          height={H}
+        />
+        <ConfigPanel>
+          <ConfigSlider
+            label="Azimuth"
+            value={az}
+            onChange={setAz}
             min={-180}
             max={180}
-            value={az}
-            onChange={(e) => setAz(Number(e.target.value))}
-            className="w-36"
+            formatValue={degrees}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span>Elevation: {el}°</span>
-          <input
-            type="range"
+          <ConfigSlider
+            label="Elevation"
+            value={el}
+            onChange={setEl}
             min={0}
             max={90}
-            value={el}
-            onChange={(e) => setEl(Number(e.target.value))}
-            className="w-36"
+            formatValue={degrees}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span>FOV: {fov}°</span>
-          <input
-            type="range"
+          <ConfigSlider
+            label="FOV"
+            value={fov}
+            onChange={setFov}
             min={0}
             max={180}
-            value={fov}
-            onChange={(e) => setFov(Number(e.target.value))}
-            className="w-36"
+            formatValue={degrees}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span>Distance: {camDist}</span>
-          <input
-            type="range"
+          <ConfigSlider
+            label="Distance"
+            value={camDist}
+            onChange={setCamDist}
             min={0}
             max={30}
-            value={camDist}
-            onChange={(e) => setCamDist(Number(e.target.value))}
-            className="w-36"
           />
-        </label>
-      </ConfigPanel>
-    </div>
-  );
-};
-
-export default demo(() => <Scene3D />, {
-  tags: ["d.vary", "3d", "camera"],
-});
+        </ConfigPanel>
+      </div>
+    );
+  },
+  { tags: ["d.vary", "3d", "camera"] },
+);

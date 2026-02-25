@@ -666,22 +666,18 @@ export default demo(
             />
           </div>
           <ConfigPanel>
-            <div className="flex flex-col gap-1">
-              <ConfigCheckbox
-                value={config.oneNodeAtATime}
-                onChange={(v) =>
-                  setConfig((c) => ({ ...c, oneNodeAtATime: v }))
-                }
-              >
-                Only drag one node at a time
-              </ConfigCheckbox>
-              <ConfigCheckbox
-                value={config.showTradRep}
-                onChange={(v) => setConfig((c) => ({ ...c, showTradRep: v }))}
-              >
-                Show traditional representation
-              </ConfigCheckbox>
-            </div>
+            <ConfigCheckbox
+              value={config.oneNodeAtATime}
+              onChange={(v) => setConfig((c) => ({ ...c, oneNodeAtATime: v }))}
+            >
+              Only drag one node at a time
+            </ConfigCheckbox>
+            <ConfigCheckbox
+              value={config.showTradRep}
+              onChange={(v) => setConfig((c) => ({ ...c, showTradRep: v }))}
+            >
+              Show traditional representation
+            </ConfigCheckbox>
           </ConfigPanel>
         </div>
       </div>

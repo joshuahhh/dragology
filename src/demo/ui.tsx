@@ -426,6 +426,7 @@ export function ConfigSlider({
   min,
   max,
   step = 1,
+  formatValue,
 }: {
   label: string;
   value: number;
@@ -433,11 +434,12 @@ export function ConfigSlider({
   min: number;
   max: number;
   step?: number;
+  formatValue?: (value: number) => string;
 }) {
   return (
-    <label className="flex items-start gap-2 text-xs">
+    <label className="flex flex-col gap-1 text-xs">
       <span>
-        {label}: {value}
+        {label}: {formatValue ? formatValue(value) : value}
       </span>
       <input
         type="range"
@@ -487,7 +489,7 @@ export function ConfigPanel({
   return (
     <div className="bg-gray-50 rounded p-3 shrink-0 md:ml-auto md:sticky md:top-4">
       <div className="text-xs font-medium text-gray-700 mb-2">{title}</div>
-      {children}
+      <div className="flex flex-col gap-2">{children}</div>
     </div>
   );
 }
