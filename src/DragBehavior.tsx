@@ -3,8 +3,8 @@ import _ from "lodash";
 import { Draggable } from "./draggable";
 import { Chaining, DragSpecData } from "./DragSpec";
 import { ErrorWithJSX } from "./ErrorBoundary";
+import { FindMinimum } from "./math/cobyla";
 import { CoincidentPointsError, Delaunay } from "./math/delaunay";
-import { minimize } from "./math/minimize";
 import { Vec2 } from "./math/vec2";
 import { getAtPath, setAtPath } from "./paths";
 import {
@@ -449,55 +449,91 @@ function varyBehavior<T extends object>(
     return localToGlobal(found.accumulatedTransform, ctx.pointerLocal);
   };
 
+  // Pre-compute constraint count (flatten a dummy call to count entries)
+  const numConstraints = spec.constraint
+    ? manyToArray(spec.constraint(spec.state)).length
+    : 0;
+
   return (frame) => {
-    const baseObjectiveFn = (params: number[]) => {
-      const pos = getElementPos(params);
-      return pos.dist2(frame.pointer);
-    };
+    const n = spec.paramPaths.length;
 
-    const r = minimize(baseObjectiveFn, curParams);
-    let resultParams = r.solution;
+    // COBYLA modifies x in-place, so pass a copy of curParams
+    const x: number[] = curParams.slice();
 
-    // Evaluate constraint: flatten Many<number> to array, take max (most violated)
-    const evalConstraint = (params: number[]): number => {
-      const gs = manyToArray(spec.constraint!(stateFromParams(params)));
-      return gs.length === 0 ? -Infinity : Math.max(...gs);
-    };
+    // Ensure x is not the zero vector (COBYLA uses zero as another
+    // simplex vertex, so they'd coincide)
+    if (x.every((v) => v === 0)) {
+      (x as number[])[0] = 1e-4;
+    }
 
-    // If the unconstrained optimum violates the constraint (g > 0),
-    // do a second optimization to find the closest feasible point.
-    // Objective: max(0, g(x)) + ε·dist²
-    // The max(0,g) term dominates until we reach g≤0, then the
-    // distance term finds the closest feasible point to the optimum.
-    if (spec.constraint && evalConstraint(resultParams) > 0) {
-      const x0 = resultParams.slice();
-      const pos0 = spec.constrainByRender ? getElementPos(resultParams) : null;
-      const pullbackFn = (params: number[]) => {
-        const g = evalConstraint(params);
-        const penalty = g > 0 ? g : 0;
-        let dist2: number;
-        if (spec.constrainByRender) {
-          // Screen-space distance (more accurate)
-          const pos = getElementPos(params);
-          dist2 = pos.dist2(pos0!);
-        } else {
-          // Parameter-space distance (faster, default)
-          dist2 = 0;
-          for (let i = 0; i < params.length; i++) {
-            dist2 += (params[i] - x0[i]) ** 2;
+    const xBefore = x.slice();
+    FindMinimum(
+      (_n, _m, xArr, con) => {
+        // xArr is a Float64Array — copy into a plain number[]
+        const params: number[] = [];
+        for (let i = 0; i < n; i++) params[i] = xArr[i];
+
+        // Objective: distance² from pointer to element position
+        const pos = getElementPos(params);
+        const obj = pos.dist2(frame.pointer);
+
+        // Constraints: spec.constraint returns values where > 0 means
+        // violated. COBYLA wants con[k] >= 0 to mean satisfied. So negate.
+        if (spec.constraint) {
+          const gs = manyToArray(spec.constraint(stateFromParams(params)));
+          for (let k = 0; k < gs.length; k++) {
+            con[k] = -gs[k];
           }
         }
-        return penalty + 1e-4 * dist2;
-      };
-      const r2 = minimize(pullbackFn, resultParams);
-      resultParams = r2.solution;
+
+        return obj;
+      },
+      n,
+      numConstraints,
+      x,
+      1, // rhobeg: initial simplex size (small since we warm-start)
+      1e-3, // rhoend: convergence tolerance
+      0, // iprint: silent
+      200, // maxfun: max evaluations
+    );
+
+    // x has been modified in-place by FindMinimum
+    const resultParams = x;
+
+    // COBYLA's constraint accuracy is only ~rhoend, so it may return
+    // slightly infeasible results. Bisect between the previous feasible
+    // point and COBYLA's result to find the boundary.
+    if (spec.constraint) {
+      const isFeasible = (p: number[]) =>
+        Math.max(...manyToArray(spec.constraint!(stateFromParams(p)))) <= 0;
+
+      if (!isFeasible(resultParams)) {
+        // Binary search: xBefore is feasible, resultParams is not
+        let lo = 0,
+          hi = 1;
+        for (let iter = 0; iter < 16; iter++) {
+          const mid = (lo + hi) / 2;
+          const midParams = xBefore.map(
+            (v, i) => v + mid * (resultParams[i] - v),
+          );
+          if (isFeasible(midParams)) {
+            lo = mid;
+          } else {
+            hi = mid;
+          }
+        }
+        // Use the last known feasible point
+        for (let i = 0; i < resultParams.length; i++) {
+          resultParams[i] = xBefore[i] + lo * (resultParams[i] - xBefore[i]);
+        }
+      }
     }
 
     curParams = resultParams;
     const newState = stateFromParams(resultParams);
     const rendered = renderStateReadOnly(ctx, newState);
     const achievedPos = getElementPosition(ctx, rendered);
-    const distance = Math.sqrt(baseObjectiveFn(resultParams));
+    const distance = achievedPos.dist(frame.pointer);
     return {
       rendered,
       dropState: newState,
