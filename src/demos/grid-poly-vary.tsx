@@ -82,7 +82,7 @@ export default demo(
     <>
       <DemoNotes>
         Re-implementation of grid-poly in a somewhat more traditional way:
-        <ol className="list-decimal pl-5 mt-1 space-y-1">
+        <ol className="list-decimal pl-5 my-1 space-y-1">
           <li>
             <code>d.vary</code> lets x &amp; y be dragged freely.
           </li>
@@ -98,6 +98,7 @@ export default demo(
             is kinda cool because we never enumerate the drop locations!
           </li>
         </ol>
+        But note that we don't stop points from colliding, which grid-poly does.
       </DemoNotes>
       <DemoDraggable
         draggable={draggable}

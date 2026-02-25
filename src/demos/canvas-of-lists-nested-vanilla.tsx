@@ -541,7 +541,7 @@ const CanvasOfListsNestedVanilla = () => {
       </svg>
       <DemoNotes>
         <i>Claude reports...</i> Differences from the library version:
-        <ul className="list-disc pl-5 mt-1 space-y-1">
+        <ul className="list-disc pl-5 my-1 space-y-1">
           <li>
             The library shows the item snapping between candidate positions (via
             floating + closest); the vanilla version shows it floating at the
