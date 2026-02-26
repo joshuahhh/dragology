@@ -60,32 +60,38 @@ const INACTIVE_BORDER = "rgb(203, 213, 225)";
 function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
   const { activePath, colorMap } = useTreeViewContext();
 
+  /** Compute active/color/childPath/traceInfo for a node from its narrowed spec. */
+  const info = <S extends DragSpecData<T>>(s: S) => {
+    const fullPath = path + s.type;
+    return {
+      active: activePath === fullPath,
+      color: colorMap?.get(fullPath),
+      childPath: fullPath + "/",
+      traceInfo: getTraceInfo(s),
+    };
+  };
+
   if (spec.type === "fixed") {
-    const traceInfo = getTraceInfo(spec);
-    const fullPath = path + "fixed";
-    const active = activePath === fullPath;
+    const { active, color, traceInfo } = info(spec);
     return (
-      <Box label="fixed" active={active} color={colorMap?.get(fullPath)}>
+      <Box label="fixed" active={active} color={color}>
         {traceInfo && (
           <StateThumbnails renderedStates={traceInfo.renderedStates} />
         )}
       </Box>
     );
   } else if (spec.type === "with-floating") {
-    const traceInfo = getTraceInfo(spec);
-    const prefix = path + "with-floating/";
+    const { color, childPath, traceInfo } = info(spec);
     return (
-      <Box label="withFloating" color={colorMap?.get(path + "with-floating")}>
+      <Box label="withFloating" color={color}>
         {traceInfo && (
           <OutputThumbnail outputRendered={traceInfo.outputRendered} />
         )}
-        <SpecNode spec={spec.inner} path={prefix} />
+        <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
   } else if (spec.type === "vary") {
-    const traceInfo = getTraceInfo(spec);
-    const fullPath = path + "vary";
-    const active = activePath === fullPath;
+    const { active, color, traceInfo } = info(spec);
     const paramNames = spec.paramPaths.map((p) => {
       const last = p[p.length - 1];
       return typeof last === "string" ? last : String(last);
@@ -97,7 +103,7 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
       <Box
         label={`vary [${paramNames.join(", ")}]`}
         active={active}
-        color={colorMap?.get(fullPath)}
+        color={color}
       >
         {constraintSrc && (
           <div
@@ -164,33 +170,33 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
       </Box>
     );
   } else if (spec.type === "and-then") {
+    const { childPath } = info(spec);
     return (
       <Box label="andThen">
-        <SpecNode spec={spec.inner} path={path} />
+        <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
   } else if (spec.type === "during") {
-    const traceInfo = getTraceInfo(spec);
+    const { childPath, traceInfo } = info(spec);
     return (
       <Box label="during">
         {traceInfo && (
           <OutputThumbnail outputRendered={traceInfo.outputRendered} />
         )}
-        <SpecNode spec={spec.inner} path={path} />
+        <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
   } else if (spec.type === "with-distance") {
+    const { childPath } = info(spec);
     return (
       <Box label="withDistance">
-        <SpecNode spec={spec.inner} path={path} />
+        <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
   } else if (spec.type === "with-snap-radius") {
-    const traceInfo = getTraceInfo(spec);
-    const snappedPrefix = path + "with-snap-radius[snapped]/";
-    const normalPrefix = path + "with-snap-radius/";
-    const snapped = activePath?.startsWith(snappedPrefix);
-    const childPrefix = snapped ? snappedPrefix : normalPrefix;
+    const { childPath, traceInfo } = info(spec);
+    const snapped = activePath?.startsWith(childPath + "snapped/");
+    const snapSegment = snapped ? "snapped/" : "unsnapped/";
     const options = [
       spec.transition && "transition",
       spec.chain && "chain",
@@ -206,18 +212,16 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
         {traceInfo && (
           <OutputThumbnail outputRendered={traceInfo.outputRendered} />
         )}
-        <SpecNode spec={spec.inner} path={childPrefix} />
+        <SpecNode spec={spec.inner} path={childPath + snapSegment} />
       </Box>
     );
   } else if (spec.type === "between") {
-    const traceInfo = getTraceInfo(spec);
-    const fullPath = path + "between";
-    const active = activePath === fullPath;
+    const { active, color, traceInfo } = info(spec);
     return (
       <Box
         label={`between [${spec.states.length}]`}
         active={active}
-        color={colorMap?.get(fullPath)}
+        color={color}
       >
         {traceInfo && (
           <>
@@ -233,23 +237,21 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
       </Box>
     );
   } else if (spec.type === "with-drop-transition") {
-    const prefix = path + "with-drop-transition/";
+    const { childPath } = info(spec);
     return (
       <Box
         label={`withDropTransition (${describeTransition(spec.transition)})`}
       >
-        <SpecNode spec={spec.inner} path={prefix} />
+        <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
   } else if (spec.type === "switch-to-state-and-follow") {
-    const traceInfo = getTraceInfo(spec);
-    const fullPath = path + "switch-to-state-and-follow";
-    const active = activePath === fullPath;
+    const { active, color, traceInfo } = info(spec);
     return (
       <Box
         label={`switchToStateAndFollow → ${spec.draggedId}`}
         active={active}
-        color={colorMap?.get(fullPath)}
+        color={color}
       >
         {traceInfo && (
           <StateThumbnails renderedStates={traceInfo.renderedStates} />
@@ -257,23 +259,21 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
       </Box>
     );
   } else if (spec.type === "with-branch-transition") {
-    const prefix = path + "with-branch-transition/";
+    const { childPath } = info(spec);
     return (
       <Box
         label={`withBranchTransition (${describeTransition(spec.transition)})`}
       >
-        <SpecNode spec={spec.inner} path={prefix} />
+        <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
   } else if (spec.type === "drop-target") {
-    const traceInfo = getTraceInfo(spec);
-    const fullPath = path + "drop-target";
-    const active = activePath === fullPath;
+    const { active, color, traceInfo } = info(spec);
     return (
       <Box
         label={`dropTarget → ${spec.targetId}`}
         active={active}
-        color={colorMap?.get(fullPath)}
+        color={color}
       >
         {traceInfo && (
           <StateThumbnails renderedStates={traceInfo.renderedStates} />
@@ -281,10 +281,10 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
       </Box>
     );
   } else if (spec.type === "with-chaining") {
-    const prefix = path + "with-chaining/";
+    const { childPath } = info(spec);
     return (
       <Box label="withChaining">
-        <SpecNode spec={spec.inner} path={prefix} />
+        <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
   } else {

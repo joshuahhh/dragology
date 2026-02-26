@@ -284,6 +284,7 @@ function andThenBehavior<T extends object>(
         typeof spec.andThenState === "function"
           ? (spec.andThenState as (s: T) => T)(result.dropState)
           : spec.andThenState,
+      activePath: `and-then/${result.activePath}`,
       tracedSpec: { ...spec, inner: result.tracedSpec },
     };
   };
@@ -308,6 +309,7 @@ function duringBehavior<T extends object>(
       rendered,
       dropState: transformedState,
       distance: frame.pointer.dist(elementPos),
+      activePath: `during/${result.activePath}`,
       tracedSpec: setTraceInfo(
         { ...spec, inner: result.tracedSpec },
         { outputRendered: rendered },
@@ -444,6 +446,7 @@ function withDistanceBehavior<T extends object>(
     return {
       ...result,
       distance: scaledDistance,
+      activePath: `with-distance/${result.activePath}`,
       tracedSpec: { ...spec, inner: result.tracedSpec },
     };
   };
@@ -477,10 +480,8 @@ function withSnapRadiusBehavior<T extends object>(
     if (snapped) {
       rendered = dropRendered;
     }
-    const activePath =
-      spec.transition && snapped
-        ? `with-snap-radius[snapped]/${result.activePath}`
-        : `with-snap-radius/${result.activePath}`;
+    const snapSegment = spec.transition && snapped ? "snapped" : "unsnapped";
+    const activePath = `with-snap-radius/${snapSegment}/${result.activePath}`;
     return {
       ...result,
       rendered,
