@@ -1,9 +1,10 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { Demo, listedDemos, unlistedDemos } from "./registry";
+import { tagMatches } from "./tags";
 import { DemoCard, DemoSettingsBar, DemoSettingsProvider, DemoTag } from "./ui";
 
-function hasTag(demo: Demo, tag: string) {
-  return demo.tags?.includes(tag);
+function hasTag(demo: Demo, filter: string) {
+  return demo.tags?.some((tag) => tagMatches(tag, filter));
 }
 
 export function DemoPage() {
@@ -37,7 +38,7 @@ export function DemoPage() {
         {tagFilter && (
           <div className="flex items-center gap-2 px-5 pb-3 max-w-3xl mx-auto w-full">
             <span className="text-sm text-gray-400">Filtering by</span>
-            <DemoTag>{tagFilter}</DemoTag>
+            <DemoTag tag={tagFilter} />
             <button
               onClick={() => setSearchParams({})}
               className="text-xs text-gray-400 hover:text-gray-600"

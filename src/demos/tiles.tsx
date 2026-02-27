@@ -124,5 +124,5 @@ export default demo(
       />
     </div>
   ),
-  { tags: ["spec.withSnapRadius w/chain", "d.between"] },
+  { tags: ["spec.withSnapRadius [w/chain]", "d.between"] },
 );

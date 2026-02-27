@@ -144,5 +144,5 @@ export default demo(
       height={350}
     />
   ),
-  { tags: ["d.vary w/constraint", "d.closest"] },
+  { tags: ["d.vary [w/constraint]", "d.closest"] },
 );

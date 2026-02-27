@@ -269,11 +269,10 @@ export default demo(
   },
   {
     tags: [
-      "spec.withSnapRadius w/chain",
+      "spec.withSnapRadius [w/chain]",
       "math",
       "fancy",
-      "spec.withFloating",
-      "spec.withFloating w/ghost",
+      "spec.withFloating [w/ghost]",
       "d.between",
       "spec.withChaining",
     ],

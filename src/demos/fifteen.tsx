@@ -127,5 +127,5 @@ export default demo(
       />
     </div>
   ),
-  { tags: ["spec.withSnapRadius w/chain", "d.between", "puzzle"] },
+  { tags: ["spec.withSnapRadius [w/chain]", "d.between", "puzzle"] },
 );

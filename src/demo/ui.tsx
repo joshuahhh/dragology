@@ -21,6 +21,7 @@ import { OpenInEditor } from "../OpenInEditor";
 import { Draggable } from "../draggable";
 import { assert } from "../utils";
 import type { Demo } from "./registry";
+import { parseTag, type TagNode, tagStringFromPath } from "./tags";
 
 export type DemoToggleSettings = {
   showTreeView: boolean;
@@ -502,19 +503,94 @@ export function DemoTags({ children }: { children?: React.ReactNode }) {
 }
 
 export function DemoTag({
-  children,
-  onClick,
+  tag,
+  onTagClick,
 }: {
-  children?: React.ReactNode;
-  onClick?: () => void;
+  tag: string;
+  onTagClick?: (filter: string) => void;
 }) {
-  const clickable = onClick ? "cursor-pointer hover:brightness-95" : "";
+  const parsed = parseTag(tag);
+  return (
+    <TagNodeView
+      node={parsed}
+      ancestorPath={[]}
+      onTagClick={onTagClick}
+      isRoot
+    />
+  );
+}
+
+function TagNodeView({
+  node,
+  ancestorPath,
+  onTagClick,
+  isRoot,
+}: {
+  node: TagNode;
+  ancestorPath: string[];
+  onTagClick?: (filter: string) => void;
+  isRoot: boolean;
+}) {
+  const currentPath = [...ancestorPath, node.text];
+  const filterString = tagStringFromPath(currentPath);
+  const hasChildren = node.children.length > 0;
+
+  const handleClick = onTagClick
+    ? (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onTagClick(filterString);
+      }
+    : undefined;
+
+  const clickable = onTagClick ? "cursor-pointer" : "";
+
+  if (isRoot && !hasChildren) {
+    return (
+      <span
+        className={`inline-flex items-center text-xs border rounded px-1.5 py-0.5 text-slate-500 bg-slate-50 border-slate-200 ${clickable} ${onTagClick ? "hover:bg-slate-100" : ""}`}
+        onClick={handleClick}
+      >
+        {node.text}
+      </span>
+    );
+  }
+
+  if (isRoot) {
+    return (
+      <span
+        className={`inline-flex items-center gap-1 text-xs border rounded pl-1.5 pr-0.5 py-0.5 text-slate-500 bg-slate-50 border-slate-200 ${clickable} ${onTagClick ? "hover:bg-slate-100" : ""}`}
+        onClick={handleClick}
+      >
+        {node.text}
+        {node.children.map((child, i) => (
+          <TagNodeView
+            key={i}
+            node={child}
+            ancestorPath={currentPath}
+            onTagClick={onTagClick}
+            isRoot={false}
+          />
+        ))}
+      </span>
+    );
+  }
+
+  // Sub-tag
   return (
     <span
-      className={`inline-block text-xs border rounded px-1.5 py-0.5 text-slate-500 bg-slate-50 border-slate-200 ${clickable}`}
-      onClick={onClick}
+      className={`inline-flex items-center gap-0.5 text-[11px] border rounded px-1 py-0 text-slate-500 bg-white border-slate-300 ${clickable} ${onTagClick ? "hover:bg-slate-100" : ""}`}
+      onClick={handleClick}
     >
-      {children}
+      {node.text}
+      {node.children.map((child, i) => (
+        <TagNodeView
+          key={i}
+          node={child}
+          ancestorPath={currentPath}
+          onTagClick={onTagClick}
+          isRoot={false}
+        />
+      ))}
     </span>
   );
 }
@@ -625,9 +701,7 @@ export function DemoCard({
       {demo.tags && demo.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-4">
           {demo.tags.map((tag) => (
-            <DemoTag key={tag} onClick={onTagClick && (() => onTagClick(tag))}>
-              {tag}
-            </DemoTag>
+            <DemoTag key={tag} tag={tag} onTagClick={onTagClick} />
           ))}
         </div>
       )}

@@ -161,11 +161,6 @@ export default demo(
     </div>
   ),
   {
-    tags: [
-      "d.closest",
-      "spec.withFloating",
-      "spec.withFloating w/ghost",
-      "puzzle",
-    ],
+    tags: ["d.closest", "spec.withFloating [w/ghost]", "puzzle"],
   },
 );
