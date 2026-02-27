@@ -86,20 +86,24 @@ export function debugOverlay<T>(
     case "with-floating": {
       const info = getTraceInfo(spec);
       if (!info) return null;
+      const innerOverlay = debugOverlay(spec.inner, pointer);
       const distance = pointer.dist(info.elementPos);
       return (
-        <g opacity={0.8}>
-          <circle
-            cx={info.elementPos.x}
-            cy={info.elementPos.y}
-            r={5}
-            fill="magenta"
-          />
-          <DistanceLine
-            from={info.elementPos}
-            to={pointer}
-            distance={distance}
-          />
+        <g>
+          {innerOverlay}
+          <g opacity={0.8}>
+            <circle
+              cx={info.elementPos.x}
+              cy={info.elementPos.y}
+              r={5}
+              fill="magenta"
+            />
+            <DistanceLine
+              from={info.elementPos}
+              to={pointer}
+              distance={distance}
+            />
+          </g>
         </g>
       );
     }
