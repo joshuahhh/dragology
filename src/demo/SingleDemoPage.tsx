@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { demosById } from "./registry";
 import { DemoCard, DemoSettingsBar, DemoSettingsProvider } from "./ui";
 
 export function SingleDemoPage({ id }: { id: string }) {
   const [searchParams] = useSearchParams();
   const minimal = searchParams.has("minimal");
+  const navigate = useNavigate();
   const demo = demosById.get(id);
 
   if (!demo) {
@@ -42,7 +43,12 @@ export function SingleDemoPage({ id }: { id: string }) {
           </Link>
         </div>
         <div className="flex flex-col gap-5 px-5 pb-5 max-w-3xl mx-auto flex-1 w-full">
-          <DemoCard demo={demo} />
+          <DemoCard
+            demo={demo}
+            onTagClick={(tag) =>
+              navigate(`/demos?tag=${encodeURIComponent(tag)}`)
+            }
+          />
         </div>
         <DemoSettingsBar />
       </div>
