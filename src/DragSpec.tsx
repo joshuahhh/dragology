@@ -314,6 +314,12 @@ export function resolveDragSpecLike<T>(specLike: DragSpecLike<T>): DragSpec<T> {
 // # DragSpecBuilder
 
 export class DragSpecBuilder<T> {
+  readonly state: T;
+
+  constructor(state: T) {
+    this.state = state;
+  }
+
   /**
    * This drag behavior simply shows a static view of the given
    * state.

@@ -720,7 +720,7 @@ const DrawIdleMode = memoGeneric(
   }) => {
     const content = ctx.draggable({
       state: dragState.state,
-      d: new DragSpecBuilder<T>(),
+      d: new DragSpecBuilder<T>(dragState.state),
       draggedId: null,
       setState: ctx.catchToRenderError(
         (

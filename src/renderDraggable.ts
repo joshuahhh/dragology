@@ -15,7 +15,7 @@ export function renderDraggableInertUnlayered<T extends object>(
   return pipe(
     draggable({
       state,
-      d: new DragSpecBuilder<T>(),
+      d: new DragSpecBuilder<T>(state),
       draggedId,
       setState: throwError,
       isTracking,
