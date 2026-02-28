@@ -287,6 +287,13 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
         <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
+  } else if (spec.type === "substate") {
+    const { childPath } = info(spec);
+    return (
+      <Box label={`substate [${spec.path.join(", ")}]`}>
+        <SpecNode spec={spec.innerSpec} path={childPath} />
+      </Box>
+    );
   } else {
     assertNever(spec);
   }

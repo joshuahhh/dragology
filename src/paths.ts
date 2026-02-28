@@ -67,3 +67,15 @@ function objCloneAndSet<T, K extends keyof T>(obj: T, key: K, value: T[K]): T {
   clone[key] = value;
   return clone;
 }
+
+// Compute the value type at a given path through T
+export type ValueAtPath<
+  T,
+  P extends readonly (string | number | symbol)[],
+> = P extends readonly [infer K, ...infer Rest]
+  ? K extends keyof T
+    ? Rest extends readonly (string | number | symbol)[]
+      ? ValueAtPath<T[K], Rest>
+      : never
+    : never
+  : T;

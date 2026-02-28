@@ -1,5 +1,5 @@
 import { SVGProps } from "react";
-import { PathIn } from "./paths";
+import { PathIn, ValueAtPath, getAtPath } from "./paths";
 import {
   Transition,
   TransitionLike,
@@ -25,6 +25,7 @@ export type DragSpecData<T> = (
   | DragSpecWithBranchTransition<T>
   | DragSpecWithChaining<T>
   | DragSpecDuring<T>
+  | DragSpecSubstate<T>
 ) & { traceInfo?: unknown };
 
 export type DragSpecFixed<T> = {
@@ -123,6 +124,14 @@ export type DragSpecDuring<T> = {
   type: "during";
   inner: DragSpecData<T>;
   duringFn: (state: T) => T;
+};
+
+export type DragSpecSubstate<T> = {
+  type: "substate";
+  state: T;
+  path: (string | number)[];
+  /** This is really a DragSpecData<T[path]> */
+  innerSpec: DragSpecData<any>;
 };
 
 /**
@@ -385,6 +394,27 @@ export class DragSpecBuilder<T> {
    */
   dropTarget(state: T, targetId: string): DragSpec<T> {
     return attachMethods({ type: "drop-target", state, targetId });
+  }
+
+  /**
+   * Focus on a sub-path of the state (a lens). The callback receives
+   * a DragSpecBuilder for the substate type, and should return a
+   * DragSpec for that substate. `substate` lifts it back to a
+   * DragSpec for the full state.
+   */
+  substate<const P extends PathIn<T, any>>(
+    state: T,
+    path: P,
+    fn: (d: DragSpecBuilder<ValueAtPath<T, P>>) => DragSpec<ValueAtPath<T, P>>,
+  ): DragSpec<T> {
+    const subState = getAtPath(state, path as any) as ValueAtPath<T, P>;
+    const innerSpec = fn(new DragSpecBuilder(subState));
+    return attachMethods({
+      type: "substate",
+      state,
+      path: path as any,
+      innerSpec,
+    });
   }
 
   /**

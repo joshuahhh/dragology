@@ -40,6 +40,7 @@ export type DragSpecTraceInfoByType = {
     globalCorners: Vec2[];
   };
   "with-chaining": Record<string, never>;
+  substate: Record<string, never>;
 };
 
 /** Get typed trace info from a spec node, or undefined if not annotated. */
@@ -231,6 +232,9 @@ export function debugOverlay<T>(
 
     case "switch-to-state-and-follow":
       return null;
+
+    case "substate":
+      return debugOverlay(spec.innerSpec, pointer);
 
     default:
       assertNever(spec);

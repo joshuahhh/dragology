@@ -115,6 +115,8 @@ export function dragSpecToBehavior<T extends object>(
       return dropTargetBehavior(spec, ctx);
     case "with-chaining":
       return withChainingBehavior(spec, ctx);
+    case "substate":
+      return substateBehavior(spec, ctx);
     default:
       assertNever(spec);
   }
@@ -686,6 +688,34 @@ function withChainingBehavior<T extends object>(
       chainNow: result.chainNow ?? spec.chaining,
       activePath: `with-chaining/${result.activePath}`,
       tracedSpec: { ...spec, inner: result.tracedSpec },
+    };
+  };
+}
+
+function substateBehavior<T extends object>(
+  spec: DragSpecData<T> & { type: "substate" },
+  ctx: DragBehaviorInitContext<T>,
+): DragBehavior<T> {
+  const { state, path, innerSpec } = spec;
+
+  // Create a lensed draggable: takes SubState, lifts to T, renders
+  const lensedDraggable: Draggable<any> = (props) =>
+    ctx.draggable({
+      ...props,
+      state: setAtPath(state, path as any, props.state),
+    });
+
+  const innerBehavior = dragSpecToBehavior(innerSpec, {
+    ...ctx,
+    draggable: lensedDraggable,
+  });
+
+  return (frame) => {
+    const result = innerBehavior(frame);
+    return {
+      ...result,
+      dropState: setAtPath(state, path as any, result.dropState),
+      tracedSpec: setTraceInfo({ ...spec, innerSpec: result.tracedSpec }, {}),
     };
   };
 }
