@@ -58,5 +58,5 @@ export default demo(
       height={250}
     />
   ),
-  { tags: ["d.vary", "control"] },
+  { tags: ["d.vary"] },
 );

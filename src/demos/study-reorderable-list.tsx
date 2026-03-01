@@ -106,7 +106,6 @@ export default demo(
       "spec.withFloating",
       "spec.withSnapRadius",
       "reordering",
-      "control",
     ],
   },
 );

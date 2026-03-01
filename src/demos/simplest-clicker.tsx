@@ -36,5 +36,5 @@ export default demo(
       height={150}
     />
   ),
-  { tags: ["setState", "control"] },
+  { tags: ["setState"] },
 );

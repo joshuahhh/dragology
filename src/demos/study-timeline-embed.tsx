@@ -115,7 +115,6 @@ export default demo(
       "embed()",
       "d.vary [w/constraint]",
       "d.closest",
-      "control",
       "spec.withBranchTransition",
     ],
   },

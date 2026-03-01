@@ -60,5 +60,5 @@ export default demo(
       height={200}
     />
   ),
-  { tags: ["d.between", "control"] },
+  { tags: ["d.between"] },
 );

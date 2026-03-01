@@ -65,5 +65,5 @@ export default demo(
       height={130}
     />
   ),
-  { tags: ["d.vary [w/constraint]", "control"] },
+  { tags: ["d.vary [w/constraint]"] },
 );

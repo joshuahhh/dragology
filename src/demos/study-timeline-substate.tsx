@@ -115,7 +115,6 @@ export default demo(
       "d.substate",
       "d.vary [w/constraint]",
       "d.closest",
-      "control",
       "spec.withBranchTransition",
     ],
   },
