@@ -1,18 +1,20 @@
 import { useCallback, useState } from "react";
 import { demo } from "../demo";
 import { DemoNotes } from "../demo/ui";
-import { Draggable } from "../draggable";
-import { DraggableRenderer } from "../DraggableRenderer";
-import { translate } from "../svgx/helpers";
+import { and, Draggable, DraggableRenderer, lessThan, translate } from "../lib";
 
-type State = {
+type SwitchState = {
   value: boolean;
+};
+
+type SliderState = {
+  t: number;
 };
 
 const SQUARE_SIZE = 40;
 const TRACK_LENGTH = 60;
 
-const draggable: Draggable<State> = ({ state, d }) => (
+const switchDraggable: Draggable<SwitchState> = ({ state, d }) => (
   <g>
     <line
       x1={SQUARE_SIZE / 2}
@@ -39,8 +41,34 @@ const draggable: Draggable<State> = ({ state, d }) => (
   </g>
 );
 
-const SimpleDemo = () => {
-  const [state, setState] = useState<State>({ value: false });
+const sliderDraggable: Draggable<SliderState> = ({ state, d }) => (
+  <g>
+    <line
+      x1={0}
+      y1={10}
+      x2={100}
+      y2={10}
+      stroke="#cbd5e1"
+      strokeWidth={4}
+      strokeLinecap="round"
+    />
+    <circle
+      id="knob"
+      transform={translate(state.t * 100, 10)}
+      r={8}
+      dragology={() =>
+        d.vary(state, [["t"]], {
+          constraint: (s) => and(lessThan(0, s.t), lessThan(s.t, 1)),
+        })
+      }
+    />
+  </g>
+);
+
+type DemoProps = { handlerName: "onDropState" | "onDragState" };
+
+const SimpleDemo = ({ handlerName }: DemoProps) => {
+  const [state, setState] = useState<SwitchState>({ value: false });
 
   return (
     <>
@@ -62,9 +90,9 @@ const SimpleDemo = () => {
       </div>
       <div className="mb-2">
         <DraggableRenderer
-          draggable={draggable}
+          draggable={switchDraggable}
           state={state}
-          onStateChange={setState}
+          {...{ [handlerName]: setState }}
           width={150}
           height={40}
         />
@@ -73,29 +101,29 @@ const SimpleDemo = () => {
   );
 };
 
-const DoubleDemo = () => {
-  const [state, setState] = useState<State>({ value: false });
+const DoubleSwitchDemo = ({ handlerName }: DemoProps) => {
+  const [state, setState] = useState<SwitchState>({ value: false });
 
   return (
     <>
-      <h3 className="text-md font-medium italic mt-6 mb-1">double</h3>
+      <h3 className="text-md font-medium italic mt-6 mb-1">double switch</h3>
       <DemoNotes>
         Two draggable components controlled by the same state.
       </DemoNotes>
       <div className="mb-2">
         <DraggableRenderer
-          draggable={draggable}
+          draggable={switchDraggable}
           state={state}
-          onStateChange={setState}
+          {...{ [handlerName]: setState }}
           width={150}
           height={40}
         />
       </div>
       <div className="mb-2">
         <DraggableRenderer
-          draggable={draggable}
+          draggable={switchDraggable}
           state={state}
-          onStateChange={setState}
+          {...{ [handlerName]: setState }}
           width={150}
           height={40}
         />
@@ -104,12 +132,12 @@ const DoubleDemo = () => {
   );
 };
 
-const RejectionDemo = () => {
-  const [state, setState] = useState<State>({ value: false });
+const RejectionDemo = ({ handlerName }: DemoProps) => {
+  const [state, setState] = useState<SwitchState>({ value: false });
 
-  const onStateChange = useCallback(
-    (newState: State) => {
-      console.log("onStateChange", newState, "old was", state.value);
+  const onDropState = useCallback(
+    (newState: SwitchState) => {
+      console.log("onDropState", newState, "old was", state.value);
       if (newState.value === true) {
         setState(newState);
       }
@@ -122,9 +150,9 @@ const RejectionDemo = () => {
       <h3 className="text-md font-medium italic mt-6 mb-1">rejection</h3>
       <DemoNotes>Here the parent only accepts changes to "true".</DemoNotes>
       <DraggableRenderer
-        draggable={draggable}
+        draggable={switchDraggable}
         state={state}
-        onStateChange={onStateChange}
+        {...{ [handlerName]: onDropState }}
         width={150}
         height={40}
       />
@@ -132,10 +160,10 @@ const RejectionDemo = () => {
   );
 };
 
-const OverrideDemo = () => {
-  const [state, setState] = useState<State>({ value: false });
+const OverrideDemo = ({ handlerName }: DemoProps) => {
+  const [state, setState] = useState<SwitchState>({ value: false });
 
-  const onStateChange = useCallback((newState: State) => {
+  const onDropState = useCallback((newState: SwitchState) => {
     setState({ value: !newState.value });
   }, []);
 
@@ -147,12 +175,43 @@ const OverrideDemo = () => {
         draggable asks for.
       </DemoNotes>
       <DraggableRenderer
-        draggable={draggable}
+        draggable={switchDraggable}
         state={state}
-        onStateChange={onStateChange}
+        {...{ [handlerName]: onDropState }}
         width={150}
         height={40}
       />
+    </>
+  );
+};
+
+const DoubleSliderDemo = ({ handlerName }: DemoProps) => {
+  const [state, setState] = useState<SliderState>({ t: 0.5 });
+
+  return (
+    <>
+      <h3 className="text-md font-medium italic mt-6 mb-1">double slider</h3>
+      <DemoNotes>
+        Two draggable components controlled by the same state.
+      </DemoNotes>
+      <div className="mb-2">
+        <DraggableRenderer
+          draggable={sliderDraggable}
+          state={state}
+          {...{ [handlerName]: setState }}
+          width={150}
+          height={16}
+        />
+      </div>
+      <div className="mb-2">
+        <DraggableRenderer
+          draggable={sliderDraggable}
+          state={state}
+          {...{ [handlerName]: setState }}
+          width={150}
+          height={16}
+        />
+      </div>
     </>
   );
 };
@@ -164,12 +223,23 @@ export default demo(
         <DemoNotes>
           A few simple tests of using <code>{"<DraggableRenderer>"}</code> as a{" "}
           <i>controlled component</i> – its React parent ultimately controls its
-          state.
+          state. (Also, as a lightweight check, this file imports dependencies
+          from <code>lib.ts</code>.)
         </DemoNotes>
-        <SimpleDemo />
-        <DoubleDemo />
-        <RejectionDemo />
-        <OverrideDemo />
+
+        <h3 className="text-xl font-medium mt-6 mb-1">using onDropState</h3>
+        <SimpleDemo handlerName="onDropState" />
+        <DoubleSwitchDemo handlerName="onDropState" />
+        <RejectionDemo handlerName="onDropState" />
+        <OverrideDemo handlerName="onDropState" />
+        <DoubleSliderDemo handlerName="onDropState" />
+
+        <h3 className="text-xl font-medium mt-6 mb-1">using onDragState</h3>
+        <SimpleDemo handlerName="onDragState" />
+        <DoubleSwitchDemo handlerName="onDragState" />
+        <RejectionDemo handlerName="onDragState" />
+        <OverrideDemo handlerName="onDragState" />
+        <DoubleSliderDemo handlerName="onDragState" />
       </div>
     );
   },

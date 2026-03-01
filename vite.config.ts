@@ -26,7 +26,7 @@ function dtsPlugin(): Plugin {
         const filePath = path.resolve(id.slice("dts-bundle:".length));
         const [result] = generateDtsBundle(
           [{ filePath, output: { noBanner: true } }],
-          { preferredConfigPath: path.resolve("tsconfig.json") },
+          { preferredConfigPath: path.resolve("tsconfig.app.json") },
         );
         return `export default ${JSON.stringify(result)};`;
       }
@@ -53,6 +53,9 @@ function dtsPlugin(): Plugin {
 
 export default defineConfig({
   base: "./",
+  build: {
+    outDir: "dist-demo",
+  },
   plugins: [
     dtsPlugin(),
     {

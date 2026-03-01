@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "vite-plugin-qrcode.ts"]
+  "include": ["vite.config.ts", "vite.config.lib.ts", "vite-plugin-qrcode.ts"]
 }

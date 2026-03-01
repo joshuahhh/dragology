@@ -3,6 +3,7 @@ import React, {
   SetStateAction,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -117,12 +118,13 @@ export type DragStatus<T extends object> = {
 
 // # Component
 
-interface DraggableRendererBaseProps<T extends object> {
+export interface DraggableRendererBaseProps<T extends object> {
   draggable: Draggable<T>;
   width?: number;
   height?: number;
-  onStateChange?: (state: T) => void;
-  onDragStatusChange?: (status: DragStatus<T>) => void;
+  onDropState?: (state: T) => void;
+  onDragState?: (state: T) => void;
+  onDragStatus?: (dragStatus: DragStatus<T>) => void;
   showDebugOverlay?: boolean;
   /**
    * Minimum pointer movement (in px) before a pointerdown becomes a drag.
@@ -133,11 +135,12 @@ interface DraggableRendererBaseProps<T extends object> {
   dragThreshold?: number;
 }
 
-type DraggableRendererProps<T extends object> = DraggableRendererBaseProps<T> &
-  (
-    | { state: T; initialState?: undefined }
-    | { state?: undefined; initialState: T }
-  );
+export type DraggableRendererProps<T extends object> =
+  DraggableRendererBaseProps<T> &
+    (
+      | { state: T; initialState?: undefined }
+      | { state?: undefined; initialState: T }
+    );
 
 export function DraggableRenderer<T extends object>({
   state,
@@ -158,22 +161,22 @@ export function DraggableRenderer<T extends object>({
 
 function DraggableRendererUncontrolled<T extends object>({
   initialState,
-  onStateChange,
+  onDropState,
   ...rest
 }: DraggableRendererBaseProps<T> & { initialState: T }) {
   const [state, setState] = useState(initialState);
   const handleStateChange = useCallback(
     (newState: T) => {
       setState(newState);
-      onStateChange?.(newState);
+      onDropState?.(newState);
     },
-    [onStateChange],
+    [onDropState],
   );
   return (
     <DraggableRendererControlled
       {...rest}
       state={state}
-      onStateChange={handleStateChange}
+      onDropState={handleStateChange}
     />
   );
 }
@@ -183,8 +186,9 @@ function DraggableRendererControlled<T extends object>({
   state,
   width,
   height,
-  onStateChange,
-  onDragStatusChange,
+  onDropState,
+  onDragState,
+  onDragStatus,
   showDebugOverlay,
   dragThreshold = 2,
 }: DraggableRendererBaseProps<T> & { state: T }) {
@@ -196,32 +200,46 @@ function DraggableRendererControlled<T extends object>({
     springingFrom: null,
   });
 
-  // Sync internal idle state from props.state changes (with spring animation).
-  const [prevPropState, setPrevPropState] = useState(state);
-  if (state !== prevPropState) {
-    setPrevPropState(state);
-    if (status.type === "idle" && status.state !== state) {
-      const currentRendered = renderDraggableInert(
-        draggable,
-        status.state,
-        null,
-        false,
-      );
-      const currentVisual = runSpring(status.springingFrom, currentRendered);
-      setStatus({
-        ...status,
-        state,
-        springingFrom: makeSpringingFrom(true, () => currentVisual),
-      });
-    }
+  // Sync internal idle state from props.state (with spring animation).
+  // This covers both prop changes and post-drop corrections (where the
+  // idle state reverts to startState but the prop already reflects the
+  // drop target, e.g. because onDragState updated the parent mid-drag).
+  if (status.type === "idle" && status.state !== state) {
+    const currentRendered = renderDraggableInert(
+      draggable,
+      status.state,
+      null,
+      false,
+    );
+    const currentVisual = runSpring(status.springingFrom, currentRendered);
+    setStatus({
+      ...status,
+      state,
+      springingFrom: makeSpringingFrom(true, () => currentVisual),
+    });
   }
 
   useEffect(() => {
-    onDragStatusChange?.(status);
-  }, [status, onDragStatusChange]);
+    onDragStatus?.(status);
+  }, [status, onDragStatus]);
+
+  // Fire onDragState when dropState changes during drag.
+  // Drop-time firing is handled imperatively in onPointerUp.
+  const prevDropStateRef = useRef<T | undefined>(undefined);
+  useLayoutEffect(() => {
+    const dropState =
+      status.type === "dragging" ? status.result.dropState : undefined;
+    if (dropState !== undefined && dropState !== prevDropStateRef.current) {
+      onDragState?.(dropState);
+    }
+    prevDropStateRef.current = dropState;
+  }, [status, onDragState]);
+
   const pointerRef = useRef<Vec2 | undefined>(undefined);
-  const onStateChangeRef = useRef(onStateChange);
-  onStateChangeRef.current = onStateChange;
+  const onDropStateRef = useRef(onDropState);
+  onDropStateRef.current = onDropState;
+  const onDragStateRef = useRef(onDragState);
+  onDragStateRef.current = onDragState;
 
   const [svgElem, setSvgElem] = useState<SVGSVGElement | null>(null);
 
@@ -308,7 +326,8 @@ function DraggableRendererControlled<T extends object>({
         ),
       };
       setStatus(newState);
-      onStateChangeRef.current?.(dropState);
+      onDropStateRef.current?.(dropState);
+      onDragStateRef.current?.(dropState);
     });
 
     const onKeyChange = catchToRenderError((e: KeyboardEvent) => {
@@ -372,14 +391,14 @@ function DraggableRendererControlled<T extends object>({
       catchToRenderError,
       setPointerFromEvent,
       setStatus,
-      onStateChange,
+      onDropState,
       dragThreshold,
     }),
     [
       catchToRenderError,
       draggable,
       dragThreshold,
-      onStateChange,
+      onDropState,
       setStatus,
       setPointerFromEvent,
     ],
@@ -641,8 +660,8 @@ type RenderContext<T extends object> = {
   draggable: Draggable<T>;
   catchToRenderError: CatchToRenderError;
   setPointerFromEvent: (e: globalThis.PointerEvent) => Vec2;
-  setStatus: (status: DragStatus<T>) => void;
-  onStateChange?: (state: T) => void;
+  setStatus: (ds: DragStatus<T>) => void;
+  onDropState?: (state: T) => void;
   dragThreshold: number;
 };
 
@@ -692,7 +711,7 @@ function postProcessForInteraction<T extends object>(
             };
 
             const frame: DragFrame = { pointer, pointerStart: pointer };
-            const draggingState = initDrag(
+            const draggingStatus = initDrag(
               dragSpec,
               behaviorCtxWithoutFloat,
               state,
@@ -711,7 +730,7 @@ function postProcessForInteraction<T extends object>(
               ctx.dragThreshold <= 0 ||
               (!el.props.onClick && !el.props.onDoubleClick)
             ) {
-              ctx.setStatus(draggingState);
+              ctx.setStatus(draggingStatus);
             } else {
               // Stay idle with pending — DOM is preserved, clicks still work.
               ctx.setStatus({
@@ -721,7 +740,7 @@ function postProcessForInteraction<T extends object>(
                 pendingDrag: {
                   startClientPos: Vec2(e.clientX, e.clientY),
                   threshold: ctx.dragThreshold,
-                  status: draggingState,
+                  status: draggingStatus,
                 },
               });
             }
@@ -763,7 +782,7 @@ const DrawIdleMode = memoGeneric(
               ),
             };
             ctx.setStatus(newStatus);
-            ctx.onStateChange?.(resolved);
+            ctx.onDropState?.(resolved);
           },
         ),
         isTracking: false,

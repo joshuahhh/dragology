@@ -347,7 +347,7 @@ export function DemoDraggable<T extends object>({
               initialState={initialState}
               width={width}
               height={height}
-              onDragStatusChange={setStatus}
+              onDragStatus={setStatus}
               showDebugOverlay={showDebugOverlay}
             />
             {showDropZones && overlayData && (
