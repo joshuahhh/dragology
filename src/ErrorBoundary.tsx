@@ -66,40 +66,109 @@ export class ErrorBoundary extends Component<
       const isErrorWithJSX = error instanceof ErrorWithJSX;
 
       return (
-        <div className="border border-red-300 bg-red-50 rounded p-4 m-4 select-text self-start">
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <div className="font-semibold text-red-800 text-lg">
+        <div
+          style={{
+            border: "1px solid rgb(252, 165, 165)",
+            background: "rgb(254, 242, 242)",
+            borderRadius: 6,
+            padding: 16,
+            margin: 16,
+            userSelect: "text",
+            alignSelf: "flex-start",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 12,
+              marginBottom: 8,
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                color: "rgb(153, 27, 27)",
+                fontSize: "1.125rem",
+              }}
+            >
               Error: {error.message}
             </div>
             <button
               onClick={this.reset}
-              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors"
+              style={{
+                padding: "4px 12px",
+                background: "rgb(220, 38, 38)",
+                color: "white",
+                borderRadius: 6,
+                fontSize: "0.875rem",
+                fontWeight: 500,
+                border: "none",
+                cursor: "pointer",
+              }}
             >
               Reset
             </button>
           </div>
 
           {isErrorWithJSX && (
-            <div className="mt-3 mb-3">{(error as ErrorWithJSX).jsx}</div>
+            <div style={{ marginTop: 12, marginBottom: 12 }}>
+              {(error as ErrorWithJSX).jsx}
+            </div>
           )}
 
           {error.stack && (
-            <details className="mt-3">
-              <summary className="cursor-pointer text-red-700 font-medium mb-1">
+            <details style={{ marginTop: 12 }}>
+              <summary
+                style={{
+                  cursor: "pointer",
+                  color: "rgb(185, 28, 28)",
+                  fontWeight: 500,
+                  marginBottom: 4,
+                }}
+              >
                 Stack Trace
               </summary>
-              <pre className="text-xs bg-red-100 p-3 rounded overflow-x-auto text-red-900 mt-2">
+              <pre
+                style={{
+                  fontSize: "0.75rem",
+                  background: "rgb(254, 226, 226)",
+                  padding: 12,
+                  borderRadius: 6,
+                  overflowX: "auto",
+                  color: "rgb(127, 29, 29)",
+                  marginTop: 8,
+                }}
+              >
                 {error.stack}
               </pre>
             </details>
           )}
 
           {this.state.errorInfo?.componentStack && (
-            <details className="mt-3">
-              <summary className="cursor-pointer text-red-700 font-medium mb-1">
+            <details style={{ marginTop: 12 }}>
+              <summary
+                style={{
+                  cursor: "pointer",
+                  color: "rgb(185, 28, 28)",
+                  fontWeight: 500,
+                  marginBottom: 4,
+                }}
+              >
                 Component Stack
               </summary>
-              <pre className="text-xs bg-red-100 p-3 rounded overflow-x-auto text-red-900 mt-2">
+              <pre
+                style={{
+                  fontSize: "0.75rem",
+                  background: "rgb(254, 226, 226)",
+                  padding: 12,
+                  borderRadius: 6,
+                  overflowX: "auto",
+                  color: "rgb(127, 29, 29)",
+                  marginTop: 8,
+                }}
+              >
                 {this.state.errorInfo.componentStack}
               </pre>
             </details>

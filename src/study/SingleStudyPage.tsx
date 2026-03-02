@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
+import { OpenInEditor } from "../demo/OpenInEditor";
 import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
-import { OpenInEditor } from "../OpenInEditor";
 import { ApiReference } from "./ApiReference";
 import { studiesById } from "./registry";
 

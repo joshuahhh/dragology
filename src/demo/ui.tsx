@@ -17,9 +17,9 @@ import {
 import { DragSpecTreeView } from "../DragSpecTreeView";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import { ErrorBoundary } from "../ErrorBoundary";
-import { OpenInEditor } from "../OpenInEditor";
 import { Draggable } from "../draggable";
 import { assert } from "../utils";
+import { OpenInEditor } from "./OpenInEditor";
 import type { Demo } from "./registry";
 import { parseTag, type TagNode, tagStringFromPath } from "./tags";
 

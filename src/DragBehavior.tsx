@@ -515,17 +515,19 @@ function betweenBehavior<T extends object>(
       throw new ErrorWithJSX(
         "Coincident targets detected in d.between",
         <>
-          <p className="mb-2">
-            In order to use <span className="font-mono">d.between</span>, the
+          <p style={{ marginBottom: 8 }}>
+            In order to use{" "}
+            <span style={{ fontFamily: "monospace" }}>d.between</span>, the
             dragged element must move to distinct locations in the different
             states provided.
           </p>
-          <p className="mb-2">
+          <p style={{ marginBottom: 8 }}>
             Here, we are dragging element{" "}
-            <span className="font-mono">{ctx.draggedPath}</span>. Two states put
-            it at the point [{renderedStates[e.indexA].position.str(", ")}]:
+            <span style={{ fontFamily: "monospace" }}>{ctx.draggedPath}</span>.
+            Two states put it at the point [
+            {renderedStates[e.indexA].position.str(", ")}]:
           </p>
-          <div className="mb-2">
+          <div style={{ marginBottom: 8 }}>
             <PrettyPrint value={renderedStates[e.indexA].state} />
             <PrettyPrint value={renderedStates[e.indexB].state} />
           </div>

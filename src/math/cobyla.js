@@ -1,4 +1,3 @@
-/* eslint-disable */
 /*
  Copyright 2008-2025
  Matthias Ehmann,

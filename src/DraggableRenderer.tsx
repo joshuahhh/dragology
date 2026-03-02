@@ -410,7 +410,7 @@ function DraggableRendererControlled<T extends object>({
       width={width}
       height={height}
       xmlns="http://www.w3.org/2000/svg"
-      className="overflow-visible select-none touch-none"
+      style={{ overflow: "visible", userSelect: "none", touchAction: "none" }}
     >
       {status.type === "idle" ? (
         <DrawIdleMode status={status} ctx={renderCtx} />

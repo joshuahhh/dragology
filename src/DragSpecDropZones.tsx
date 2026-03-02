@@ -271,7 +271,7 @@ export function DropZonesSvg({
     <svg
       width={width}
       height={height}
-      className="absolute top-0 left-0 pointer-events-none"
+      style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
       xmlns="http://www.w3.org/2000/svg"
     >
       <g opacity={0.35}>
@@ -288,9 +288,21 @@ export function DropZonesSvg({
 export function DropZoneLegend({ data }: { data: DropZoneData }) {
   const entries = [...data.colorMap.entries()];
   return (
-    <div className="text-xs font-mono flex flex-wrap gap-x-4 gap-y-1">
+    <div
+      style={{
+        fontSize: "0.75rem",
+        fontFamily: "monospace",
+        display: "flex",
+        flexWrap: "wrap",
+        columnGap: 16,
+        rowGap: 4,
+      }}
+    >
       {entries.map(([path, color]) => (
-        <div key={path} className="flex items-center gap-1.5">
+        <div
+          key={path}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+        >
           <div
             style={{
               width: 10,
@@ -301,7 +313,7 @@ export function DropZoneLegend({ data }: { data: DropZoneData }) {
               flexShrink: 0,
             }}
           />
-          <span className="text-slate-600">{path}</span>
+          <span style={{ color: "rgb(71, 85, 105)" }}>{path}</span>
         </div>
       ))}
     </div>

@@ -17,8 +17,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "prettier": "prettier --write src",
     "lint": "eslint src",
+    "check": "npm run typecheck && npm test && npm run lint",
     "prepublishOnly": "npm run clean && npm run build:lib",
-    "release": "npm test && npm version patch && npm publish"
+    "release": "npm run check && npm version patch && npm publish"
   },
   "peerDependencies": {
     "react": "^18 || ^19",

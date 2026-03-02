@@ -193,21 +193,21 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
         a.type,
       )} and ${String(b.type)}`,
       <>
-        <p className="mb-2">
+        <p style={{ marginBottom: 8 }}>
           During interpolation, I found elements of different types at the same
           path in the "before" and "after" SVG trees. I don't know how to
           interpolate between those, sorry.
         </p>
         {a.props.id === b.props.id && (
-          <p className="mb-2">
+          <p style={{ marginBottom: 8 }}>
             (FYI: These elements share the ID{" "}
-            <span className="font-mono">{a.props.id}</span>. I would guess that
-            you are drawing this element in two different code paths, and they
-            don't match up.)
+            <span style={{ fontFamily: "monospace" }}>{a.props.id}</span>. I
+            would guess that you are drawing this element in two different code
+            paths, and they don't match up.)
           </p>
         )}
         <PrettyPrint value={a} />
-        <div className="my-4">vs</div>
+        <div style={{ marginTop: 16, marginBottom: 16 }}>vs</div>
         <PrettyPrint value={b} />
       </>,
     );
@@ -291,7 +291,7 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
       `Cannot lerp children: different child counts (${childrenA.length} vs ${childrenB.length})`,
       <div>
         <PrettyPrint value={a} />
-        <div className="my-4">vs</div>
+        <div style={{ marginTop: 16, marginBottom: 16 }}>vs</div>
         <PrettyPrint value={b} />
       </div>,
     );

@@ -40,7 +40,7 @@ export function DragSpecTreeView<T>({
     <TreeViewContext.Provider
       value={{ activePath, colorMap, svgWidth, svgHeight, thumbArea }}
     >
-      <div className="text-xs font-mono">
+      <div style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>
         <SpecNode spec={spec} path="" />
       </div>
     </TreeViewContext.Provider>
