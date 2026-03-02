@@ -1,6 +1,11 @@
 import _ from "lodash";
 import { useMemo, useState } from "react";
-import { ConfigCheckbox, ConfigPanel, DemoDraggable, DemoWithConfig } from "../demo/ui";
+import {
+  ConfigCheckbox,
+  ConfigPanel,
+  DemoDraggable,
+  DemoWithConfig,
+} from "../demo/ui";
 import { Draggable } from "../draggable";
 
 import { demo } from "../demo";

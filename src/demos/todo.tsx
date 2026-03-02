@@ -2,7 +2,12 @@ import { produce } from "immer";
 import _ from "lodash";
 import { useMemo, useState } from "react";
 import { demo } from "../demo";
-import { ConfigCheckbox, ConfigPanel, DemoDraggable, DemoWithConfig } from "../demo/ui";
+import {
+  ConfigCheckbox,
+  ConfigPanel,
+  DemoDraggable,
+  DemoWithConfig,
+} from "../demo/ui";
 import { Draggable, SetState } from "../draggable";
 import { Svgx } from "../svgx";
 import { translate } from "../svgx/helpers";

@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { demo } from "../demo";
-import { ConfigCheckbox, ConfigPanel, DemoDraggable, DemoWithConfig } from "../demo/ui";
+import {
+  ConfigCheckbox,
+  ConfigPanel,
+  DemoDraggable,
+  DemoWithConfig,
+} from "../demo/ui";
 import { Draggable } from "../draggable";
 import { type DragSpecBuilder } from "../DragSpec";
 import { Svgx } from "../svgx";

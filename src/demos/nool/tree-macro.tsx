@@ -5,7 +5,12 @@ import { produce } from "immer";
 import _ from "lodash";
 import { useMemo, useState } from "react";
 import { demo } from "../../demo";
-import { ConfigCheckbox, ConfigPanel, DemoDraggable, DemoWithConfig } from "../../demo/ui";
+import {
+  ConfigCheckbox,
+  ConfigPanel,
+  DemoDraggable,
+  DemoWithConfig,
+} from "../../demo/ui";
 import { Draggable, DragologyPropValue } from "../../draggable";
 import { DragSpecBuilder } from "../../DragSpec";
 import { Svgx } from "../../svgx";
