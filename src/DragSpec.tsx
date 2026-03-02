@@ -88,6 +88,7 @@ export type DragSpecVary<T> = {
   state: T;
   paramPaths: PathIn<T, number>[];
   constraint?(state: T): Many<number>;
+  pin?(state: T): Many<number>;
 };
 
 export type DragSpecChangeDistance<T> = {
@@ -444,6 +445,12 @@ export type VaryOptions<T> = {
    * to express a < b constraints.
    */
   constraint?: (state: T) => Many<number>;
+  /**
+   * A pin function returns one or more numbers that will be
+   * constrained to remain constant throughout the drag. (This is a
+   * convenience built on top of `constraint`.)
+   */
+  pin?: (state: T) => Many<number>;
 };
 
 export { and, equal, lessThan, moreThan } from "./math/optimization";

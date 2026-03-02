@@ -15,20 +15,20 @@ import {
 import { getLocalBounds, pointInBounds } from "./svgx/bounds";
 import { translate } from "./svgx/helpers";
 import {
-  LayeredSvgx,
   findByPathInLayered,
   layeredExtract,
   layeredMerge,
   layeredPrefixIds,
   layeredSetAttributes,
   layeredShiftZIndices,
+  LayeredSvgx,
   layeredTransform,
 } from "./svgx/layers";
 import { lerpLayered, lerpLayered3 } from "./svgx/lerp";
 import { findByPath } from "./svgx/path";
 import { globalToLocal, localToGlobal, parseTransform } from "./svgx/transform";
 import { Transition } from "./transition";
-import { assert, assertNever, manyToArray, pipe } from "./utils";
+import { assert, assertNever, Many, manyToArray, pipe } from "./utils";
 
 /**
  * A "drag behavior" defines the ongoing behavior of a drag – what is
@@ -345,9 +345,22 @@ function varyBehavior<T extends object>(
     return localToGlobal(found.accumulatedTransform, ctx.pointerLocal);
   };
 
+  // Bake pins into the constraint function: evaluate pin at the
+  // initial state to capture targets, then add equal() constraints.
+  const constraint = spec.pin
+    ? (s: T): Many<number> => {
+        const pinTargets = manyToArray(spec.pin!(spec.state));
+        const pinCurrent = manyToArray(spec.pin!(s));
+        return [
+          spec.constraint?.(s),
+          pinCurrent.map((v, i) => [v - pinTargets[i], pinTargets[i] - v]),
+        ];
+      }
+    : spec.constraint;
+
   // Pre-compute constraint count (flatten a dummy call to count entries)
-  const numConstraints = spec.constraint
-    ? manyToArray(spec.constraint(spec.state)).length
+  const numConstraints = constraint
+    ? manyToArray(constraint(spec.state)).length
     : 0;
 
   const initialParams = spec.paramPaths.map((path) =>
@@ -355,9 +368,8 @@ function varyBehavior<T extends object>(
   );
   const minimizer = new DistanceMinimizer(initialParams, numConstraints);
 
-  const constraintsFn = spec.constraint
-    ? (params: number[]) =>
-        manyToArray(spec.constraint!(stateFromParams(params)))
+  const constraintsFn = constraint
+    ? (params: number[]) => manyToArray(constraint(stateFromParams(params)))
     : undefined;
 
   return (frame) => {

@@ -1,7 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { and, equal, moreThan } from "../DragSpec";
+import { moreThan } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 type State = {
@@ -17,6 +17,8 @@ const MIN_W = 40;
 const MIN_H = 30;
 const HANDLE_HIT = 14;
 const CORNER_SIZE = 18;
+
+const bigEnough = (s: State) => [moreThan(s.w, MIN_W), moreThan(s.h, MIN_H)];
 
 const draggable: Draggable<State> = ({ state, d }) => {
   const { x, y, w, h } = state;
@@ -62,10 +64,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
           style={{ cursor: "ns-resize" }}
           dragology={() =>
             d.vary(state, [["y"], ["h"]], {
-              constraint: (s) => [
-                equal(s.y + s.h, y + h),
-                moreThan(s.h, MIN_H),
-              ],
+              pin: (s) => s.y + s.h,
+              constraint: bigEnough,
             })
           }
         />
@@ -92,7 +92,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
           style={{ cursor: "ns-resize" }}
           dragology={() =>
             d.vary(state, [["h"]], {
-              constraint: (s) => moreThan(s.h, MIN_H),
+              constraint: bigEnough,
             })
           }
         />
@@ -119,10 +119,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
           style={{ cursor: "ew-resize" }}
           dragology={() =>
             d.vary(state, [["x"], ["w"]], {
-              constraint: (s) => [
-                equal(s.x + s.w, x + w),
-                moreThan(s.w, MIN_W),
-              ],
+              pin: (s) => s.x + s.w,
+              constraint: bigEnough,
             })
           }
         />
@@ -149,7 +147,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
           style={{ cursor: "ew-resize" }}
           dragology={() =>
             d.vary(state, [["w"]], {
-              constraint: (s) => moreThan(s.w, MIN_W),
+              constraint: bigEnough,
             })
           }
         />
@@ -178,12 +176,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
           style={{ cursor: "nwse-resize" }}
           dragology={() =>
             d.vary(state, [["x"], ["y"], ["w"], ["h"]], {
-              constraint: (s) => [
-                equal(s.x + s.w, x + w),
-                equal(s.y + s.h, y + h),
-                moreThan(s.w, MIN_W),
-                moreThan(s.h, MIN_H),
-              ],
+              pin: (s) => [s.x + s.w, s.y + s.h],
+              constraint: bigEnough,
             })
           }
         />
@@ -206,11 +200,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
           style={{ cursor: "nesw-resize" }}
           dragology={() =>
             d.vary(state, [["y"], ["w"], ["h"]], {
-              constraint: (s) => [
-                equal(s.y + s.h, y + h),
-                moreThan(s.w, MIN_W),
-                moreThan(s.h, MIN_H),
-              ],
+              pin: (s) => s.y + s.h,
+              constraint: bigEnough,
             })
           }
         />
@@ -233,11 +224,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
           style={{ cursor: "nesw-resize" }}
           dragology={() =>
             d.vary(state, [["x"], ["w"], ["h"]], {
-              constraint: (s) => [
-                equal(s.x + s.w, x + w),
-                moreThan(s.w, MIN_W),
-                moreThan(s.h, MIN_H),
-              ],
+              pin: (s) => s.x + s.w,
+              constraint: bigEnough,
             })
           }
         />
@@ -263,8 +251,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
           style={{ cursor: "nwse-resize" }}
           dragology={() =>
             d.vary(state, [["w"], ["h"]], {
-              constraint: (s) =>
-                and(moreThan(s.w, MIN_W), moreThan(s.h, MIN_H)),
+              constraint: bigEnough,
             })
           }
         />
@@ -288,5 +275,5 @@ export default demo(
       height={300}
     />
   ),
-  { tags: ["d.vary [w/constraint]"] },
+  { tags: ["d.vary [w/constraint] [w/pin]"] },
 );
