@@ -347,13 +347,13 @@ function varyBehavior<T extends object>(
 
   // Bake pins into the constraint function: evaluate pin at the
   // initial state to capture targets, then add equal() constraints.
+  const pinTargets = spec.pin ? manyToArray(spec.pin(spec.state)) : undefined;
   const constraint = spec.pin
     ? (s: T): Many<number> => {
-        const pinTargets = manyToArray(spec.pin!(spec.state));
         const pinCurrent = manyToArray(spec.pin!(s));
         return [
           spec.constraint?.(s),
-          pinCurrent.map((v, i) => [v - pinTargets[i], pinTargets[i] - v]),
+          pinCurrent.map((v, i) => [v - pinTargets![i], pinTargets![i] - v]),
         ];
       }
     : spec.constraint;
