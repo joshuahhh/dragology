@@ -5,7 +5,7 @@ import { demo } from "../demo";
 import { translate } from "../svgx/helpers";
 
 // Variant of orbiting-planet where the planet can also float freely.
-// Uses withBackground(closest(vary per star), vary(free x,y)).
+// Uses whenFar(closest(vary per star), vary(free x,y)).
 
 const STARS = [
   { x: 100, y: 150, color: "#e8b730", label: "A" },
@@ -84,9 +84,9 @@ const draggable: Draggable<State> = ({ state, d }) => {
                 ),
               ),
             )
-            .withBackground(
+            .whenFar(
               d.vary({ mode: "free", x: planetX, y: planetY }, [["x"], ["y"]]),
-              { radius: 50 },
+              { distance: 50 },
             );
         }}
       >
@@ -114,7 +114,7 @@ export default demo(
     tags: [
       "d.vary",
       "d.closest",
-      "spec.withBackground",
+      "spec.whenFar",
       "multiple continuous targets",
     ],
   },

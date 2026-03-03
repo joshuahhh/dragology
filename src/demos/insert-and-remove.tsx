@@ -101,10 +101,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
               draft.items.splice(insertIdx, 0, storeItem);
             });
 
-            return d
-              .closest(statesWith)
-              .withBackground(stateWithout)
-              .withFloating();
+            return d.closest(statesWith).whenFar(stateWithout).withFloating();
           },
         }),
       )}
@@ -140,7 +137,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
                 // This state needs "d.fixed" so we can call "onDrop"
                 d.fixed(deleteState).onDrop(postDeleteState),
               )
-              .withBackground(stateWithout)
+              .whenFar(stateWithout)
               .withFloating();
           },
         }),
@@ -202,7 +199,7 @@ export default demo(
       "d.closest",
       "d.fixed",
       "spec.withFloating",
-      "spec.withBackground",
+      "spec.whenFar",
     ],
   },
 );

@@ -97,8 +97,8 @@ export function dragSpecToBehavior<T extends object>(
       return withFloatingBehavior(spec, ctx);
     case "closest":
       return closestBehavior(spec, ctx);
-    case "with-background":
-      return withBackgroundBehavior(spec, ctx);
+    case "when-far":
+      return whenFarBehavior(spec, ctx);
     case "on-drop":
       return onDropBehavior(spec, ctx);
     case "during":
@@ -243,15 +243,15 @@ function closestBehavior<T extends object>(
   };
 }
 
-function withBackgroundBehavior<T extends object>(
-  spec: DragSpecData<T> & { type: "with-background" },
+function whenFarBehavior<T extends object>(
+  spec: DragSpecData<T> & { type: "when-far" },
   ctx: DragBehaviorInitContext<T>,
 ): DragBehavior<T> {
   const foregroundBehavior = dragSpecToBehavior(spec.foreground, ctx);
   const backdropBehavior = dragSpecToBehavior(spec.background, ctx);
   return (frame) => {
     const foregroundResult = foregroundBehavior(frame);
-    const inForeground = foregroundResult.distance <= spec.radius;
+    const inForeground = foregroundResult.distance <= spec.distance;
     if (!inForeground) {
       const bgResult = backdropBehavior(frame);
       return {

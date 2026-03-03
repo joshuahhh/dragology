@@ -256,7 +256,7 @@ function renderTree(
                 if (config.useFloating) {
                   return d
                     .closest(statesWith)
-                    .withBackground(result.tree)
+                    .whenFar(result.tree)
                     .withFloating();
                 } else {
                   return d.between(statesWith);
@@ -414,7 +414,7 @@ export default demo(
       "d.between",
       "d.closest",
       "spec.withFloating",
-      "spec.withBackground",
+      "spec.whenFar",
       "reordering",
     ],
   },

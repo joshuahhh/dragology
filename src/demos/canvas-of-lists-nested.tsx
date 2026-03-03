@@ -156,7 +156,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       return d
         .closest(statesWith)
         .withFloating()
-        .withBackground(
+        .whenFar(
           d.vary(stateWithTopRow, [
             ["rows", stateWithTopRow.rows.length - 1, "x"],
             ["rows", stateWithTopRow.rows.length - 1, "y"],
@@ -270,6 +270,6 @@ export default demo(
     </div>
   ),
   {
-    tags: ["d.closest", "spec.withFloating", "d.vary", "spec.withBackground"],
+    tags: ["d.closest", "spec.withFloating", "d.vary", "spec.whenFar"],
   },
 );

@@ -157,9 +157,9 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
         </div>
       </Box>
     );
-  } else if (spec.type === "with-background") {
+  } else if (spec.type === "when-far") {
     return (
-      <Box label={`withBackground (r=${spec.radius})`}>
+      <Box label={`whenFar (d=${spec.distance})`}>
         <div style={{ display: "flex", flexDirection: "row", gap: 4 }}>
           <Slot label="fg">
             <SpecNode spec={spec.foreground} path={path + "fg/"} />

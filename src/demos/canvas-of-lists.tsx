@@ -154,7 +154,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
                   return d
                     .closest(statesWith)
                     .withFloating()
-                    .withBackground(
+                    .whenFar(
                       d.vary(stateWithNewRow, [
                         ["rows", newRowId, "x"],
                         ["rows", newRowId, "y"],
@@ -212,7 +212,7 @@ export default demo(
       "d.closest",
       "spec.withFloating",
       "d.vary",
-      "spec.withBackground",
+      "spec.whenFar",
       "discrete on top of continuous",
     ],
   },

@@ -15,7 +15,7 @@ export type DragSpecTraceInfoByType = {
   fixed: { renderedStates: RenderedState[] };
   "with-floating": { outputRendered: LayeredSvgx; elementPos: Vec2 };
   closest: { bestIndex: number };
-  "with-background": { inForeground: boolean };
+  "when-far": { inForeground: boolean };
   "on-drop": Record<string, never>;
   during: { outputRendered: LayeredSvgx };
   vary: { renderedStates: RenderedState[]; currentParams: number[] };
@@ -127,7 +127,7 @@ export function debugOverlay<T>(
       );
     }
 
-    case "with-background": {
+    case "when-far": {
       const info = getTraceInfo(spec);
       if (!info) return null;
       const fgOverlay = debugOverlay(spec.foreground, pointer);

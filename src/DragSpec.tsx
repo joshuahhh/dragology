@@ -13,7 +13,7 @@ export type DragSpecData<T> = (
   | DragSpecFixed<T>
   | DragSpecWithFloating<T>
   | DragSpecClosest<T>
-  | DragSpecWithBackground<T>
+  | DragSpecWhenFar<T>
   | DragSpecOnDrop<T>
   | DragSpecVary<T>
   | DragSpecChangeDistance<T>
@@ -50,11 +50,11 @@ export type DragSpecClosest<T> = {
   specs: DragSpecData<T>[];
 };
 
-export type DragSpecWithBackground<T> = {
-  type: "with-background";
+export type DragSpecWhenFar<T> = {
+  type: "when-far";
   foreground: DragSpecData<T>;
   background: DragSpecData<T>;
-  radius: number;
+  distance: number;
 };
 
 export type DragSpecWithSnapRadius<T> = {
@@ -170,14 +170,13 @@ export interface DragSpecMethods<T> {
   onDrop(state: T | ((previewState: T) => T)): DragSpec<T>;
 
   /**
-   * Augment the behavior with a "background" behavior that it will
-   * switch to when the pointer gets more than a certain distance
-   * away. This distance is 50 pixels by default, but can be
-   * configured via the `radius` option.
+   * Switch to an alternate behavior when the pointer gets more than
+   * a certain distance away. This distance is 50 pixels by default,
+   * but can be configured via the `distance` option.
    */
-  withBackground(
+  whenFar(
     background: DragSpecLike<T>,
-    opts?: { radius?: number },
+    opts?: { distance?: number },
   ): DragSpec<T>;
 
   /**
@@ -202,7 +201,7 @@ export interface DragSpecMethods<T> {
    * behavior. "Branches" isn't yet a very well-established concept,
    * but this includes, e.g., switching between behaviors in a
    * `closest`, or switching between the "foreground" and
-   * "background" in a `withBackground`.
+   * "background" in a `whenFar`.
    *
    * NOTE: There is currently no way to say, e.g., "do transition X
    * when switching between branches of a `closest` but do transition
@@ -253,12 +252,12 @@ const dragSpecMethods: DragSpecMethods<any> & ThisType<DragSpec<any>> = {
       onDropState: state,
     });
   },
-  withBackground(bg, { radius = 50 } = {}) {
+  whenFar(bg, { distance = 50 } = {}) {
     return attachMethods({
-      type: "with-background",
+      type: "when-far",
       foreground: this,
       background: resolveDragSpecLike(bg),
-      radius,
+      distance,
     });
   },
   withSnapRadius(radius, { transition = false, chain = false } = {}) {

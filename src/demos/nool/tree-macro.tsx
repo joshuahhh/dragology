@@ -413,7 +413,7 @@ function renderMacroTree(
       const gutterTargets = gutterInsertionTargets(stateWithout, tree);
       return d
         .closest(gutterTargets, fullState)
-        .withBackground(stateWithout)
+        .whenFar(stateWithout)
         .withFloating();
     }
 
@@ -456,7 +456,7 @@ function renderMacroTree(
         gutterTargets,
         fullState, // put back
       )
-      .withBackground(stateWithout)
+      .whenFar(stateWithout)
       .withFloating();
   };
 
@@ -632,7 +632,7 @@ function renderMacroMode(
                       );
                       return d
                         .closest(targetStates)
-                        .withBackground(stateWithout)
+                        .whenFar(stateWithout)
                         .withFloating();
                     }
                   : undefined,
@@ -687,7 +687,7 @@ function renderMacroMode(
               );
               return d
                 .closest(placeTargets, reorderTargets)
-                .withBackground(stateWithout)
+                .whenFar(stateWithout)
                 .withFloating();
             },
           }).element,
@@ -873,11 +873,6 @@ export default demo(
     );
   },
   {
-    tags: [
-      "d.between",
-      "d.closest",
-      "spec.withFloating",
-      "spec.withBackground",
-    ],
+    tags: ["d.between", "d.closest", "spec.withFloating", "spec.whenFar"],
   },
 );

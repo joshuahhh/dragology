@@ -13,7 +13,5 @@
 - tiles: fix the thing where it transitions back home cuz there are multiple betweens meeting there
 
 - names...
-  - background "radius" -> "threshold"?
-  - withBackground -> withDefault?
   - "drawer" -> "engine"?
   - eliminate other "data-"s?

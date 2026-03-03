@@ -34,7 +34,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
                 const idx = amb(_.range(stateWithout.perm.length + 1));
                 draft.perm.splice(idx, 0, p);
               });
-              return d.closest(statesWith).withBackground(state).withFloating();
+              return d.closest(statesWith).whenFar(state).withFloating();
             }}
           >
             <rect
@@ -73,11 +73,6 @@ export default demo(
     />
   ),
   {
-    tags: [
-      "d.closest",
-      "spec.withFloating",
-      "spec.withBackground",
-      "reordering",
-    ],
+    tags: ["d.closest", "spec.withFloating", "spec.whenFar", "reordering"],
   },
 );

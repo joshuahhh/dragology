@@ -273,7 +273,7 @@ function makePickupDrag(
           fullState,
         )
         .withFloating()
-        .withBackground(d.floating(stateWithClone));
+        .whenFar(d.floating(stateWithClone));
     }
 
     // Backdrop: variadic parent → splice out, fixed parent → leave ◯ hole
@@ -365,7 +365,7 @@ function makePickupDrag(
           .floating(removeStageHoles(eraseState))
           .onDrop(removeStageHoles(cleanState)),
       )
-      .withBackground(
+      .whenFar(
         d.floating(cleanedWithout).onDrop({
           ...cleanedWithout,
           voidStack: newVoidStack,
@@ -416,7 +416,7 @@ function makeBrushDrag(
 
     return d
       .closest(holeTargets, insertTargets, stageTargets, paletteTargets)
-      .withBackground(stateWithout)
+      .whenFar(stateWithout)
       .withFloating();
   };
 }
@@ -456,7 +456,7 @@ function makePaletteDrag(
       const palTargets = paletteInsertionTargets(stateWithClone, block);
       return d
         .closest(placeTargets, insertTargets, stageTargets, palTargets, state)
-        .withBackground(stateWithClone)
+        .whenFar(stateWithClone)
         .withFloating();
     }
 
@@ -499,7 +499,7 @@ function makePaletteDrag(
           .floating(removeStageHoles(eraseState))
           .onDrop(removeStageHoles(cleanState)),
       )
-      .withBackground(
+      .whenFar(
         d.floating(stateWithout).onDrop({
           ...stateWithout,
           voidStack: newVoidStack,
@@ -548,7 +548,7 @@ function makeVoidDrag(
     return d
       .closest(holeTargets, insertTargets, paletteTargets, stageTargets)
       .withFloating()
-      .withBackground(d.floating(stateWithout).onDrop(state));
+      .whenFar(d.floating(stateWithout).onDrop(state));
   };
 }
 
@@ -1250,7 +1250,7 @@ export default demo(
       "keyboard",
       "d.closest",
       "spec.withFloating",
-      "spec.withBackground",
+      "spec.whenFar",
     ],
   },
 );

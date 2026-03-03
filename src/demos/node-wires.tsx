@@ -131,7 +131,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       );
     }
 
-    return d.closest(snapSpecs).withBackground(varySpec, { radius: 20 });
+    return d.closest(snapSpecs).whenFar(varySpec, { distance: 20 });
   }
 
   return (
@@ -309,11 +309,6 @@ export default demo(
     />
   ),
   {
-    tags: [
-      "d.switchToStateAndFollow",
-      "spec.onDrop",
-      "d.vary",
-      "spec.withBackground",
-    ],
+    tags: ["d.switchToStateAndFollow", "spec.onDrop", "d.vary", "spec.whenFar"],
   },
 );

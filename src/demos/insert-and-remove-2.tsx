@@ -106,7 +106,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
                 items: [...state.items, { id: newId, label }],
               },
               `tile-${newId}`,
-              dropIntoListAndTrash(state, { id: newId, label }).withBackground(
+              dropIntoListAndTrash(state, { id: newId, label }).whenFar(
                 d.floating(state),
               ),
             );
@@ -126,10 +126,9 @@ const draggable: Draggable<State> = ({ state, d }) => {
               draft.items.splice(idx, 1);
             });
 
-            return dropIntoListAndTrash(
-              stateWithout,
-              draggedItem,
-            ).withBackground(d.floating(state));
+            return dropIntoListAndTrash(stateWithout, draggedItem).whenFar(
+              d.floating(state),
+            );
           },
         }),
       )}
@@ -183,7 +182,7 @@ export default demo(
       "d.closest",
       "spec.withFloating",
       "d.dropTarget",
-      "spec.withBackground",
+      "spec.whenFar",
     ],
   },
 );
