@@ -13,10 +13,7 @@ type State = {
 const center = Vec2(150, 150);
 const radius = 100;
 
-const initialState: State = {
-  x: center.x + radius,
-  y: center.y,
-};
+const initialState: State = center.add(Vec2(radius, 0));
 
 const draggable: Draggable<State> = ({ state, d }) => {
   return (
@@ -31,12 +28,12 @@ const draggable: Draggable<State> = ({ state, d }) => {
       />
       <circle
         id="point"
-        transform={translate(Vec2(state.x, state.y))}
+        transform={translate(state)}
         r={14}
         fill="black"
         dragology={() =>
           d.vary(state, [["x"], ["y"]], {
-            constraint: (s) => equal(Vec2(s.x, s.y).dist2(center), radius ** 2),
+            constraint: (s) => equal(center.dist2(s), radius ** 2),
           })
         }
       />

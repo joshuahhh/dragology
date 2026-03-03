@@ -19,8 +19,8 @@ const aPx = a * SCALE;
 const cPx = c * SCALE;
 
 const center = Vec2(200, 150);
-const f1 = Vec2(center.x - cPx, center.y);
-const f2 = Vec2(center.x + cPx, center.y);
+const f1 = center.add(Vec2(-cPx, 0));
+const f2 = center.add(Vec2(cPx, 0));
 
 // Parametric sampling for the SVG path
 function cassiniPath(n: number): string {
@@ -32,9 +32,7 @@ function cassiniPath(n: number): string {
     const r2 = cPx ** 2 * cos2t + Math.sqrt(aPx ** 4 - cPx ** 4 * sin2t ** 2);
     if (r2 < 0) continue;
     const r = Math.sqrt(r2);
-    points.push(
-      `${center.x + r * Math.cos(theta)},${center.y + r * Math.sin(theta)}`,
-    );
+    points.push(center.add(Vec2.polarRad(r, theta)).str());
   }
   return `M${points.join("L")}Z`;
 }
@@ -43,7 +41,7 @@ const curvePath = cassiniPath(200);
 
 // Initial point: rightmost point of the oval (θ=0)
 const r0 = Math.sqrt(cPx ** 2 + aPx ** 2);
-const initialState: State = { x: center.x + r0, y: center.y };
+const initialState: State = center.add(Vec2(r0, 0));
 
 const draggable: Draggable<State> = ({ state, d }) => {
   return (
@@ -57,13 +55,13 @@ const draggable: Draggable<State> = ({ state, d }) => {
       />
       <circle
         id="point"
-        transform={translate(Vec2(state.x, state.y))}
+        transform={translate(state)}
         r={14}
         fill="black"
         dragology={() =>
           d.vary(state, [["x"], ["y"]], {
             constraint: (s) => {
-              const p = Vec2(s.x, s.y);
+              const p = Vec2(s);
               return equal(p.dist(f1) * p.dist(f2), aPx ** 2);
             },
           })
