@@ -140,7 +140,6 @@ export default demo(() => (
 - **Positioning**: Always use `transform={translate(x, y)}`, never `x`/`y` attributes directly
 - **Layering**: Use `data-z-index={isDragged ? 2 : 1}` to control draw order
 - **Conditional drag**: `dragology={condition && drag(...)}` to make things conditionally draggable
-- **drag() wrapper**: Every `dragology` value must be wrapped in `drag(...)` — the framework throws if you don't
 - **`data-transition={false}`**: Elements with this skip spring animation and track the cursor directly
 
 ### Registration
