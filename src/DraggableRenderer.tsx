@@ -30,12 +30,7 @@ import {
   renderDraggableInertUnlayered,
 } from "./renderDraggable";
 import { Svgx, findElement, updatePropsDownTree } from "./svgx";
-import {
-  LayeredSvgx,
-  drawLayered,
-  layerSvg,
-  layeredExtract,
-} from "./svgx/layers";
+import { LayeredSvgx, drawLayered, layerSvg } from "./svgx/layers";
 import { lerpLayered } from "./svgx/lerp";
 import { assignPaths, findByPath, getPath } from "./svgx/path";
 import { globalToLocal, localToGlobal } from "./svgx/transform";
@@ -356,7 +351,7 @@ function DraggableRendererControlled<T extends object>({
 
       const newStatus = initDrag(
         newSpec,
-        status.dragParamsInfo.originalBehaviorCtxWithoutFloat,
+        status.dragParamsInfo.originalBehaviorCtx,
         status.dragParamsInfo.originalStartState,
         frame,
         status.pointerStart,
@@ -460,10 +455,7 @@ type DragParamsInfo<T extends object> = {
   dragParams: DragParams;
   dragParamsCallback: (params: DragParams) => DragSpec<T>;
   originalStartState: T;
-  originalBehaviorCtxWithoutFloat: Omit<
-    DragBehaviorInitContext<T>,
-    "floatLayered"
-  >;
+  originalBehaviorCtx: DragBehaviorInitContext<T>;
 };
 
 function advanceFrame<T extends object>(
@@ -568,11 +560,10 @@ function processChainNow<T extends object>(
     pointerLocal,
   );
 
-  const { floatLayered: _fl, ...behaviorCtxWithoutFloat } = status.behaviorCtx;
   const chainedResult = initDrag(
     newDragSpec,
     {
-      ...behaviorCtxWithoutFloat,
+      ...status.behaviorCtx,
       draggedPath: newDraggedPath,
       draggedId: newDraggedId,
       pointerLocal,
@@ -600,28 +591,13 @@ function processChainNow<T extends object>(
 
 function initDrag<T extends object>(
   spec: DragSpec<T>,
-  behaviorCtxWithoutFloat: Omit<DragBehaviorInitContext<T>, "floatLayered">,
+  behaviorCtx: DragBehaviorInitContext<T>,
   state: T,
   frame: DragFrame,
   pointerStart: Vec2,
   springingFrom: SpringingFrom | null,
   dragParamsInfo: DragParamsInfo<T>,
 ): DragStatus<T> & { type: "dragging" } {
-  const { draggable, draggedId } = behaviorCtxWithoutFloat;
-  let floatLayered: LayeredSvgx | null = null;
-  if (draggedId) {
-    const startLayered = renderDraggableInert(
-      draggable,
-      state,
-      draggedId,
-      false,
-    );
-    floatLayered = layeredExtract(startLayered, draggedId).extracted;
-  }
-  const behaviorCtx: DragBehaviorInitContext<T> = {
-    ...behaviorCtxWithoutFloat,
-    floatLayered,
-  };
   const behavior = dragSpecToBehavior(spec, behaviorCtx);
   // Use the canonical pointerStart (not frame.pointerStart) so that
   // the first rendered frame of a chained drag uses the correct
@@ -701,7 +677,7 @@ function postProcessForInteraction<T extends object>(
               pointer,
             );
 
-            const behaviorCtxWithoutFloat = {
+            const behaviorCtx: DragBehaviorInitContext<T> = {
               draggable: ctx.draggable,
               draggedPath,
               draggedId,
@@ -711,7 +687,7 @@ function postProcessForInteraction<T extends object>(
             const frame: DragFrame = { pointer, pointerStart: pointer };
             const draggingStatus = initDrag(
               dragSpec,
-              behaviorCtxWithoutFloat,
+              behaviorCtx,
               state,
               frame,
               pointer,
@@ -720,7 +696,7 @@ function postProcessForInteraction<T extends object>(
                 dragParams,
                 dragParamsCallback: dragSpecCallback,
                 originalStartState: state,
-                originalBehaviorCtxWithoutFloat: behaviorCtxWithoutFloat,
+                originalBehaviorCtx: behaviorCtx,
               },
             );
 

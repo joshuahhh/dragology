@@ -79,7 +79,6 @@ export type DragBehaviorInitContext<T extends object> = {
   draggedPath: string;
   draggedId: string | null;
   pointerLocal: Vec2;
-  floatLayered: LayeredSvgx | null;
 };
 
 /**
@@ -155,13 +154,20 @@ function withFloatingBehavior<T extends object>(
   spec: DragSpecData<T> & { type: "with-floating" },
   ctx: DragBehaviorInitContext<T>,
 ): DragBehavior<T> {
-  const { draggedId, floatLayered } = ctx;
+  const { draggedId } = ctx;
   assert(
     draggedId !== null,
     "Floating drags require the dragged element to have an id",
   );
-  assert(floatLayered !== null, "Floating drags require floatLayered");
   const innerBehavior = dragSpecToBehavior(spec.inner, ctx);
+
+  // Cache the latest float element for frames where the inner result
+  // doesn't contain the dragged element.
+  let cachedFloatLayered: LayeredSvgx | null = null;
+  let cachedFloatPos: Vec2 | null = null;
+  // The element position on the first frame (used to keep the float
+  // anchored to the cursor regardless of inner-result interpolation).
+  let startFloatPos: Vec2 | null = null;
 
   return (frame) => {
     const innerResult = innerBehavior(frame);
@@ -172,17 +178,37 @@ function withFloatingBehavior<T extends object>(
       ? localToGlobal(draggedElement.props.transform, ctx.pointerLocal)
       : Vec2(Infinity, Infinity);
 
+    // Extract the float element from the inner result, or fall back to cache.
+    let floatLayered: LayeredSvgx;
+    let floatPos: Vec2;
     let backdrop: LayeredSvgx;
     if (!draggedElement) {
-      backdrop = layered;
-    } else if (spec.ghost !== undefined) {
-      const { remaining, extracted } = layeredExtract(layered, draggedId);
-      backdrop = layeredMerge(
-        remaining,
-        layeredSetAttributes(layeredPrefixIds(extracted, "ghost-"), spec.ghost),
+      assert(
+        cachedFloatLayered !== null,
+        "Floating drag: dragged element never appeared in inner result",
       );
+      floatLayered = cachedFloatLayered;
+      floatPos = cachedFloatPos!;
+      backdrop = layered;
     } else {
-      backdrop = layeredExtract(layered, draggedId).remaining;
+      const { remaining, extracted } = layeredExtract(layered, draggedId);
+      floatLayered = extracted;
+      floatPos = elementPos;
+      cachedFloatLayered = extracted;
+      cachedFloatPos = floatPos;
+      if (startFloatPos === null) startFloatPos = floatPos;
+
+      if (spec.ghost !== undefined) {
+        backdrop = layeredMerge(
+          remaining,
+          layeredSetAttributes(
+            layeredPrefixIds(extracted, "ghost-"),
+            spec.ghost,
+          ),
+        );
+      } else {
+        backdrop = remaining;
+      }
     }
 
     // Compute float translation. With tether, we limit how far the
@@ -197,9 +223,13 @@ function withFloatingBehavior<T extends object>(
         floatDelta = adjusted.sub(frame.pointerStart);
       }
     }
+
+    // Correct for the element being at its inner-result position
+    // rather than the start-of-drag position.
+    const posCorrection = startFloatPos!.sub(floatPos);
     const floatPositioned = layeredTransform(
       floatLayered,
-      translate(floatDelta),
+      translate(floatDelta.add(posCorrection)),
     );
     const rendered = layeredMerge(
       backdrop,
