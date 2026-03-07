@@ -322,48 +322,69 @@ function activeSpecPathD(state: State): string {
   );
 }
 
+// ─── Expr Helpers ───
+
+function exprChildren(e: Expr): string[] {
+  if ("childIds" in e) return e.childIds;
+  if ("childId" in e && e.childId) return [e.childId];
+  return [];
+}
+
+function exprSlotKind(e: Expr): "state" | "spec" | null {
+  switch (e.type) {
+    case "between":
+      return "state";
+    case "closest":
+    case "withSnapRadius":
+    case "withFloating":
+      return "spec";
+    default:
+      return null;
+  }
+}
+
+function exprOpenSlots(e: Expr): number[] {
+  if ("childIds" in e) {
+    return Array.from({ length: e.childIds.length + 1 }, (_, i) => i);
+  }
+  if ("childId" in e && e.childId === null) return [0];
+  return [];
+}
+
+function insertChild(e: Expr, childId: string, idx: number): void {
+  if ("childIds" in e) e.childIds.splice(idx, 0, childId);
+  else if ("childId" in e) e.childId = childId;
+}
+
+function removeChild(e: Expr, idx: number): void {
+  if ("childIds" in e) e.childIds.splice(idx, 1);
+  else if ("childId" in e) e.childId = null;
+}
+
 // ─── State Helpers ───
 
 function findParent(state: State, nodeId: string) {
   for (const [pid, pnode] of Object.entries(state.nodes)) {
-    const e = pnode.expr;
-    if (e.type === "between") {
-      const idx = e.childIds.indexOf(nodeId);
-      if (idx >= 0) return { parentId: pid, idx };
-    }
-    if (e.type === "closest") {
-      const idx = e.childIds.indexOf(nodeId);
-      if (idx >= 0) return { parentId: pid, idx };
-    }
-    if (e.type === "withSnapRadius" && e.childId === nodeId) {
-      return { parentId: pid, idx: 0 };
-    }
-    if (e.type === "withFloating" && e.childId === nodeId) {
-      return { parentId: pid, idx: 0 };
-    }
+    const children = exprChildren(pnode.expr);
+    const idx = children.indexOf(nodeId);
+    if (idx >= 0) return { parentId: pid, idx };
   }
   return null;
 }
 
 function detach(state: State, nodeId: string): State {
   return produce(state, (draft) => {
-    // Unlink from active spec slot
     if (draft.activeSpecId === nodeId) {
       draft.activeSpecId = null;
       draft.nodes[nodeId].x = 0;
       draft.nodes[nodeId].y = TOOLBAR_H;
     }
-    // Unlink from parent node
     const parent = findParent(state, nodeId);
     if (parent) {
       const pn = state.nodes[parent.parentId];
       draft.nodes[nodeId].x = pn.x;
       draft.nodes[nodeId].y = pn.y;
-      const pe = draft.nodes[parent.parentId].expr;
-      if (pe.type === "between") pe.childIds.splice(parent.idx, 1);
-      else if (pe.type === "closest") pe.childIds.splice(parent.idx, 1);
-      else if (pe.type === "withSnapRadius") pe.childId = null;
-      else if (pe.type === "withFloating") pe.childId = null;
+      removeChild(draft.nodes[parent.parentId].expr, parent.idx);
     }
   });
 }
@@ -375,15 +396,8 @@ function collectDescendants(
   const result: string[] = [nid];
   const node = nodes[nid];
   if (!node) return result;
-  const e = node.expr;
-  if (e.type === "between")
-    for (const c of e.childIds) result.push(...collectDescendants(nodes, c));
-  if (e.type === "closest")
-    for (const c of e.childIds) result.push(...collectDescendants(nodes, c));
-  if (e.type === "withSnapRadius" && e.childId)
-    result.push(...collectDescendants(nodes, e.childId));
-  if (e.type === "withFloating" && e.childId)
-    result.push(...collectDescendants(nodes, e.childId));
+  for (const c of exprChildren(node.expr))
+    result.push(...collectDescendants(nodes, c));
   return result;
 }
 
@@ -397,62 +411,24 @@ function nodeDrag(
   const node = base.nodes[nid];
   const snaps: State[] = [];
 
-  if (node.expr.type === "state") {
-    // States snap into between blocks
-    for (const [sid, sn] of Object.entries(base.nodes)) {
-      if (sn.expr.type === "between" && sid !== nid) {
-        for (let i = 0; i <= sn.expr.childIds.length; i++) {
-          snaps.push(
-            produce(base, (draft) => {
-              (draft.nodes[sid].expr as BetweenExpr).childIds.splice(i, 0, nid);
-            }),
-          );
-        }
-      }
-    }
-  } else {
-    // Spec blocks snap into WSR, closest, and withFloating blocks
-    for (const [sid, sn] of Object.entries(base.nodes)) {
-      if (
-        sn.expr.type === "withSnapRadius" &&
-        sn.expr.childId === null &&
-        sid !== nid
-      ) {
-        snaps.push(
-          produce(base, (draft) => {
-            (draft.nodes[sid].expr as WithSnapRadiusExpr).childId = nid;
-          }),
-        );
-      }
-      if (
-        sn.expr.type === "withFloating" &&
-        sn.expr.childId === null &&
-        sid !== nid
-      ) {
-        snaps.push(
-          produce(base, (draft) => {
-            (draft.nodes[sid].expr as WithFloatingExpr).childId = nid;
-          }),
-        );
-      }
-      if (sn.expr.type === "closest" && sid !== nid) {
-        for (let i = 0; i <= sn.expr.childIds.length; i++) {
-          snaps.push(
-            produce(base, (draft) => {
-              (draft.nodes[sid].expr as ClosestExpr).childIds.splice(i, 0, nid);
-            }),
-          );
-        }
-      }
-    }
-    // Active spec slot
-    if (!base.activeSpecId) {
+  const myKind = node.expr.type === "state" ? "state" : "spec";
+  for (const [sid, sn] of Object.entries(base.nodes)) {
+    if (sid === nid || exprSlotKind(sn.expr) !== myKind) continue;
+    for (const i of exprOpenSlots(sn.expr)) {
       snaps.push(
         produce(base, (draft) => {
-          draft.activeSpecId = nid;
+          insertChild(draft.nodes[sid].expr, nid, i);
         }),
       );
     }
+  }
+  // Spec blocks also snap into the active spec slot
+  if (myKind === "spec" && !base.activeSpecId) {
+    snaps.push(
+      produce(base, (draft) => {
+        draft.activeSpecId = nid;
+      }),
+    );
   }
 
   // Delete state: remove node and all its descendants
@@ -613,16 +589,8 @@ function compileExpr(
 const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   // Collect snapped IDs
   const snappedIds = new Set<string>();
-  for (const n of Object.values(state.nodes)) {
-    if (n.expr.type === "between")
-      for (const cid of n.expr.childIds) snappedIds.add(cid);
-    if (n.expr.type === "closest")
-      for (const cid of n.expr.childIds) snappedIds.add(cid);
-    if (n.expr.type === "withSnapRadius" && n.expr.childId)
-      snappedIds.add(n.expr.childId);
-    if (n.expr.type === "withFloating" && n.expr.childId)
-      snappedIds.add(n.expr.childId);
-  }
+  for (const n of Object.values(state.nodes))
+    for (const cid of exprChildren(n.expr)) snappedIds.add(cid);
   if (state.activeSpecId) snappedIds.add(state.activeSpecId);
 
   // ── Toolbar defs ──
@@ -747,9 +715,10 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   }
 
   function renderWithFloatingBlock(_parentId: string, expr: WithFloatingExpr) {
-    const nhw = expr.childId && state.nodes[expr.childId]
-      ? childBlockW(state.nodes[expr.childId].expr, state.nodes) / 2
-      : WSR_DEFAULT_NOTCH_HW;
+    const nhw =
+      expr.childId && state.nodes[expr.childId]
+        ? childBlockW(state.nodes[expr.childId].expr, state.nodes) / 2
+        : WSR_DEFAULT_NOTCH_HW;
     const w = Math.max(FLT_W, nhw * 2 + WSR_PAD * 2);
     return (
       <g>
