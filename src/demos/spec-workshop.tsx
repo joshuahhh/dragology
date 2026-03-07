@@ -194,13 +194,32 @@ function nodeDrag(
 
   const myKind = node.expr.type === "state" ? "state" : "spec";
   for (const [sid, sn] of Object.entries(base.nodes)) {
-    if (sid === nid || exprSlotKind(sn.expr) !== myKind) continue;
-    for (const i of exprOpenSlots(sn.expr)) {
-      snaps.push(
-        produce(base, (draft) => {
-          insertChild(draft.nodes[sid].expr, nid, i);
-        }),
-      );
+    if (sid === nid) continue;
+    const slotKind = exprSlotKind(sn.expr);
+    if (slotKind === myKind) {
+      for (const i of exprOpenSlots(sn.expr)) {
+        snaps.push(
+          produce(base, (draft) => {
+            insertChild(draft.nodes[sid].expr, nid, i);
+          }),
+        );
+      }
+    }
+    // States can also snap into spec slots via an auto-created fixed adapter
+    if (myKind === "state" && slotKind === "spec") {
+      for (const i of exprOpenSlots(sn.expr)) {
+        snaps.push(
+          produce(base, (draft) => {
+            const fixedId = makeId();
+            draft.nodes[fixedId] = {
+              expr: { type: "fixed", childId: nid },
+              x: sn.x,
+              y: sn.y,
+            };
+            insertChild(draft.nodes[sid].expr, fixedId, i);
+          }),
+        );
+      }
     }
   }
   // Spec blocks also snap into the active spec slot
@@ -208,6 +227,20 @@ function nodeDrag(
     snaps.push(
       produce(base, (draft) => {
         draft.activeSpecId = nid;
+      }),
+    );
+  }
+  // States can snap into the active spec slot via a fixed adapter
+  if (myKind === "state" && !base.activeSpecId) {
+    snaps.push(
+      produce(base, (draft) => {
+        const fixedId = makeId();
+        draft.nodes[fixedId] = {
+          expr: { type: "fixed", childId: nid },
+          x: 0,
+          y: TOOLBAR_H,
+        };
+        draft.activeSpecId = fixedId;
       }),
     );
   }
