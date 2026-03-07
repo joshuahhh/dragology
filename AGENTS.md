@@ -155,18 +155,18 @@ Demos are auto-discovered from `src/demos/**/*.tsx` via `import.meta.glob`. To a
 For demos with user-configurable options:
 
 ```typescript
-import { ConfigCheckbox, ConfigPanel, DemoDraggable } from "../demo/ui";
+import { ConfigCheckbox, ConfigPanel, DemoDraggable, DemoWithConfig } from "../demo/ui";
 
 export const MyDemo = () => {
   const [showLabels, setShowLabels] = useState(true);
   const draggable = useMemo(() => makeDraggable(showLabels), [showLabels]);
   return (
-    <div className="flex flex-col md:flex-row gap-4 items-start">
+    <DemoWithConfig>
       <DemoDraggable draggable={draggable} initialState={state} width={400} height={300} />
       <ConfigPanel>
         <ConfigCheckbox label="Show labels" value={showLabels} onChange={setShowLabels} />
       </ConfigPanel>
-    </div>
+    </DemoWithConfig>
   );
 };
 ```
