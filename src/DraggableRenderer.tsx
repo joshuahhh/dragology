@@ -25,7 +25,6 @@ import {
 } from "./draggable";
 import { Vec2 } from "./math/vec2";
 import {
-  extractFloatContext,
   renderDraggableInert,
   renderDraggableInertUnlayered,
 } from "./renderDraggable";
@@ -521,20 +520,16 @@ function processChainNow<T extends object>(
     pointerLocal,
   );
 
-  const {
-    floatLayered: _fl,
-    pointerStart: _ps,
-    ...behaviorCtxBase
-  } = status.behaviorCtx;
   const chainedResult = initDrag(
     newDragSpec,
     {
-      ...behaviorCtxBase,
+      ...status.behaviorCtx,
       draggedPath: newDraggedPath,
       draggedId: newDraggedId,
       pointerLocal,
+      pointerStart: newPointerStart,
+      startState: newState,
     },
-    newPointerStart,
     newState,
     frame,
     newSpringingFrom,
@@ -556,29 +551,11 @@ function processChainNow<T extends object>(
 
 function initDrag<T extends object>(
   spec: DragSpec<T>,
-  behaviorCtxBase: Omit<
-    DragBehaviorInitContext<T>,
-    "floatLayered" | "pointerStart"
-  >,
-  pointerStart: Vec2,
+  behaviorCtx: DragBehaviorInitContext<T>,
   state: T,
   frame: DragFrame,
   springingFrom: SpringingFrom | null,
 ): DragStatusDragging<T> {
-  const { draggable, draggedId } = behaviorCtxBase;
-  const floatLayered = draggedId
-    ? extractFloatContext(
-        draggable,
-        state,
-        draggedId,
-        behaviorCtxBase.pointerLocal,
-      ).floatLayered
-    : null;
-  const behaviorCtx: DragBehaviorInitContext<T> = {
-    ...behaviorCtxBase,
-    pointerStart,
-    floatLayered,
-  };
   const behavior = dragSpecToBehavior(spec, behaviorCtx);
   const result = behavior(frame);
 
@@ -649,18 +626,19 @@ function postProcessForInteraction<T extends object>(
               pointer,
             );
 
-            const behaviorCtxWithoutFloat = {
+            const behaviorCtx: DragBehaviorInitContext<T> = {
               draggable: ctx.draggable,
               draggedPath,
               draggedId,
               pointerLocal,
+              pointerStart: pointer,
+              startState: state,
             };
 
             const frame: DragFrame = { pointer };
             const draggingStatus = initDrag(
               dragSpec,
-              behaviorCtxWithoutFloat,
-              pointer,
+              behaviorCtx,
               state,
               frame,
               null,
