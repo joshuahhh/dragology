@@ -17,13 +17,13 @@ type WithSnapRadiusExpr = {
   radius: number;
 };
 type ClosestExpr = { type: "closest"; childIds: string[] };
-type FloatingExpr = { type: "floating"; childId: string | null };
+type WithFloatingExpr = { type: "withFloating"; childId: string | null };
 type Expr =
   | StateExpr
   | BetweenExpr
   | WithSnapRadiusExpr
   | ClosestExpr
-  | FloatingExpr;
+  | WithFloatingExpr;
 
 type CanvasNode = { expr: Expr; x: number; y: number };
 type DotLabel = "A" | "B" | "C";
@@ -82,7 +82,7 @@ const STATE_FILL: Record<string, string> = {
 type BlockStyle = { bg: string; stroke: string; text: string; fs: number };
 const S: Record<string, BlockStyle> = {
   between: { bg: "#ede9fe", stroke: "#c4b5fd", text: "#7c3aed", fs: 11 },
-  floating: { bg: "#ccfbf1", stroke: "#5eead4", text: "#0f766e", fs: 11 },
+  withFloating: { bg: "#ccfbf1", stroke: "#5eead4", text: "#0f766e", fs: 10 },
   closest: { bg: "#fef3c7", stroke: "#fcd34d", text: "#b45309", fs: 11 },
   wsr: { bg: "#e0f2fe", stroke: "#93c5fd", text: "#2563eb", fs: 10 },
   activeSpec: { bg: "#f1f5f9", stroke: "#94a3b8", text: "#475569", fs: 10 },
@@ -108,15 +108,6 @@ function btwInlet(_e: BetweenExpr, i: number) {
   };
 }
 
-// -- Floating --
-
-function fltInlet() {
-  return {
-    x: FLT_W / 2,
-    y: btwH() - BTW_NOTCH_D + DIAMOND_R,
-  };
-}
-
 // -- WSR --
 
 function wsrH() {
@@ -133,8 +124,13 @@ function childBlockW(expr: Expr, nodes: Record<string, CanvasNode>): number {
       return clsW(expr, nodes);
     case "withSnapRadius":
       return wsrW(expr, nodes);
-    case "floating":
-      return FLT_W;
+    case "withFloating": {
+      const nhw =
+        expr.childId && nodes[expr.childId]
+          ? childBlockW(nodes[expr.childId].expr, nodes) / 2
+          : WSR_DEFAULT_NOTCH_HW;
+      return Math.max(FLT_W, nhw * 2 + WSR_PAD * 2);
+    }
     default:
       return DIAMOND_R * 2;
   }
@@ -286,15 +282,6 @@ function betweenPathD(expr: BetweenExpr): string {
   return p + pCloseRounded(h);
 }
 
-function floatingPathD(): string {
-  const h = btwH();
-  return (
-    pRoundedTop(FLT_W, h) +
-    pVNotch(FLT_W / 2, BTW_NOTCH_HW, BTW_NOTCH_D, h) +
-    pCloseRounded(h)
-  );
-}
-
 function wsrPathD(w: number, nhw: number): string {
   const h = wsrH();
   return (
@@ -351,7 +338,7 @@ function findParent(state: State, nodeId: string) {
     if (e.type === "withSnapRadius" && e.childId === nodeId) {
       return { parentId: pid, idx: 0 };
     }
-    if (e.type === "floating" && e.childId === nodeId) {
+    if (e.type === "withFloating" && e.childId === nodeId) {
       return { parentId: pid, idx: 0 };
     }
   }
@@ -376,7 +363,7 @@ function detach(state: State, nodeId: string): State {
       if (pe.type === "between") pe.childIds.splice(parent.idx, 1);
       else if (pe.type === "closest") pe.childIds.splice(parent.idx, 1);
       else if (pe.type === "withSnapRadius") pe.childId = null;
-      else if (pe.type === "floating") pe.childId = null;
+      else if (pe.type === "withFloating") pe.childId = null;
     }
   });
 }
@@ -395,7 +382,7 @@ function collectDescendants(
     for (const c of e.childIds) result.push(...collectDescendants(nodes, c));
   if (e.type === "withSnapRadius" && e.childId)
     result.push(...collectDescendants(nodes, e.childId));
-  if (e.type === "floating" && e.childId)
+  if (e.type === "withFloating" && e.childId)
     result.push(...collectDescendants(nodes, e.childId));
   return result;
 }
@@ -411,7 +398,7 @@ function nodeDrag(
   const snaps: State[] = [];
 
   if (node.expr.type === "state") {
-    // States snap into between and floating blocks
+    // States snap into between blocks
     for (const [sid, sn] of Object.entries(base.nodes)) {
       if (sn.expr.type === "between" && sid !== nid) {
         for (let i = 0; i <= sn.expr.childIds.length; i++) {
@@ -422,20 +409,9 @@ function nodeDrag(
           );
         }
       }
-      if (
-        sn.expr.type === "floating" &&
-        sn.expr.childId === null &&
-        sid !== nid
-      ) {
-        snaps.push(
-          produce(base, (draft) => {
-            (draft.nodes[sid].expr as FloatingExpr).childId = nid;
-          }),
-        );
-      }
     }
   } else {
-    // Spec blocks snap into WSR and closest blocks
+    // Spec blocks snap into WSR, closest, and withFloating blocks
     for (const [sid, sn] of Object.entries(base.nodes)) {
       if (
         sn.expr.type === "withSnapRadius" &&
@@ -445,6 +421,17 @@ function nodeDrag(
         snaps.push(
           produce(base, (draft) => {
             (draft.nodes[sid].expr as WithSnapRadiusExpr).childId = nid;
+          }),
+        );
+      }
+      if (
+        sn.expr.type === "withFloating" &&
+        sn.expr.childId === null &&
+        sid !== nid
+      ) {
+        snaps.push(
+          produce(base, (draft) => {
+            (draft.nodes[sid].expr as WithFloatingExpr).childId = nid;
           }),
         );
       }
@@ -597,11 +584,11 @@ function compileExpr(
       if (childStates.length === 0) return null;
       return d.between(childStates);
     }
-    case "floating": {
-      if (!expr.childId || !state.nodes[expr.childId]) return null;
-      const cn = state.nodes[expr.childId];
-      if (cn.expr.type !== "state") return null;
-      return d.floating({ ...state, previewDot: cn.expr.label });
+    case "withFloating": {
+      if (!expr.childId) return null;
+      const inner = compileExpr(d, state, expr.childId);
+      if (!inner) return null;
+      return inner.withFloating();
     }
     case "closest": {
       const childSpecs = expr.childIds
@@ -633,7 +620,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       for (const cid of n.expr.childIds) snappedIds.add(cid);
     if (n.expr.type === "withSnapRadius" && n.expr.childId)
       snappedIds.add(n.expr.childId);
-    if (n.expr.type === "floating" && n.expr.childId)
+    if (n.expr.type === "withFloating" && n.expr.childId)
       snappedIds.add(n.expr.childId);
   }
   if (state.activeSpecId) snappedIds.add(state.activeSpecId);
@@ -677,9 +664,9 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       x: 150,
     },
     {
-      label: "floating",
-      makeExpr: (): Expr => ({ type: "floating", childId: null }),
-      preview: tbPreview("floating", S.floating),
+      label: "withFloating",
+      makeExpr: (): Expr => ({ type: "withFloating", childId: null }),
+      preview: tbPreview("withFloating", S.withFloating, 36, 8),
       x: 230,
     },
     {
@@ -735,8 +722,8 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
         return renderWSRBlock(nodeId, node.expr);
       case "closest":
         return renderClosestBlock(nodeId, node.expr);
-      case "floating":
-        return renderFloatingBlock(nodeId, node.expr);
+      case "withFloating":
+        return renderWithFloatingBlock(nodeId, node.expr);
       default:
         return null;
     }
@@ -759,19 +746,31 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
     );
   }
 
-  function renderFloatingBlock(_parentId: string, expr: FloatingExpr) {
+  function renderWithFloatingBlock(_parentId: string, expr: WithFloatingExpr) {
+    const nhw = expr.childId && state.nodes[expr.childId]
+      ? childBlockW(state.nodes[expr.childId].expr, state.nodes) / 2
+      : WSR_DEFAULT_NOTCH_HW;
+    const w = Math.max(FLT_W, nhw * 2 + WSR_PAD * 2);
     return (
       <g>
-        {blockHeader(floatingPathD(), FLT_W, "floating", S.floating)}
+        {blockHeader(
+          pRoundedTop(w, btwH()) +
+            pRectNotch(w / 2, nhw, WSR_NOTCH_D, btwH()) +
+            pCloseRounded(btwH()),
+          w,
+          "withFloating",
+          S.withFloating,
+        )}
         {expr.childId &&
           state.nodes[expr.childId] &&
           (() => {
-            const cn = state.nodes[expr.childId!];
-            if (cn.expr.type !== "state") return null;
+            const childId = expr.childId!;
+            const cn = state.nodes[childId];
+            const childW = childBlockW(cn.expr, state.nodes);
             return renderSnappedChild(
-              expr.childId!,
-              fltInlet(),
-              renderDiamond(cn.expr.label),
+              childId,
+              { x: w / 2 - childW / 2, y: btwH() - WSR_NOTCH_D },
+              renderSpecBlock(childId, cn),
             );
           })()}
       </g>
