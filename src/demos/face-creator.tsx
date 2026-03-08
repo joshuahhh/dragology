@@ -899,17 +899,12 @@ export default demo(
         </div>
         <ConfigPanel>
           <ConfigCheckbox
-            label="Scale curve with endpoints"
-            value={scaleCurve}
-            onChange={setScaleCurve}
-          />
-          <ConfigCheckbox
             label="Keep eyes above mouth"
             value={eyesAboveMouth}
             onChange={setEyesAboveMouth}
           />
           <ConfigCheckbox
-            label="Mickey mode"
+            label="Enable Mickey mode"
             value={!constrainFaceShape}
             onChange={(v) => setConstrainFaceShape(!v)}
           />
@@ -917,6 +912,11 @@ export default demo(
             label="Features move face"
             value={expandFace}
             onChange={setExpandFace}
+          />
+          <ConfigCheckbox
+            label="Scale mouth with endpoints"
+            value={scaleCurve}
+            onChange={setScaleCurve}
           />
         </ConfigPanel>
       </DemoWithConfig>
