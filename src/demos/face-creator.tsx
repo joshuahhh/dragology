@@ -24,7 +24,6 @@ const FACE_MARGIN = EYE_R + FACE_STROKE / 2 + 2;
 const EYE_MARGIN = EYE_R + MOUTH_STROKE / 2 + 4;
 const MIN_EYE_SPACING = EYE_R + 5;
 
-
 type State = {
   eyeY: number;
   eyeDx: number;
@@ -631,6 +630,14 @@ function makeDraggable(
       ? featureConstraints
       : featureConstraintsWithFace;
 
+    // Shared tail for feature .during(): clamp eyes above curve, expand face, clamp inside.
+    function finalizeDuring(s: State): State {
+      let result = s;
+      if (eyesAboveMouth) result = clampEyesAboveCurve(result);
+      if (expandFace) result = expandFaceForFeatures(result);
+      return clampInsideFace(result);
+    }
+
     // Pin indicator x position (relative to rightmost face edge)
     const pinX = FACE_CX + state.faceRx + 18;
 
@@ -660,9 +667,7 @@ function makeDraggable(
             cp2dy: origCp2dy * scale,
           };
         }
-        if (eyesAboveMouth) result = clampEyesAboveCurve(result);
-        if (expandFace) result = expandFaceForFeatures(result);
-        return clampInsideFace(result);
+        return finalizeDuring(result);
       });
     }
 
@@ -678,7 +683,6 @@ function makeDraggable(
       const origCp2dy = state.cp2dy;
       return spec.during((s) => {
         let result = eyesPinned ? s : pushEyesAway(s);
-        if (eyesAboveMouth) result = clampEyesAboveCurve(result);
         if (scaleCurve) {
           const dxScale = origDx > 0 ? result.mouthDx / origDx : 1;
           const fb = FACE_CY + state.faceRyBot - FACE_MARGIN;
@@ -693,8 +697,7 @@ function makeDraggable(
             cp2dy: origCp2dy * vyScale,
           };
         }
-        if (expandFace) result = expandFaceForFeatures(result);
-        return clampInsideFace(result);
+        return finalizeDuring(result);
       });
     }
 
@@ -707,10 +710,8 @@ function makeDraggable(
             : [["cp1dx"], ["cp1dy"], ["cp2dx"], ["cp2dy"]];
       const spec = d.vary(state, paths, { constraint: featureConstraint });
       return spec.during((s) => {
-        let result = eyesPinned ? s : pushEyesAway(s);
-        if (eyesAboveMouth) result = clampEyesAboveCurve(result);
-        if (expandFace) result = expandFaceForFeatures(result);
-        return clampInsideFace(result);
+        const result = eyesPinned ? s : pushEyesAway(s);
+        return finalizeDuring(result);
       });
     }
 
