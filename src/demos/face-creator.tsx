@@ -221,20 +221,6 @@ function faceRadiusAtAngle(samples: FaceSample[], angle: number): number {
   return samples[i0].radius + t * (samples[i1].radius - samples[i0].radius);
 }
 
-// Constraint-compatible: returns ≤ 0 if point is inside face (with margin), > 0 if outside.
-function faceContains(
-  samples: FaceSample[],
-  point: { x: number; y: number },
-  margin: number,
-): number {
-  const dx = point.x - FACE_CX;
-  const dy = point.y - FACE_CY;
-  const pointDist = Math.sqrt(dx * dx + dy * dy);
-  const angle = Math.atan2(dy, dx);
-  const maxDist = faceRadiusAtAngle(samples, angle) - margin;
-  return pointDist - maxDist; // ≤ 0 when inside
-}
-
 // Clamp a point to be inside the face outline (with margin).
 // Pushes the point toward the center along the radial direction.
 function clampPointInsideFace(
@@ -315,17 +301,12 @@ function dist(
 
 // ── Constraints ────────────────────────────────────────────────────
 
-function shapeConstraints(s: State): number[] {
+// Constraints for feature drags: everything except inside-face checks.
+// Omitting face containment lets COBYLA freely position features,
+// then .during() expands the face to fit (same pattern as eye-mouth push).
+function featureConstraints(s: State): number[] {
   const results: number[] = [];
-  const samples = sampleFaceOutline(s);
-  const ml = mouthLeft(s);
-  const mr = mouthRight(s);
-
-  results.push(faceContains(samples, leftEye(s), FACE_MARGIN));
-  results.push(faceContains(samples, rightEye(s), FACE_MARGIN));
   results.push(moreThan(s.eyeDx, MIN_EYE_SPACING));
-  results.push(faceContains(samples, ml, FACE_MARGIN));
-  results.push(faceContains(samples, mr, FACE_MARGIN));
   results.push(moreThan(s.mouthDx, 10));
 
   const MAX_CP_OFFSET = 100;
@@ -337,20 +318,11 @@ function shapeConstraints(s: State): number[] {
   );
 
   const N = 8;
-  for (let i = 0; i <= N; i++) {
-    const pt = evalMouthBezier(s, i / N);
-    results.push(faceContains(samples, pt, FACE_MARGIN));
-  }
   for (let i = 0; i < N; i++) {
     const pt1 = evalMouthBezier(s, i / N);
     const pt2 = evalMouthBezier(s, (i + 1) / N);
     results.push(lessThan(pt1.x, pt2.x));
   }
-
-  // Face shape constraints: radii must be positive and not too small
-  results.push(moreThan(s.faceRx, 40));
-  results.push(moreThan(s.faceRyTop, 40));
-  results.push(moreThan(s.faceRyBot, 40));
 
   return results;
 }
@@ -621,7 +593,7 @@ function makeDraggable(
 
     function eyeDragology() {
       const spec = d.vary(state, [["eyeY"], ["eyeDx"]], {
-        constraint: shapeConstraints,
+        constraint: featureConstraints,
       });
       if (mouthPinned && !eyesAboveMouth) return spec;
       const origMouthEy = state.mouthEy;
@@ -653,7 +625,7 @@ function makeDraggable(
 
     function endpointDragology() {
       const spec = d.vary(state, [["mouthDx"], ["mouthEy"]], {
-        constraint: shapeConstraints,
+        constraint: featureConstraints,
       });
       const origDx = state.mouthDx;
       const origEy = state.mouthEy;
@@ -690,7 +662,7 @@ function makeDraggable(
           : t > 0.6
             ? [["cp2dx"], ["cp2dy"]]
             : [["cp1dx"], ["cp1dy"], ["cp2dx"], ["cp2dy"]];
-      const spec = d.vary(state, paths, { constraint: shapeConstraints });
+      const spec = d.vary(state, paths, { constraint: featureConstraints });
       return spec.during((s) => {
         let result = eyesPinned ? s : pushEyesAway(s);
         if (eyesAboveMouth) result = clampEyesAboveCurve(result);
