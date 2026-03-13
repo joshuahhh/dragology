@@ -5,6 +5,7 @@
 - make specs-in-between work
 - rationalize & extend customization of transitions
 - would be nice if withFloating could work on an un-id'd element
+- drop zone vis show zones for d.between
 
 ## meh
 - memoize a lot of rendering of states? (but only if it's actually a problem; no premature stuff!)
