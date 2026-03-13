@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  DragBehaviorInitContext,
-  DragFrame,
-  dragSpecToBehavior,
-} from "./DragBehavior";
-import { DragSpec } from "./DragSpec";
+import { DragFrame, dragSpecToBehavior } from "./DragBehavior";
+import { DragStatus } from "./DraggableRenderer";
 import { Vec2 } from "./math/vec2";
 
 // # Types
@@ -446,17 +442,11 @@ function* computeDropZones(
 // # Hook: drives the generator cooperatively
 
 export function useDropZoneData<T extends object>(
-  dragging: {
-    spec: DragSpec<T>;
-    behaviorCtx: DragBehaviorInitContext<T>;
-    pointerStart: Vec2;
-  } | null,
+  status: (DragStatus<T> & { type: "dragging" }) | null,
   width: number,
   height: number,
 ): { data: DropZoneData | null; computing: boolean } {
-  const spec = dragging?.spec ?? null;
-  const behaviorCtx = dragging?.behaviorCtx ?? null;
-  const pointerStart = dragging?.pointerStart ?? null;
+  const { spec, behaviorCtx, pointerStart } = status ?? {};
 
   const [data, setData] = useState<DropZoneData | null>(null);
   const [computing, setComputing] = useState(false);
