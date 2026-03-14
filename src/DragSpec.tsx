@@ -84,6 +84,11 @@ export type DragSpecData<T> = {
       /** This is really a DragSpecData<T[path]> */
       innerSpec: DragSpecData<unknown>;
     }
+  | {
+      type: "react-to";
+      iterator: Iterator<unknown>;
+      callback: (value: any) => DragSpec<T>;
+    }
 );
 
 export type FloatingOptions = {
@@ -395,6 +400,18 @@ export class DragSpecBuilder<T> {
       draggedId,
       followSpec: followSpec && resolveDragSpecLike(followSpec),
     });
+  }
+
+  /**
+   * This drag behavior calls an iterator on every frame. When the
+   * iterator's value changes, a child behavior is re-initialized
+   * with the new value.
+   */
+  reactTo<V>(
+    iterator: Iterator<V>,
+    callback: (value: V) => DragSpec<T>,
+  ): DragSpec<T> {
+    return attachMethods({ type: "react-to", iterator, callback });
   }
 }
 

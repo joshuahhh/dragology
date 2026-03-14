@@ -1,6 +1,10 @@
 import { PrettyPrint } from "@joshuahhh/pretty-print";
 import _ from "lodash";
-import { Draggable, makeDraggableProps } from "./draggable";
+import {
+  Draggable,
+  getDragSpecCallbackOnElement,
+  makeDraggableProps,
+} from "./draggable";
 import { Chaining, DragSpecData } from "./DragSpec";
 import { setTraceInfo } from "./DragSpecTraceInfo";
 import { ErrorWithJSX } from "./ErrorBoundary";
@@ -9,9 +13,11 @@ import { DistanceMinimizer } from "./math/optimization";
 import { Vec2 } from "./math/vec2";
 import { getAtPath, setAtPath } from "./paths";
 import {
+  extractFloatContext,
   renderDraggableInert,
   renderDraggableInertUnlayered,
 } from "./renderDraggable";
+import { findElement } from "./svgx";
 import { getLocalBounds, pointInBounds } from "./svgx/bounds";
 import { translate } from "./svgx/helpers";
 import {
@@ -123,6 +129,8 @@ export function dragSpecToBehavior<T extends object>(
       return withChainingBehavior(spec, ctx);
     case "substate":
       return substateBehavior(spec, ctx);
+    case "react-to":
+      return reactToBehavior(spec, ctx);
     default:
       assertNever(spec);
   }
@@ -346,6 +354,7 @@ function varyBehavior<T extends object>(
       true,
     );
     const found = findByPath(ctx.draggedPath, content);
+    console.log("getElementPos", params, candidateState, found, ctx.draggedId);
     if (!found) return Vec2(Infinity, Infinity);
     return localToGlobal(found.accumulatedTransform, ctx.pointerLocal);
   };
@@ -592,18 +601,56 @@ function switchToStateAndFollowBehavior<T extends object>(
   spec: DragSpecData<T> & { type: "switch-to-state-and-follow" },
   ctx: DragBehaviorInitContext<T>,
 ): DragBehavior<T> {
-  const rendered = renderStateReadOnly(ctx, spec.state);
-  const elementPos = getElementPosition(ctx, rendered);
-  return (_frame) => ({
-    rendered,
-    dropState: spec.state,
-    distance: 0,
-    activePath: "switch-to-state-and-follow",
-    chainNow: { draggedId: spec.draggedId, followSpec: spec.followSpec },
-    tracedSpec: setTraceInfo(spec, {
-      renderedStates: [{ layered: rendered, position: elementPos }],
-    }),
+  const floatCtx = spec.draggedId
+    ? extractFloatContext(
+        ctx.draggable,
+        spec.state,
+        spec.draggedId,
+        ctx.pointerLocal,
+      )
+    : null;
+
+  let followSpec = spec.followSpec;
+  if (!followSpec && spec.draggedId) {
+    // TODO: this is kinda questionable and/or redundant
+
+    const content = renderDraggableInertUnlayered(
+      ctx.draggable,
+      spec.state,
+      spec.draggedId,
+      true,
+    );
+    const found = findElement(content, (el) => el.props.id === spec.draggedId);
+    assert(
+      !!found,
+      `switchToStateAndFollow: element "${spec.draggedId}" not found`,
+    );
+    const callback = getDragSpecCallbackOnElement<T>(found.element);
+    assert(
+      !!callback,
+      `switchToStateAndFollow: no followSpec and no dragology on "${spec.draggedId}"`,
+    );
+    followSpec = callback();
+  }
+  assert(!!followSpec, "switchToStateAndFollow: no followSpec");
+
+  const subBehavior = dragSpecToBehavior(followSpec, {
+    ...ctx,
+    draggedId: spec.draggedId,
+    draggedPath: spec.draggedId + "/",
+    floatLayered: floatCtx?.floatLayered ?? null,
+    pointerStart: floatCtx?.pointerStart ?? ctx.pointerStart,
   });
+  return (frame) => {
+    const innerResult = subBehavior(frame);
+    return {
+      ...innerResult,
+      activePath: `switch-to-state-and-follow/${innerResult.activePath}`,
+      tracedSpec: setTraceInfo(spec, {
+        tracedInner: innerResult.tracedSpec,
+      }),
+    };
+  };
 }
 
 function dropTargetBehavior<T extends object>(
@@ -696,6 +743,40 @@ function substateBehavior<T extends object>(
         } as DragSpecData<T>,
         {},
       ),
+    };
+  };
+}
+
+function reactToBehavior<T extends object>(
+  spec: DragSpecData<T> & { type: "react-to" },
+  ctx: DragBehaviorInitContext<T>,
+): DragBehavior<T> {
+  const { iterator, callback } = spec;
+
+  // initialize with fresh object so it will be invalidated
+  let lastValue: unknown = {};
+  let innerBehavior: DragBehavior<T>;
+  let changeCount = 0;
+
+  console.log("initting react-to", new Error().stack);
+
+  return (frame) => {
+    const value = iterator.next().value;
+    if (value !== lastValue) {
+      console.log("new value", value, changeCount);
+      lastValue = value;
+      changeCount++;
+      innerBehavior = dragSpecToBehavior(callback(value), ctx);
+    }
+    const result = innerBehavior(frame);
+    return {
+      ...result,
+      activePath: `react-to/${result.activePath}`,
+      tracedSpec: setTraceInfo(spec, {
+        currentValue: lastValue,
+        changeCount,
+        tracedInner: result.tracedSpec,
+      }),
     };
   };
 }

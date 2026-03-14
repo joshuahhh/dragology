@@ -19,24 +19,18 @@ import { DragSpec } from "./DragSpec";
 import { debugOverlay } from "./DragSpecTraceInfo";
 import { ErrorBoundary } from "./ErrorBoundary";
 import {
-  DragParams,
-  DragSpecCallback,
   Draggable,
   getDragSpecCallbackOnElement,
   makeDraggableProps,
 } from "./draggable";
 import { Vec2 } from "./math/vec2";
 import {
+  extractFloatContext,
   renderDraggableInert,
   renderDraggableInertUnlayered,
 } from "./renderDraggable";
 import { Svgx, findElement, updatePropsDownTree } from "./svgx";
-import {
-  LayeredSvgx,
-  drawLayered,
-  layerSvg,
-  layeredExtract,
-} from "./svgx/layers";
+import { LayeredSvgx, drawLayered, layerSvg } from "./svgx/layers";
 import { lerpLayered } from "./svgx/lerp";
 import { assignPaths, findByPath, getPath } from "./svgx/path";
 import { globalToLocal, localToGlobal } from "./svgx/transform";
@@ -50,20 +44,6 @@ import { useAnimationLoop } from "./useAnimationLoop";
 import { CatchToRenderError, useCatchToRenderError } from "./useRenderError";
 import { useStateWithRef } from "./useStateWithRef";
 import { assert, assertNever, memoGeneric, pipe } from "./utils";
-
-function dragParamsFromEvent(e: {
-  altKey: boolean;
-  ctrlKey: boolean;
-  metaKey: boolean;
-  shiftKey: boolean;
-}): DragParams {
-  return {
-    altKey: e.altKey,
-    ctrlKey: e.ctrlKey,
-    metaKey: e.metaKey,
-    shiftKey: e.shiftKey,
-  };
-}
 
 // # Engine state machine
 
@@ -107,25 +87,17 @@ A bit of terminology about the lifetimes of drags:
   thing we all know and love.
 
 - A "drag span" is the portion of a drag running under a fixed drag
-  behavior. A drag can consist of multiple drag spans in two ways:
-
-  1. When we chain, we move into a new state and re-initialize the
-     drag from that new state, starting a new, chained span.
-  2. When drag params (modifier keys) change, we re-initialize back
-     to the drag start – not the span start, but the drag start. This
-     is unpleasant.
+  behavior. A drag can consist of multiple drag spans due to
+  chaining: When we chain, we move into a new state and re-initialize
+  the drag from that new state, starting a new, chained span.
 
   A drag span is initialized in a few steps:
 
   - Get ahold of a DragSpecCallback – extract from rendered SVGX or
     use a saved one.
-  - Evaluate the DragSpecCallback on DragParams to get a drag spec.
+  - Evaluate the DragSpecCallback to get a DragSpec.
   - Turn the DragSpec into a DragBehavior using dragSpecToBehavior,
     providing some DragBehaviorInitContext.
-
-Currently, the "dragging" drag status needs to store information
-about the current span AND, to support the drag-params-change-thing,
-information about the original drag-spec callback.
 
 */
 
@@ -139,7 +111,6 @@ export type DragStatus<T extends object> = {
       behavior: DragBehavior<T>;
       behaviorCtx: DragBehaviorInitContext<T>;
       result: DragResult<T>;
-      dragParamsInfo: DragParamsInfo<T>;
       /**
        * We save the drag spec so we can generate fresh behaviors for
        * the drop-zone visualization. It's named in a scary way to
@@ -366,52 +337,11 @@ function DraggableRendererControlled<T extends object>({
       onDragStateRef.current?.(dropState);
     });
 
-    const onKeyChange = catchToRenderError((e: KeyboardEvent) => {
-      const status = statusRef.current;
-      if (status.type !== "dragging") return;
-
-      const newParams = dragParamsFromEvent(e);
-      const oldParams = status.dragParamsInfo.originalDragParams;
-      if (
-        newParams.altKey === oldParams.altKey &&
-        newParams.ctrlKey === oldParams.ctrlKey &&
-        newParams.metaKey === oldParams.metaKey &&
-        newParams.shiftKey === oldParams.shiftKey
-      )
-        return;
-
-      // Re-evaluate the drag spec with new modifier keys
-      const newSpec = status.dragParamsInfo.dragSpecCallback(newParams);
-      const pointer = pointerRef.current;
-      if (!pointer) return;
-
-      const frame: DragFrame = { pointer };
-
-      // Spring from current display
-      const layered = runSpring(status.springingFrom, status.result.rendered);
-      const newSpringingFrom = makeSpringingFrom(true, () => layered);
-
-      const newStatus = initDrag(
-        newSpec,
-        status.dragParamsInfo.originalBehaviorCtxWithoutFloat,
-        status.behaviorCtx.pointerStart,
-        status.dragParamsInfo.originalStartState,
-        frame,
-        newSpringingFrom,
-        { ...status.dragParamsInfo, originalDragParams: newParams },
-      );
-      setStatus(newStatus);
-    });
-
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
-    document.addEventListener("keydown", onKeyChange);
-    document.addEventListener("keyup", onKeyChange);
     return () => {
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
-      document.removeEventListener("keydown", onKeyChange);
-      document.removeEventListener("keyup", onKeyChange);
     };
   }, [
     catchToRenderError,
@@ -492,21 +422,6 @@ function runSpring(
   }
   return lerped;
 }
-
-/**
- * TODO: This is a BS type made by Claude, in the process of
- * supporting changing DragParams (modifier key state). It's
- * certainly not well-named, and it may not be meaningful at all.
- */
-type DragParamsInfo<T extends object> = {
-  originalDragParams: DragParams;
-  dragSpecCallback: DragSpecCallback<T>;
-  originalStartState: T;
-  originalBehaviorCtxWithoutFloat: Omit<
-    DragBehaviorInitContext<T>,
-    "floatLayered" | "pointerStart"
-  >;
-};
 
 function advanceFrame<T extends object>(
   status: DragStatus<T>,
@@ -590,9 +505,7 @@ function processChainNow<T extends object>(
 
   const newDragSpec =
     result.chainNow.followSpec ??
-    getDragSpecCallbackOnElement<T>(found.element)?.(
-      status.dragParamsInfo.originalDragParams,
-    );
+    getDragSpecCallbackOnElement<T>(found.element)?.();
   if (!newDragSpec) return null;
 
   const newSpringingFrom = makeSpringingFrom(true, () =>
@@ -625,7 +538,6 @@ function processChainNow<T extends object>(
     newState,
     frame,
     newSpringingFrom,
-    status.dragParamsInfo,
   );
   // TODO: this is a hack
   // Don't chain if the new state isn't strictly closer than what we had.
@@ -652,19 +564,16 @@ function initDrag<T extends object>(
   state: T,
   frame: DragFrame,
   springingFrom: SpringingFrom | null,
-  dragParamsInfo: DragParamsInfo<T>,
 ): DragStatusDragging<T> {
   const { draggable, draggedId } = behaviorCtxBase;
-  let floatLayered: LayeredSvgx | null = null;
-  if (draggedId) {
-    const startLayered = renderDraggableInert(
-      draggable,
-      state,
-      draggedId,
-      false,
-    );
-    floatLayered = layeredExtract(startLayered, draggedId).extracted;
-  }
+  const floatLayered = draggedId
+    ? extractFloatContext(
+        draggable,
+        state,
+        draggedId,
+        behaviorCtxBase.pointerLocal,
+      ).floatLayered
+    : null;
   const behaviorCtx: DragBehaviorInitContext<T> = {
     ...behaviorCtxBase,
     pointerStart,
@@ -681,7 +590,6 @@ function initDrag<T extends object>(
     behaviorCtx,
     result,
     springingFrom,
-    dragParamsInfo,
   };
 
   // If the result chains immediately (e.g. switchToStateAndFollow),
@@ -727,8 +635,7 @@ function postProcessForInteraction<T extends object>(
             e.stopPropagation();
             const pointer = ctx.setPointerFromEvent(e.nativeEvent);
 
-            const dragParams = dragParamsFromEvent(e);
-            const dragSpec: DragSpec<T> = dragSpecCallback(dragParams);
+            const dragSpec: DragSpec<T> = dragSpecCallback();
             const draggedId = el.props.id ?? null;
             const draggedPath = getPath(el);
             assert(!!draggedPath, "Dragged element must have a path");
@@ -757,12 +664,6 @@ function postProcessForInteraction<T extends object>(
               state,
               frame,
               null,
-              {
-                originalDragParams: dragParams,
-                dragSpecCallback,
-                originalStartState: state,
-                originalBehaviorCtxWithoutFloat: behaviorCtxWithoutFloat,
-              },
             );
 
             if (

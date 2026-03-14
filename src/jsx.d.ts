@@ -1,6 +1,5 @@
 import "react";
 import { DragSpecBrand } from "./DragSpec";
-import { DragParams } from "./draggable";
 
 declare module "react" {
   interface SVGAttributes<T> {
@@ -14,11 +13,7 @@ declare module "react" {
      * @example
      * <rect dragology={() => d.between([state1, state2])} />
      */
-    dragology?:
-      | ((params: DragParams) => DragSpecBrand)
-      | false
-      | null
-      | undefined;
+    dragology?: (() => DragSpecBrand) | false | null | undefined;
 
     "data-z-index"?: number;
     "data-transition"?: boolean;

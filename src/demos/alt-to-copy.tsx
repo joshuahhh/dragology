@@ -1,6 +1,7 @@
 import { demo } from "../demo";
-import { DemoDraggable, DemoNotes } from "../demo/ui";
+import { DemoDraggable, DemoLink, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { altKey } from "../modifierKeys";
 import { translate } from "../svgx/helpers";
 import { makeId } from "../utils";
 
@@ -34,32 +35,34 @@ const draggable: Draggable<State> = ({ state, d, setState }) => (
           const { [id]: _, ...rest } = state.dots;
           setState({ dots: rest });
         }}
-        dragology={(dp) => {
+        dragology={() => {
           const moveDot = (s: State, dotId: string) =>
             d.vary(s, [
               ["dots", dotId, "x"],
               ["dots", dotId, "y"],
             ]);
 
-          if (dp.altKey) {
-            // Copy: add a new dot at the same position, follow the copy
-            const copyId = makeId();
-            const newDot = {
-              ...dot,
-              color: colors[Object.keys(state.dots).length % colors.length],
-            };
-            const newState: State = {
-              dots: { ...state.dots, [copyId]: newDot },
-            };
-            return d.switchToStateAndFollow(
-              newState,
-              `dot-${copyId}`,
-              moveDot(newState, copyId),
-            );
-          } else {
-            // Move: vary this dot's position
-            return moveDot(state, id);
-          }
+          return d.reactTo(altKey, (altKey) => {
+            if (altKey) {
+              // Copy: add a new dot at the same position, follow the copy
+              const copyId = makeId();
+              const newDot = {
+                ...dot,
+                color: colors[Object.keys(state.dots).length % colors.length],
+              };
+              const newState: State = {
+                dots: { ...state.dots, [copyId]: newDot },
+              };
+              return d.switchToStateAndFollow(
+                newState,
+                `dot-${copyId}`,
+                moveDot(newState, copyId),
+              );
+            } else {
+              // Move: vary this dot's position
+              return moveDot(state, id);
+            }
+          });
         }}
       />
     ))}
@@ -71,7 +74,11 @@ export default demo(
     <>
       <DemoNotes>
         Hold <b>Alt/Option</b> while dragging to duplicate a dot. You can toggle
-        Alt mid-drag.
+        Alt mid-drag. (Though we don't yet support a{" "}
+        <DemoLink href="https://tldraw.dev/blog/adding-delays-to-modifier-keys">
+          release timeout
+        </DemoLink>
+        !)
       </DemoNotes>
       <DemoDraggable
         draggable={draggable}

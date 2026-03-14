@@ -244,7 +244,7 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
       </Box>
     );
   } else if (spec.type === "switch-to-state-and-follow") {
-    const { active, color, traceInfo } = info(spec);
+    const { active, color, traceInfo, childPath } = info(spec);
     return (
       <Box
         label={`switchToStateAndFollow → ${spec.draggedId}`}
@@ -252,7 +252,7 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
         color={color}
       >
         {traceInfo && (
-          <StateThumbnails renderedStates={traceInfo.renderedStates} />
+          <SpecNode spec={traceInfo.tracedInner} path={childPath} />
         )}
       </Box>
     );
@@ -290,6 +290,32 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
     return (
       <Box label={`substate [${spec.path.join(", ")}]`}>
         <SpecNode spec={spec.innerSpec} path={childPath} />
+      </Box>
+    );
+  } else if (spec.type === "react-to") {
+    const { traceInfo, childPath } = info(spec);
+    return (
+      <Box label="reactTo">
+        {traceInfo && (
+          <>
+            <div
+              style={{
+                fontSize: 9,
+                color: "rgb(120, 113, 108)",
+                background: "rgba(0,0,0,0.04)",
+                borderRadius: 3,
+                padding: "2px 4px",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+              }}
+            >
+              value: {truncate(String(traceInfo.currentValue), 40)}
+              {" · "}
+              changes: {traceInfo.changeCount}
+            </div>
+            <SpecNode spec={traceInfo.tracedInner} path={childPath} />
+          </>
+        )}
       </Box>
     );
   } else {

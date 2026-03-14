@@ -33,7 +33,9 @@ export type DragSpecTraceInfoByType = {
     delaunayTriangles: Vec2[][];
     projectedPoint: Vec2;
   };
-  "switch-to-state-and-follow": { renderedStates: RenderedState[] };
+  "switch-to-state-and-follow": {
+    tracedInner: DragSpecData<any>;
+  };
   "drop-target": {
     renderedStates: RenderedState[];
     inside: boolean;
@@ -41,6 +43,11 @@ export type DragSpecTraceInfoByType = {
   };
   "with-chaining": Record<string, never>;
   substate: Record<string, never>;
+  "react-to": {
+    currentValue: unknown;
+    changeCount: number;
+    tracedInner: DragSpecData<any>;
+  };
 };
 
 /** Get typed trace info from a spec node, or undefined if not annotated. */
@@ -235,6 +242,11 @@ export function debugOverlay<T>(
 
     case "substate":
       return debugOverlay(spec.innerSpec, pointer);
+
+    case "react-to": {
+      const info = getTraceInfo(spec);
+      return info ? debugOverlay(info.tracedInner, pointer) : null;
+    }
 
     default:
       assertNever(spec);

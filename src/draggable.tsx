@@ -60,23 +60,7 @@ export type SetState<T> = (
 
 // # drag
 
-/**
- * A drag spec callback (dragology value) is provided with DragParams
- * input. Although you generally think of the callback as being
- * called only at drag start, it's actually reactive to changes in
- * these params – if these params change the drag will be
- * re-initialized.
- *
- * (So far, this is just modifier key state.)
- */
-export type DragParams = {
-  altKey: boolean;
-  ctrlKey: boolean;
-  metaKey: boolean;
-  shiftKey: boolean;
-};
-
-export type DragSpecCallback<T> = (params: DragParams) => DragSpec<T>;
+export type DragSpecCallback<T> = () => DragSpec<T>;
 
 export const DRAGOLOGY_PROP_NAME = "dragology";
 
@@ -116,8 +100,8 @@ function embedImpl<T extends object, const P extends PathIn<T, any>>(
     const dragSpecCallback = getDragSpecCallbackOnElement<any>(el);
     if (!dragSpecCallback) return;
     return {
-      [DRAGOLOGY_PROP_NAME]: (params: DragParams) => {
-        const subSpec = dragSpecCallback(params);
+      [DRAGOLOGY_PROP_NAME]: () => {
+        const subSpec = dragSpecCallback();
         return props.d.substate(props.state, path as any, () => subSpec as any);
       },
     };

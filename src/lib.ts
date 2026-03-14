@@ -12,12 +12,7 @@ export type {
 } from "./DraggableRenderer";
 
 // Draggable type & helpers
-export type {
-  DragParams,
-  Draggable,
-  DraggableProps,
-  SetState,
-} from "./draggable";
+export type { Draggable, DraggableProps, SetState } from "./draggable";
 
 // DragSpec & builder
 export { and, lessThan, moreThan } from "./DragSpec";
