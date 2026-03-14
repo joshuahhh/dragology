@@ -111,11 +111,9 @@ A bit of terminology about the lifetimes of drags:
 
   1. When we chain, we move into a new state and re-initialize the
      drag from that new state, starting a new, chained span.
-  2. When drag params (modifier keys) change, we re-initialize the
-     current span. (It's kinda a one-step undo. You could imagine us
-     undoing all the way back to the start of the drag, but 1. that's
-     complicated and 2. how often are people combining chaining with
-     modifier keys?)
+  2. When drag params (modifier keys) change, we re-initialize back
+     to the drag start – not the span start, but the drag start. This
+     is unpleasant.
 
   A drag span is initialized in a few steps:
 
@@ -125,8 +123,9 @@ A bit of terminology about the lifetimes of drags:
   - Turn the DragSpec into a DragBehavior using dragSpecToBehavior,
     providing some DragBehaviorInitContext.
 
-I believe the "dragging" drag status need only store information
-about the current span.
+Currently, the "dragging" drag status needs to store information
+about the current span AND, to support the drag-params-change-thing,
+information about the original drag-spec callback.
 
 */
 
