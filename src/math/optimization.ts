@@ -91,6 +91,15 @@ export function equal(a: number, b: number): number[] {
   return [a - b, b - a];
 }
 
+/** Constraint helper: ensure numbers are in ascending order */
+export function inOrder(...nums: number[]): number[] {
+  const constraints: number[] = [];
+  for (let i = 0; i < nums.length - 1; i++) {
+    constraints.push(lessThan(nums[i], nums[i + 1]));
+  }
+  return constraints;
+}
+
 /** Constraint helper: combine multiple numeric constraints */
 export function and(...constraints: number[]): number[] {
   return constraints;
