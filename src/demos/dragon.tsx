@@ -113,8 +113,7 @@ export default demo(
         <DemoNotes>
           Adapted from{" "}
           <DemoLink href="https://omrelli.ug/g9/">g9's famous example</DemoLink>
-          . Nice performance stress test (which we are failing; try larger
-          "Levels").
+          . Nice performance stress test.
         </DemoNotes>
         <DemoWithConfig>
           <DemoDraggable
