@@ -92,12 +92,16 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
             r={isDragged ? 8 : 12}
             fill={isDragged ? "rgba(37, 99, 235, 0.3)" : "transparent"}
             dragology={() =>
-              d.vary(state, [
-                param("p1", "x"),
-                param("p1", "y"),
-                param("p2", "x"),
-                param("p2", "y"),
-              ])
+              d.vary(
+                state,
+                [
+                  param("p1", "x"),
+                  param("p1", "y"),
+                  param("p2", "x"),
+                  param("p2", "y"),
+                ],
+                { pin: (s) => [s.p2.x - s.p1.x, s.p2.y - s.p1.y] },
+              )
             }
           />
         );
