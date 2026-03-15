@@ -209,7 +209,7 @@ function withFloatingBehavior<T extends object>(
         cachedFloatPos = startDraggedElement
           ? localToGlobal(startDraggedElement.props.transform, ctx.pointerLocal)
           : Vec2(0, 0);
-        startFloatPos = cachedFloatPos;
+        startFloatPos = ctx.pointerStart;
       }
       floatLayered = cachedFloatLayered;
       floatPos = cachedFloatPos!;
@@ -220,7 +220,7 @@ function withFloatingBehavior<T extends object>(
       floatPos = elementPos;
       cachedFloatLayered = extracted;
       cachedFloatPos = floatPos;
-      if (startFloatPos === null) startFloatPos = floatPos;
+      if (startFloatPos === null) startFloatPos = ctx.pointerStart;
 
       if (spec.ghost !== undefined) {
         backdrop = layeredMerge(

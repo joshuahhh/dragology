@@ -1,5 +1,5 @@
 import { demo } from "../demo";
-import { DemoDraggable } from "../demo/ui";
+import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
 import { translate } from "../svgx/helpers";
 
@@ -52,12 +52,19 @@ const draggable: Draggable<State> = ({ state, d }) => (
 
 export default demo(
   () => (
-    <DemoDraggable
-      draggable={draggable}
-      initialState={initialState}
-      width={400}
-      height={300}
-    />
+    <>
+      <DemoNotes>
+        The (second) simplest possible demonstration of "discrete islands in a
+        continuous sea", aka <code>spec.whenFar(d.vary(...))</code>. Once used
+        to test some misbehaving float positioning.
+      </DemoNotes>
+      <DemoDraggable
+        draggable={draggable}
+        initialState={initialState}
+        width={400}
+        height={300}
+      />
+    </>
   ),
-  { tags: ["d.between", "d.vary", "spec.whenFar", "spec.withFloating"] },
+  { tags: ["d.closest", "d.vary", "spec.whenFar", "spec.withFloating"] },
 );
