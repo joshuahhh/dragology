@@ -217,7 +217,9 @@ export interface DragSpecMethods<T> {
    * `draggedPath` for child behaviors.
    */
   withInitContext(
-    f: (ctx: DragBehaviorInitContext<T & object>) => DragBehaviorInitContext<T & object>,
+    f: (
+      ctx: DragBehaviorInitContext<T & object>,
+    ) => DragBehaviorInitContext<T & object>,
   ): DragSpec<T>;
 }
 
