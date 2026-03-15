@@ -341,16 +341,16 @@ export class DragSpecBuilder<T> {
    * directly. You can usually feel free to set them to an arbitrary
    * value.
    */
-  vary(
-    state: T,
-    paramPaths: PathIn<T, number>[],
-    options?: VaryOptions<T>,
+  vary<S extends T>(
+    state: S,
+    paramPaths: PathIn<S, number>[],
+    options?: VaryOptions<S>,
   ): DragSpec<T> {
     return attachMethods({
       type: "vary",
       state,
-      paramPaths,
-      options: options ?? {},
+      paramPaths: paramPaths as PathIn<T, number>[],
+      options: (options ?? {}) as VaryOptions<T>,
     });
   }
 

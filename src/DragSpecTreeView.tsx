@@ -215,6 +215,7 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
     );
   } else if (spec.type === "between") {
     const { active, color, traceInfo } = info(spec);
+    const allFixed = spec.specs.every((s) => s.type === "fixed");
     return (
       <Box
         label={`between [${spec.specs.length}]`}
@@ -222,16 +223,24 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
         color={color}
       >
         {traceInfo && (
-          <>
-            <OutputThumbnail outputRendered={traceInfo.outputRendered} />
-            <Slot label="states">
-              <StateThumbnails
-                renderedStates={traceInfo.renderedStates}
-                closestIndex={traceInfo.closestIndex}
-              />
-            </Slot>
-          </>
+          <OutputThumbnail outputRendered={traceInfo.outputRendered} />
         )}
+        {allFixed
+          ? traceInfo && (
+              <Slot label="states">
+                <StateThumbnails
+                  renderedStates={traceInfo.renderedStates}
+                  closestIndex={traceInfo.closestIndex}
+                />
+              </Slot>
+            )
+          : spec.specs.map((childSpec, i) => (
+              <SpecNode
+                key={i}
+                spec={childSpec}
+                path={path + `between/${i}/`}
+              />
+            ))}
       </Box>
     );
   } else if (spec.type === "with-drop-transition") {

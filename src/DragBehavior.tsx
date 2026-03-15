@@ -556,17 +556,21 @@ function betweenBehavior<T extends object>(
   spec: DragSpecData<T> & { type: "between" },
   ctx: DragBehaviorInitContext<T>,
 ): DragBehavior<T> {
-  const states = spec.specs.map((s) => {
-    assert(s.type === "fixed", `between: expected fixed spec, got ${s.type}`);
-    return s.state;
-  });
-  const renderedStates = states.map((state) => {
-    const layered = renderStateReadOnly(ctx, state);
-    return { state, layered, position: getElementPosition(ctx, layered) };
-  });
-  let delaunay;
+  const allFixed = spec.specs.every((s) => s.type === "fixed");
+
+  if (allFixed) {
+    return betweenFixedBehavior(spec, ctx);
+  } else {
+    return betweenDynamicBehavior(spec, ctx);
+  }
+}
+
+function betweenMakeDelaunay<T extends object>(
+  renderedStates: { state: T; layered: LayeredSvgx; position: Vec2 }[],
+  ctx: DragBehaviorInitContext<T>,
+) {
   try {
-    delaunay = new Delaunay(renderedStates.map((rs) => rs.position));
+    return new Delaunay(renderedStates.map((rs) => rs.position));
   } catch (e) {
     if (e instanceof CoincidentPointsError) {
       throw new ErrorWithJSX(
@@ -597,52 +601,93 @@ function betweenBehavior<T extends object>(
     }
     throw new Error(`Failed to create Delaunay triangulation: ${e}`);
   }
+}
 
+function betweenProjectAndRender<T extends object>(
+  renderedStates: { state: T; layered: LayeredSvgx; position: Vec2 }[],
+  delaunay: Delaunay,
+  frame: DragFrame,
+  spec: DragSpecData<T> & { type: "between" },
+): DragResult<T> {
+  const projection = delaunay.projectOntoConvexHull(frame.pointer);
   const delaunayTriangles = delaunay.triangles();
 
+  let rendered: LayeredSvgx;
+  if (projection.type === "vertex") {
+    rendered = renderedStates[projection.ptIdx].layered;
+  } else if (projection.type === "edge") {
+    rendered = lerpLayered(
+      renderedStates[projection.ptIdx0].layered,
+      renderedStates[projection.ptIdx1].layered,
+      projection.t,
+    );
+  } else {
+    rendered = lerpLayered3(
+      renderedStates[projection.ptIdx0].layered,
+      renderedStates[projection.ptIdx1].layered,
+      renderedStates[projection.ptIdx2].layered,
+      projection.barycentric,
+    );
+  }
+
+  // Drop state: closest rendered state by pointer distance
+  const closest = _.minBy(renderedStates, (rs) =>
+    rs.position.dist(frame.pointer),
+  )!;
+  const closestIndex = renderedStates.indexOf(closest);
+
+  return {
+    rendered,
+    dropState: closest.state,
+    distance: projection.dist,
+    activePath: "between",
+    tracedSpec: setTraceInfo(spec, {
+      renderedStates: renderedStates.map((rs) => ({
+        layered: rs.layered,
+        position: rs.position,
+      })),
+      closestIndex,
+      outputRendered: rendered,
+      delaunayTriangles,
+      projectedPoint: projection.projectedPt,
+    }),
+  };
+}
+
+function betweenFixedBehavior<T extends object>(
+  spec: DragSpecData<T> & { type: "between" },
+  ctx: DragBehaviorInitContext<T>,
+): DragBehavior<T> {
+  const renderedStates = spec.specs.map((s) => {
+    assert(s.type === "fixed");
+    const state = s.state;
+    const layered = renderStateReadOnly(ctx, state);
+    return { state, layered, position: getElementPosition(ctx, layered) };
+  });
+  const delaunay = betweenMakeDelaunay(renderedStates, ctx);
+
+  return (frame) =>
+    betweenProjectAndRender(renderedStates, delaunay, frame, spec);
+}
+
+function betweenDynamicBehavior<T extends object>(
+  spec: DragSpecData<T> & { type: "between" },
+  ctx: DragBehaviorInitContext<T>,
+): DragBehavior<T> {
+  const subBehaviors = spec.specs.map((s) => dragSpecToBehavior(s, ctx));
+
   return (frame) => {
-    const projection = delaunay.projectOntoConvexHull(frame.pointer);
-
-    let rendered: LayeredSvgx;
-    if (projection.type === "vertex") {
-      rendered = renderedStates[projection.ptIdx].layered;
-    } else if (projection.type === "edge") {
-      rendered = lerpLayered(
-        renderedStates[projection.ptIdx0].layered,
-        renderedStates[projection.ptIdx1].layered,
-        projection.t,
-      );
-    } else {
-      rendered = lerpLayered3(
-        renderedStates[projection.ptIdx0].layered,
-        renderedStates[projection.ptIdx1].layered,
-        renderedStates[projection.ptIdx2].layered,
-        projection.barycentric,
-      );
-    }
-
-    // Drop state: closest rendered state by pointer distance
-    const closest = _.minBy(renderedStates, (rs) =>
-      rs.position.dist(frame.pointer),
-    )!;
-    const closestIndex = renderedStates.indexOf(closest);
-
-    return {
-      rendered,
-      dropState: closest.state,
-      distance: projection.dist,
-      activePath: "between",
-      tracedSpec: setTraceInfo(spec, {
-        renderedStates: renderedStates.map((rs) => ({
-          layered: rs.layered,
-          position: rs.position,
-        })),
-        closestIndex,
-        outputRendered: rendered,
-        delaunayTriangles,
-        projectedPoint: projection.projectedPt,
-      }),
+    const subResults = subBehaviors.map((b) => b(frame));
+    const renderedStates = subResults.map((result) => {
+      const position = getElementPosition(ctx, result.rendered);
+      return { state: result.dropState, layered: result.rendered, position };
+    });
+    const tracedSpec = {
+      ...spec,
+      specs: subResults.map((r) => r.tracedSpec),
     };
+    const delaunay = betweenMakeDelaunay(renderedStates, ctx);
+    return betweenProjectAndRender(renderedStates, delaunay, frame, tracedSpec);
   };
 }
 

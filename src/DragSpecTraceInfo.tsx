@@ -157,6 +157,15 @@ export function debugOverlay<T>(
       const projDist = pointer.dist(info.projectedPoint);
       return (
         <g>
+          {spec.specs.map((child, i) => {
+            const sub = debugOverlay(child, pointer);
+            if (!sub) return null;
+            return (
+              <g key={`sub-${i}`} opacity={0.5}>
+                {sub}
+              </g>
+            );
+          })}
           {info.delaunayTriangles.map((tri, i) => {
             const [a, b, c] = tri;
             return (
