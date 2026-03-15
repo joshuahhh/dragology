@@ -268,13 +268,13 @@ function makePickupDrag(
           : [];
         const stageTargets = emptyStageTarget(stateWithClone, tree);
         return d
-          .closest(
+          .closest([
             holeTargets,
             insertTargets,
             paletteTargets,
             stageTargets,
             fullState,
-          )
+          ])
           .withFloating()
           .whenFar(d.floating(stateWithClone));
       }
@@ -355,21 +355,21 @@ function makePickupDrag(
       };
 
       return d
-        .closest(
+        .closest([
           d
-            .closest(
+            .closest([
               holeTargets,
               insertTargets,
               swapTargets,
               paletteTargets,
               stageTargets,
               fullState,
-            )
+            ])
             .withFloating(),
           d
             .floating(removeStageHoles(eraseState))
             .onDrop(removeStageHoles(cleanState)),
-        )
+        ])
         .whenFar(
           d.floating(cleanedWithout).onDrop({
             ...cleanedWithout,
@@ -421,7 +421,7 @@ function makeBrushDrag(
       : [];
 
     return d
-      .closest(holeTargets, insertTargets, stageTargets, paletteTargets)
+      .closest([holeTargets, insertTargets, stageTargets, paletteTargets])
       .whenFar(stateWithout)
       .withFloating();
   };
@@ -463,7 +463,7 @@ function makePaletteDrag(
         const stageTargets = emptyStageTarget(stateWithClone, block);
         const palTargets = paletteInsertionTargets(stateWithClone, block);
         return d
-          .closest(placeTargets, insertTargets, stageTargets, palTargets, state)
+          .closest([placeTargets, insertTargets, stageTargets, palTargets, state])
           .whenFar(stateWithClone)
           .withFloating();
       }
@@ -505,14 +505,14 @@ function makePaletteDrag(
         voidStack: newVoidStack,
       };
       return d
-        .closest(
+        .closest([
           d
-            .closest(placeTargets, insertTargets, stageTargets, reorderTargets)
+            .closest([placeTargets, insertTargets, stageTargets, reorderTargets])
             .withFloating(),
           d
             .floating(removeStageHoles(eraseState))
             .onDrop(removeStageHoles(cleanState)),
-        )
+        ])
         .whenFar(
           d.floating(stateWithout).onDrop({
             ...stateWithout,
@@ -560,7 +560,7 @@ function makeVoidDrag(
     const stageTargets = emptyStageTarget(stateWithout, tree);
 
     return d
-      .closest(holeTargets, insertTargets, paletteTargets, stageTargets)
+      .closest([holeTargets, insertTargets, paletteTargets, stageTargets])
       .withFloating()
       .whenFar(d.floating(stateWithout).onDrop(state));
   };
@@ -1058,7 +1058,7 @@ export const draggable: Draggable<State> = ({
                 ...others.slice(pos),
               ],
             }));
-            return d.between(...targets);
+            return d.between(targets);
           }}
           data-z-index={-5}
           onClick={() =>

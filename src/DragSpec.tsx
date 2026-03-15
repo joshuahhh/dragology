@@ -311,9 +311,10 @@ export class DragSpecBuilder<T> {
    * This drag behavior lets you interpolate smoothly between states
    * by dragging inside their convex hull.
    */
-  between(...states: Many<T>[]): DragSpec<T> {
-    assert(states.length > 0, "between requires at least one state");
-    return attachMethods({ type: "between", states: manyToArray(states) });
+  between(states: Many<T>): DragSpec<T> {
+    const resolved = manyToArray(states);
+    assert(resolved.length > 0, "between requires at least one state");
+    return attachMethods({ type: "between", states: resolved });
   }
 
   /**
@@ -321,7 +322,7 @@ export class DragSpecBuilder<T> {
    * it continuously switches to the behavior that gets the dragged
    * element closest to the pointer.
    */
-  closest(...specs: Many<DragSpecLike<T>>[]): DragSpec<T> {
+  closest(specs: Many<DragSpecLike<T>>): DragSpec<T> {
     return attachMethods({
       type: "closest",
       specs: manyToArray(specs).map(resolveDragSpecLike),

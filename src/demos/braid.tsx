@@ -109,9 +109,9 @@ const draggable: Draggable<State> = ({ state, d }) => {
           data-z-index={1}
           dragology={() => {
             return d
-              .closest(
+              .closest([
                 // drag to add crossing
-                d.between(
+                d.between([
                   state,
                   i > 0 &&
                     produce(state, (s) => {
@@ -121,7 +121,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
                     produce(state, (s) => {
                       s.seq.push([i, i + 1]);
                     }),
-                ),
+                ]),
                 // drag to erase last crossing
                 state.seq.length > 0 &&
                   d.between([
@@ -130,7 +130,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
                       s.seq.pop();
                     }),
                   ]),
-              )
+              ])
               .withSnapRadius(1, { chain: true });
           }}
         >

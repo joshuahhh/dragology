@@ -264,10 +264,10 @@ function renderNormalMode(
       draggedKey,
     );
     return () =>
-      d.closest(
-        d.between(state),
+      d.closest([
+        d.between([state]),
         ...newTrees.map((t) => d.fixed({ ...state, tree: t, gutter: [] })),
-      );
+      ]);
   }
 
   return renderNormalTree(state.tree, d, dragTargets, config, 0).element;
@@ -412,7 +412,7 @@ function renderMacroTree(
       };
       const gutterTargets = gutterInsertionTargets(stateWithout, tree);
       return d
-        .closest(gutterTargets, fullState)
+        .closest([gutterTargets, fullState])
         .whenFar(stateWithout)
         .withFloating();
     }
@@ -450,12 +450,12 @@ function renderMacroTree(
     const gutterTargets = gutterInsertionTargets(stateWithout, tree);
 
     return d
-      .closest(
+      .closest([
         insertTargets,
         swapTargets,
         gutterTargets,
         fullState, // put back
-      )
+      ])
       .whenFar(stateWithout)
       .withFloating();
   };
@@ -686,7 +686,7 @@ function renderMacroMode(
                 block,
               );
               return d
-                .closest(placeTargets, reorderTargets)
+                .closest([placeTargets, reorderTargets])
                 .whenFar(stateWithout)
                 .withFloating();
             },

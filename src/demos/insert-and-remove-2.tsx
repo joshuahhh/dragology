@@ -70,12 +70,12 @@ const draggable: Draggable<State> = ({ state, d }) => {
       draft.items.splice(insertIdx, 0, tile);
     });
 
-    return d.closest(
+    return d.closest([
       d.closest(rearrangeStates).withFloating(),
       // we leave "withFloating" off this part, so we see the tile
       // disappear
       d.dropTarget(state, "delete-bin"),
-    );
+    ]);
   };
 
   return (

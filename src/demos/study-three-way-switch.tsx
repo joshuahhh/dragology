@@ -49,7 +49,7 @@ const makeDraggable = (useFloating: boolean): Draggable<State> => {
         strokeWidth={3}
         filter="url(#shadow)"
         dragology={() => {
-          const spec = d.between(...states);
+          const spec = d.between(states);
           return useFloating ? spec.withFloating() : spec;
         }}
       />

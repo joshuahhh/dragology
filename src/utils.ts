@@ -127,7 +127,7 @@ export function pipe(arg: unknown, ...fns: Array<(arg: unknown) => unknown>) {
  * Many<T> is convenient sugar for T[] which automatically flattens
  * nested arrays and turns undefined/null/false into [].
  */
-export type Many<T> = T | Many<T>[] | undefined | null | false;
+export type Many<T> = T | readonly Many<T>[] | undefined | null | false;
 
 /**
  * Turn a Many<T> into a T[].
@@ -140,7 +140,9 @@ export function manyToArray<T>(a: Many<T>): T[] {
     } else if (Array.isArray(a)) {
       a.forEach(helper);
     } else {
-      result.push(a);
+      // This cast corresponds to the assumption that T doesn't
+      // overlap with array types
+      result.push(a as T);
     }
   }
   helper(a);

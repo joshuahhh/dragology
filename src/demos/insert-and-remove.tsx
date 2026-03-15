@@ -132,11 +132,11 @@ const draggable: Draggable<State> = ({ state, d }) => {
             });
 
             return d
-              .closest(
+              .closest([
                 rearrangeStates,
                 // This state needs "d.fixed" so we can call "onDrop"
                 d.fixed(deleteState).onDrop(postDeleteState),
-              )
+              ])
               .whenFar(stateWithout)
               .withFloating();
           },

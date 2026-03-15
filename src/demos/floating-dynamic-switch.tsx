@@ -24,7 +24,7 @@ const draggable: Draggable<State> = ({ state, d }) => (
       strokeWidth={1}
       filter="url(#shadow)"
       dragology={() =>
-        d.between({ status: "off" }, { status: "on" }).withFloating({
+        d.between([{ status: "off" }, { status: "on" }]).withFloating({
           tether: (dist) => Math.sqrt(dist) / 4,
         })
       }

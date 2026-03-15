@@ -69,11 +69,11 @@ function draggableFactory(config: Config): Draggable<State> {
             const singleRotations = singleRotationStates(state, boardLevel);
             return config.snappyMode
               ? d
-                  .closest(state, singleRotations)
+                  .closest([state, singleRotations])
                   .withFloating({ ghost: { opacity: 0.2 } })
                   .withChaining()
               : d
-                  .closest(singleRotations.map((s) => d.between(state, s)))
+                  .closest(singleRotations.map((s) => d.between([state, s])))
                   .withSnapRadius(1, { chain: true });
           } else {
             const all = allStates(boardLevel);
