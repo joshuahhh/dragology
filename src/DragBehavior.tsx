@@ -747,6 +747,7 @@ function switchToStateAndFollowBehavior<T extends object>(
 
   const subBehavior = dragSpecToBehavior(followSpec, {
     ...ctx,
+    startState: spec.state,
     draggedId: spec.draggedId,
     draggedPath: spec.draggedId + "/",
     pointerStart: floatCtx?.pointerStart ?? ctx.pointerStart,

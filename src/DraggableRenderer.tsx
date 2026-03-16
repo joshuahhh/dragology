@@ -108,7 +108,7 @@ export type DragStatus<T extends object> = {
   | { type: "idle"; state: T; pendingDrag?: PendingDrag<T> }
   | {
       type: "dragging";
-      startState: T;
+      startState: T; // TODO: this is of suspect utility
       behavior: DragBehavior<T>;
       behaviorCtx: DragBehaviorInitContext<T>;
       result: DragResult<T>;
