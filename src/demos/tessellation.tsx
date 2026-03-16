@@ -259,7 +259,7 @@ function shapeSpec(
 
   return d
     .closest([snapStates, d.dropTarget(stateWithout, "trash-bin")])
-    .whenFar(freeSpec)
+    .whenFar(freeSpec, { distance: 30 })
     .withInitContext((ctx) => ({ ...ctx, pointerLocal: Vec2(0) }));
 }
 
