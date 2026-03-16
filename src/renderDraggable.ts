@@ -4,7 +4,7 @@ import { Svgx } from "./svgx";
 import { LayeredSvgx, layerSvg, layeredExtract } from "./svgx/layers";
 import { assignPaths } from "./svgx/path";
 import { localToGlobal } from "./svgx/transform";
-import { pipe, throwError } from "./utils";
+import { pipe } from "./utils/pipe";
 
 /** Render a state through assignPaths, but stop before layering. */
 export function renderDraggableInertUnlayered<T extends object>(
@@ -18,7 +18,9 @@ export function renderDraggableInertUnlayered<T extends object>(
       makeDraggableProps({
         state,
         draggedId,
-        setState: throwError,
+        setState: () => {
+          throw new Error("This function should not have been called");
+        },
         isTracking,
       }),
     ),

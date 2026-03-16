@@ -6,7 +6,8 @@ import {
   TransitionLike,
   resolveTransitionLike,
 } from "./transition";
-import { Many, ManyReader, Reader, assert, manyToArray } from "./utils";
+import { assert } from "./utils/assert";
+import { Many, ManyReader, Reader, manyToArray } from "./utils/flexible-types";
 
 // # DragSpecData
 

@@ -34,15 +34,14 @@ import { lerpLayered, lerpLayered3 } from "./svgx/lerp";
 import { findByPath } from "./svgx/path";
 import { globalToLocal, localToGlobal, parseTransform } from "./svgx/transform";
 import { Transition } from "./transition";
+import { assert, assertNever } from "./utils/assert";
 import {
-  assert,
-  assertNever,
   ManyReader,
   manyReaderToArray,
-  pipe,
   Reader,
   readerToValue,
-} from "./utils";
+} from "./utils/flexible-types";
+import { pipe } from "./utils/pipe";
 
 /**
  * A "drag behavior" defines the ongoing behavior of a drag – what is

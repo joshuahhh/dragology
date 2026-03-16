@@ -3,7 +3,7 @@ import { Vec2 } from "./math/vec2";
 import { Svgx } from "./svgx";
 import { path as svgPath } from "./svgx/helpers";
 import { LayeredSvgx } from "./svgx/layers";
-import { assertNever } from "./utils";
+import { assertNever } from "./utils/assert";
 
 export type RenderedState = { layered: LayeredSvgx; position: Vec2 };
 

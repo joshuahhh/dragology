@@ -42,7 +42,9 @@ import {
 import { useAnimationLoop } from "./useAnimationLoop";
 import { CatchToRenderError, useCatchToRenderError } from "./useRenderError";
 import { useStateWithRef } from "./useStateWithRef";
-import { assert, assertNever, memoGeneric, pipe } from "./utils";
+import { memoGeneric } from "./utils";
+import { assert, assertNever } from "./utils/assert";
+import { pipe } from "./utils/pipe";
 
 // # Engine state machine
 

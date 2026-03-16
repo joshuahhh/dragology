@@ -1,5 +1,5 @@
 import * as d3Ease from "d3-ease";
-import { assertNever } from "./utils";
+import { assertNever } from "./utils/assert";
 
 export type Transition = {
   easing: "cubic-out" | "elastic-out" | ((t: number) => number);

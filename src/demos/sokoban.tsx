@@ -1,5 +1,6 @@
 import _ from "lodash";
 import { useMemo, useState } from "react";
+import { demo } from "../demo";
 import {
   ConfigCheckbox,
   ConfigPanel,
@@ -7,12 +8,10 @@ import {
   DemoWithConfig,
 } from "../demo/ui";
 import { Draggable } from "../draggable";
-
-import { demo } from "../demo";
 import { Vec2 } from "../math/vec2";
 import { inXYWH } from "../math/xywh";
 import { translate } from "../svgx/helpers";
-import { defined } from "../utils";
+import { defined } from "../utils/js";
 
 type GameObject = {
   type: "wall" | "box" | "goal";

@@ -1,6 +1,7 @@
 import { Delaunay as D3Delaunay } from "d3-delaunay";
 import _ from "lodash";
-import { assert, assertWarning, clamp } from "../utils";
+import { clamp } from "../utils";
+import { assert, assertWarning } from "../utils/assert";
 import { Vec2, Vec2able } from "./vec2";
 
 export class CoincidentPointsError extends Error {

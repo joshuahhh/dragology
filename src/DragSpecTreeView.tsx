@@ -3,7 +3,7 @@ import { DragSpecData } from "./DragSpec";
 import { RenderedState, getTraceInfo } from "./DragSpecTraceInfo";
 import { LayeredSvgx, drawLayered } from "./svgx/layers";
 import { Transition } from "./transition";
-import { assert, assertNever } from "./utils";
+import { assert, assertNever } from "./utils/assert";
 
 type TreeViewContext = {
   activePath: string;

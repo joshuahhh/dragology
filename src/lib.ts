@@ -42,4 +42,4 @@ export { amb, fail, produceAmb, require, runAmb } from "./amb";
 export type { PathIn } from "./paths";
 
 // Utility types
-export type { Many } from "./utils";
+export type { Many } from "./utils/flexible-types";

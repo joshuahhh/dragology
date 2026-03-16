@@ -4,7 +4,7 @@ import { Draggable } from "../draggable";
 
 import { demo } from "../demo";
 import { translate } from "../svgx/helpers";
-import { assertNever } from "../utils";
+import { assertNever } from "../utils/assert";
 
 type State = {
   posIndex: number;

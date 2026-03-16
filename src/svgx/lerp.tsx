@@ -7,7 +7,6 @@ import { shouldRecurseIntoChildren, Svgx } from ".";
 import { DRAGOLOGY_PROP_NAME } from "../draggable";
 import { ErrorWithJSX } from "../ErrorBoundary";
 import { lerp } from "../math/vec2";
-import { emptyToUndefined } from "../utils";
 import { LayeredSvgx } from "./layers";
 import { lerpTransformString } from "./transform";
 
@@ -300,7 +299,7 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
   return React.cloneElement(a, {
     ...lerpedNumericProps,
     ...(lerpedTransform ? { transform: lerpedTransform } : {}),
-    children: emptyToUndefined(lerpedChildren),
+    children: lerpedChildren.length === 0 ? undefined : lerpedChildren,
   });
 }
 

@@ -4,7 +4,7 @@ import { Draggable } from "../draggable";
 import { inOrder, param } from "../DragSpec";
 import { Vec2 } from "../math/vec2";
 import { translate } from "../svgx/helpers";
-import { objectEntries } from "../utils";
+import { objectEntries } from "../utils/js";
 
 const islandPos = { top: Vec2(150, 20), bottom: Vec2(150, 180) };
 

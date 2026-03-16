@@ -5,7 +5,7 @@ import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
 import { translate } from "../svgx/helpers";
-import { assertDefined } from "../utils";
+import { assertDefined } from "../utils/assert";
 
 type State = {
   rows: {

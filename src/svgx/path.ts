@@ -1,5 +1,5 @@
 import { findElement, FindElementResult, Svgx, updateElement } from ".";
-import { assert } from "../utils";
+import { assert } from "../utils/assert";
 
 const pathPropName = "data-path";
 

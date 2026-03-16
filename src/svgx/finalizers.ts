@@ -1,6 +1,6 @@
 import { findElement, Svgx } from ".";
 import { Vec2, Vec2able } from "../math/vec2";
-import { assert, assertDefined } from "../utils";
+import { assert, assertDefined } from "../utils/assert";
 import { localToGlobal } from "./transform";
 
 /**

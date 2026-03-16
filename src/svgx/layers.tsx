@@ -1,7 +1,8 @@
 import React, { cloneElement, Fragment } from "react";
 import { FindElementResult, Svgx, updateElement, updatePropsDownTree } from ".";
 import { DRAGOLOGY_PROP_NAME } from "../draggable";
-import { assert, objectEntries } from "../utils";
+import { assert } from "../utils/assert";
+import { objectEntries } from "../utils/js";
 import { findByPath } from "./path";
 import { combineTransforms } from "./transform";
 

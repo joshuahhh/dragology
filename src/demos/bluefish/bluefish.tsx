@@ -2,7 +2,7 @@ import { Child, render } from "bluefish-js";
 import parse from "html-react-parser";
 import React, { ReactNode, SVGAttributes } from "react";
 import { Svgx } from "../../svgx";
-import { assert } from "../../utils";
+import { assert } from "../../utils/assert";
 
 function parseViewBox(viewBox: string | null): {
   minX: number;

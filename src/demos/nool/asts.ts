@@ -1,5 +1,7 @@
 import { produce } from "immer";
-import { assert, hasKey, templateLiteralTagOrNot } from "../../utils";
+import { templateLiteralTagOrNot } from "../../utils";
+import { assert } from "../../utils/assert";
+import { hasKey } from "../../utils/js";
 import * as PeggyPattern from "./peggy/pattern";
 
 export type Tree = {
