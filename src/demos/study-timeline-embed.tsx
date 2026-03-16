@@ -2,7 +2,7 @@ import _ from "lodash";
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { lessThan, param } from "../DragSpec";
+import { inOrder, param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 type Block = { id: string; pos: number; track: number; color: string };
@@ -61,10 +61,7 @@ const blockDraggable: Draggable<Block> = ({ state, d, draggedId }) => {
           .closest(
             _.range(NUM_TRACKS).map((t) =>
               d.vary({ ...state, track: t }, param("pos"), {
-                constraint: (s) => [
-                  lessThan(0, s.pos),
-                  lessThan(s.pos, TRACK_W - BLOCK_W),
-                ],
+                constraint: (s) => inOrder(0, s.pos, TRACK_W - BLOCK_W),
               }),
             ),
           )

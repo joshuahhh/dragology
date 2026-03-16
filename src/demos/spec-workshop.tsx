@@ -3,7 +3,7 @@ import React from "react";
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { DragSpec, DragSpecBuilder, lessThan, param } from "../DragSpec";
+import { DragSpec, DragSpecBuilder, inOrder, param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 import { makeId } from "../utils";
 
@@ -674,7 +674,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
             d.vary(state, param("nodes", parentId, "expr", "radius"), {
               constraint: (s: State) => {
                 const expr = s.nodes[parentId].expr as WithSnapRadiusExpr;
-                return [lessThan(0, expr.radius), lessThan(expr.radius, 30)];
+                return inOrder(0, expr.radius, 30);
               },
             })
           }

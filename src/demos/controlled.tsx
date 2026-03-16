@@ -2,10 +2,9 @@ import { useCallback, useState } from "react";
 import { demo } from "../demo";
 import { DemoNotes } from "../demo/ui";
 import {
-  and,
   Draggable,
   DraggableRenderer,
-  lessThan,
+  inOrder,
   param,
   translate,
 } from "../lib";
@@ -65,7 +64,7 @@ const sliderDraggable: Draggable<SliderState> = ({ state, d }) => (
       r={8}
       dragology={() =>
         d.vary(state, param("t"), {
-          constraint: (s) => and(lessThan(0, s.t), lessThan(s.t, 1)),
+          constraint: (s) => inOrder(0, s.t, 1),
         })
       }
     />

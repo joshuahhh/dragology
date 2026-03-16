@@ -442,8 +442,9 @@ export class DragSpecBuilder<T> {
 export type VaryOptions<T> = {
   /**
    * A constraint function returns one or more numbers, all of which
-   * will be constrained to be negative. You can use `lessThan(a, b)`
-   * to express a < b constraints.
+   * will be constrained to be negative. Consider using helpers like
+   * `lessThan`, `inOrder`, and `equal` to make your constrait
+   * readable.
    */
   constraint?: ManyReader<number, T>;
   /**
@@ -454,7 +455,7 @@ export type VaryOptions<T> = {
   pin?: ManyReader<number, T>;
 };
 
-export { and, equal, lessThan, moreThan } from "./math/optimization";
+export { and, equal, inOrder, lessThan, moreThan } from "./math/optimization";
 
 // # VaryPath
 

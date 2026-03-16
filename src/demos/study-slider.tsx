@@ -1,7 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { lessThan, param } from "../DragSpec";
+import { inOrder, param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 type State = { value: number };
@@ -30,7 +30,7 @@ const draggable: Draggable<State> = ({ state, d }) => (
       filter="url(#shadow)"
       dragology={() =>
         d.vary(state, param("value"), {
-          constraint: (s) => [lessThan(0, s.value), lessThan(s.value, W)],
+          constraint: (s) => inOrder(0, s.value, W),
         })
       }
     />
