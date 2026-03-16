@@ -10,41 +10,18 @@ import { makeId } from "../utils";
 
 // --- Shape geometry ---
 
-type ShapeKind = "square" | "triangle" | "hexagon" | "octagon";
+// can extend this to new shapes if we want?
+type ShapeKind = { n: number };
 
 const SIDE = 50;
-const HALF = SIDE / 2;
-const TRI_H = (SIDE * Math.sqrt(3)) / 2;
 
-/** Regular polygon with `n` sides of length `SIDE`, centered at origin. */
-function regularPolygonVertices(n: number): Vec2[] {
-  // Circumradius from side length: R = SIDE / (2 * sin(π/n))
+function shapeVertices({ n }: ShapeKind): Vec2[] {
+  // Circumradius from side length
   const R = SIDE / (2 * Math.sin(Math.PI / n));
-  // Start from top (-90°) so the bottom edge is flat
+  // Offset so the bottom edge is flat
   return Array.from({ length: n }, (_, i) =>
-    Vec2.polarDeg(R, -90 + (360 * i) / n),
+    Vec2.polarDeg(R, (360 * (i - 0.5)) / n + 90),
   );
-}
-
-// Vertices relative to center, at rotation=0
-function shapeVertices(kind: ShapeKind): Vec2[] {
-  switch (kind) {
-    case "square":
-      return [
-        Vec2(-HALF, -HALF),
-        Vec2(HALF, -HALF),
-        Vec2(HALF, HALF),
-        Vec2(-HALF, HALF),
-      ];
-    case "triangle": {
-      const cy = TRI_H / 3; // centroid is 1/3 from base
-      return [Vec2(0, -(TRI_H - cy)), Vec2(HALF, cy), Vec2(-HALF, cy)];
-    }
-    case "hexagon":
-      return regularPolygonVertices(6);
-    case "octagon":
-      return regularPolygonVertices(8);
-  }
 }
 
 function shapePoints(kind: ShapeKind): string {
@@ -215,12 +192,16 @@ type State = {
 };
 
 // Palette items (in palette space, not on canvas)
-const PALETTE_ITEMS: { kind: ShapeKind; x: number; y: number }[] = [
-  { kind: "square", x: 50, y: 75 },
-  { kind: "triangle", x: 140, y: 75 },
-  { kind: "hexagon", x: 245, y: 75 },
-  { kind: "octagon", x: 370, y: 75 },
-];
+const PALETTE_BASELINE = 135;
+const PALETTE_ITEMS = [
+  { kind: { n: 3 }, x: 50 },
+  { kind: { n: 4 }, x: 140 },
+  { kind: { n: 6 }, x: 245 },
+  { kind: { n: 8 }, x: 370 },
+].map((item) => {
+  const bottom = Math.max(...shapeVertices(item.kind).map((v) => v.y));
+  return { ...item, y: PALETTE_BASELINE - bottom };
+});
 
 const initialState: State = { shapes: {} };
 
@@ -229,19 +210,23 @@ const initialState: State = { shapes: {} };
 const PALETTE_W = 480;
 const PALETTE_H = 150;
 
-const SHAPE_COLORS: Record<ShapeKind, string> = {
-  square: "#93c5fd",
-  triangle: "#fca5a5",
-  hexagon: "#86efac",
-  octagon: "#fde68a",
-};
+function getFillColor(kind: ShapeKind) {
+  return {
+    3: "#fca5a5",
+    4: "#93c5fd",
+    6: "#86efac",
+    8: "#fde68a",
+  }[kind.n];
+}
 
-const SHAPE_STROKES: Record<ShapeKind, string> = {
-  square: "#3b82f6",
-  triangle: "#ef4444",
-  hexagon: "#16a34a",
-  octagon: "#ca8a04",
-};
+function getStrokeColor(kind: ShapeKind) {
+  return {
+    3: "#ef4444",
+    4: "#3b82f6",
+    6: "#16a34a",
+    8: "#ca8a04",
+  }[kind.n];
+}
 
 // --- The draggable ---
 
@@ -288,19 +273,16 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
         const isDragged = draggedId === `shape-${shape.id}`;
 
         return (
-          <g
+          <polygon
             id={`shape-${shape.id}`}
             transform={translate(shape.x, shape.y) + rotateDeg(shape.rotDeg)}
             data-z-index={isDragged ? 10 : 1}
+            points={shapePoints(shape.kind)}
+            fill={getFillColor(shape.kind)}
+            stroke={getStrokeColor(shape.kind)}
+            strokeWidth={2}
             dragology={() => shapeSpec(d, state, shape.id)}
-          >
-            <polygon
-              points={shapePoints(shape.kind)}
-              fill={SHAPE_COLORS[shape.kind]}
-              stroke={SHAPE_STROKES[shape.kind]}
-              strokeWidth={2}
-            />
-          </g>
+          />
         );
       })}
 
@@ -328,7 +310,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       </g>
 
       {/* Palette background */}
-      <g id="palette-bg" data-z-index={0}>
+      <g>
         <rect
           width={PALETTE_W}
           height={PALETTE_H}
@@ -349,37 +331,30 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       </g>
 
       {/* Palette items */}
-      <g id="palette" data-z-index={20}>
-        {PALETTE_ITEMS.map((item, i) => (
-          <g
-            id={`palette-${i}`}
-            transform={translate(item.x, item.y)}
-            data-z-index={21}
-            dragology={() => {
-              const newId = makeId();
-              const newShape: Shape = {
-                id: newId,
-                kind: item.kind,
-                x: 0,
-                y: 0,
-                rotDeg: 0,
-              };
-              const stateWithNew = produce(state, (draft) => {
-                draft.shapes[newId] = newShape;
-              });
-              return d.switchToStateAndFollow(stateWithNew, `shape-${newId}`);
-            }}
-          >
-            <polygon
-              points={shapePoints(item.kind)}
-              fill={SHAPE_COLORS[item.kind]}
-              stroke={SHAPE_STROKES[item.kind]}
-              strokeWidth={2}
-              opacity={0.8}
-            />
-          </g>
-        ))}
-      </g>
+      {PALETTE_ITEMS.map((item) => (
+        <polygon
+          transform={translate(item.x, item.y)}
+          points={shapePoints(item.kind)}
+          fill={getFillColor(item.kind)}
+          stroke={getStrokeColor(item.kind)}
+          strokeWidth={2}
+          opacity={0.8}
+          dragology={() => {
+            const newId = makeId();
+            const newShape: Shape = {
+              id: newId,
+              kind: item.kind,
+              x: 0,
+              y: 0,
+              rotDeg: 0,
+            };
+            const stateWithNew = produce(state, (draft) => {
+              draft.shapes[newId] = newShape;
+            });
+            return d.switchToStateAndFollow(stateWithNew, `shape-${newId}`);
+          }}
+        />
+      ))}
     </g>
   );
 };
