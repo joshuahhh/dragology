@@ -1,5 +1,5 @@
-import { Delaunay } from "d3-delaunay";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Delaunay } from "./math/delaunay";
 import { naturalNeighborWeightsFromDelaunay } from "./math/natural-neighbor";
 import { Vec2 } from "./math/vec2";
 
@@ -29,19 +29,9 @@ export const NaturalNeighborTestPage = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const points = dots.map((d) => Vec2(d.x, d.y));
+  const points = useMemo(() => dots.map((d) => Vec2(d.x, d.y)), [dots]);
 
-  const flat = useMemo(() => {
-    const f = new Float64Array(points.length * 2);
-    for (let i = 0; i < points.length; i++) {
-      f[2 * i] = points[i].x;
-      f[2 * i + 1] = points[i].y;
-    }
-    return f;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dots]);
-
-  const delaunay = useMemo(() => new Delaunay(flat), [flat]);
+  const delaunay = useMemo(() => new Delaunay(points), [points]);
 
   // Draw weight grid on canvas.
   useEffect(() => {

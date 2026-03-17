@@ -19,6 +19,10 @@ export class CoincidentPointsError extends Error {
 export class Delaunay {
   private _inner: D3Delaunay<D3Delaunay.Point>;
 
+  get d3(): D3Delaunay<D3Delaunay.Point> {
+    return this._inner;
+  }
+
   constructor(points: Vec2able[]) {
     this._inner = D3Delaunay.from(points.map((p) => Vec2(p).arr()));
     // d3-delaunay sets inedges[i] = -1 for points it considers coincident

@@ -10,7 +10,7 @@
  * "yield" if the query point were inserted into the triangulation.
  */
 
-import { Delaunay as D3Delaunay } from "d3-delaunay";
+import { Delaunay } from "./delaunay";
 import { Vec2 } from "./vec2";
 
 export type NaturalNeighborResult = {
@@ -26,10 +26,6 @@ function nextHe(e: number): number {
   return e % 3 === 2 ? e - 2 : e + 1;
 }
 
-function prevHe(e: number): number {
-  return e % 3 === 0 ? e + 2 : e - 1;
-}
-
 /**
  * Compute natural neighbor (Sibson) weights for a query point.
  *
@@ -37,40 +33,33 @@ function prevHe(e: number): number {
  * Returns { coincidentIndex } if query is on top of an existing vertex.
  */
 export function naturalNeighborWeights(
-  points: Vec2[],
+  inputPoints: Vec2[],
   query: Vec2,
   opts?: { projectOutside?: boolean; coincidenceTolerance2?: number },
 ): NaturalNeighborResult | { coincidentIndex: number } | null {
-  const n = points.length;
-  if (n < 3) return null;
-
-  const flat = new Float64Array(n * 2);
-  for (let i = 0; i < n; i++) {
-    flat[2 * i] = points[i].x;
-    flat[2 * i + 1] = points[i].y;
-  }
-
-  const delaunay = new D3Delaunay(flat);
+  if (inputPoints.length < 3) return null;
+  const delaunay = new Delaunay(inputPoints);
   return naturalNeighborWeightsFromDelaunay(delaunay, query, opts);
 }
 
 /**
- * Same as naturalNeighborWeights but accepts a pre-built d3 Delaunay instance.
+ * Same as naturalNeighborWeights but accepts a pre-built Delaunay instance.
  */
 export function naturalNeighborWeightsFromDelaunay(
-  delaunay: D3Delaunay<Float64Array>,
+  delaunay: Delaunay,
   query: Vec2,
   opts?: { projectOutside?: boolean; coincidenceTolerance2?: number },
 ): NaturalNeighborResult | { coincidentIndex: number } | null {
   const coincidenceTolerance2 = opts?.coincidenceTolerance2 ?? 1e-20;
   const projectOutside = opts?.projectOutside ?? false;
-  const points = delaunay.points as Float64Array;
-  const { triangles, halfedges } = delaunay;
+  const d3 = delaunay.d3;
+  const points = d3.points as Float64Array;
+  const { triangles, halfedges } = d3;
   let qx = query.x;
   let qy = query.y;
 
   // Check coincidence with nearest vertex.
-  const nearest = delaunay.find(qx, qy);
+  const nearest = d3.find(qx, qy);
   const dx = points[2 * nearest] - qx;
   const dy = points[2 * nearest + 1] - qy;
   if (dx * dx + dy * dy < coincidenceTolerance2) {
@@ -79,60 +68,28 @@ export function naturalNeighborWeightsFromDelaunay(
 
   // Check if query lies on a hull edge. If so, Sibson weights degenerate to
   // linear interpolation between the two hull-edge endpoints.
-  const hullEdge = findHullEdge(delaunay, qx, qy);
+  const hullEdge = findHullEdge(points, d3.hull, qx, qy);
   if (hullEdge !== null) {
-    const [iA, iB] = hullEdge;
-    const ax = points[2 * iA],
-      ay = points[2 * iA + 1];
-    const bx = points[2 * iB],
-      by = points[2 * iB + 1];
-    const abx = bx - ax,
-      aby = by - ay;
-    const ab2 = abx * abx + aby * aby;
-    const t = ab2 > 0 ? ((qx - ax) * abx + (qy - ay) * aby) / ab2 : 0.5;
-    const weights = new Map<number, number>();
-    weights.set(iA, 1 - t);
-    weights.set(iB, t);
-    return { weights, barycentricDeviation: 0 };
+    return hullEdgeWeights(points, hullEdge, qx, qy);
   }
 
   // Find the enclosing triangle.
-  const encTri = findEnclosingTriangle(delaunay, nearest, qx, qy);
+  const encTri = delaunay.findTriangle(Vec2(qx, qy));
   if (encTri === -1) {
     if (!projectOutside) return null;
 
     // Project onto the nearest point on the convex hull boundary.
-    const proj = projectOntoHull(delaunay, qx, qy);
-    if (proj === null) return null;
-    qx = proj.x;
-    qy = proj.y;
-
-    // Re-check coincidence after projection.
-    const nearest2 = delaunay.find(qx, qy);
-    const dx2 = points[2 * nearest2] - qx;
-    const dy2 = points[2 * nearest2 + 1] - qy;
-    if (dx2 * dx2 + dy2 * dy2 < coincidenceTolerance2) {
-      return { coincidentIndex: nearest2 };
+    const proj = delaunay.projectOntoConvexHull(Vec2(qx, qy));
+    if (proj.type === "vertex") {
+      return { coincidentIndex: proj.ptIdx };
     }
-
-    // After projection we're on a hull edge.
-    const hullEdge2 = findHullEdge(delaunay, qx, qy);
-    if (hullEdge2 !== null) {
-      const [iA, iB] = hullEdge2;
-      const ax = points[2 * iA],
-        ay = points[2 * iA + 1];
-      const bx = points[2 * iB],
-        by = points[2 * iB + 1];
-      const abx = bx - ax,
-        aby = by - ay;
-      const ab2 = abx * abx + aby * aby;
-      const t = ab2 > 0 ? ((qx - ax) * abx + (qy - ay) * aby) / ab2 : 0.5;
+    if (proj.type === "edge") {
       const weights = new Map<number, number>();
-      weights.set(iA, 1 - t);
-      weights.set(iB, t);
+      weights.set(proj.ptIdx0, 1 - proj.t);
+      weights.set(proj.ptIdx1, proj.t);
       return { weights, barycentricDeviation: 0 };
     }
-
+    // type === "triangle" — shouldn't happen since findTriangle returned -1
     return null;
   }
 
@@ -358,68 +315,15 @@ export function naturalNeighborWeightsFromDelaunay(
 // --- Internal helpers ---
 
 /**
- * Find the triangle index containing (qx, qy), starting from the nearest vertex.
- * Returns -1 if outside the convex hull.
- */
-/**
- * Project (qx, qy) onto the nearest point on the convex hull boundary.
- */
-function projectOntoHull(
-  delaunay: D3Delaunay<Float64Array>,
-  qx: number,
-  qy: number,
-): { x: number; y: number } | null {
-  const points = delaunay.points as Float64Array;
-  const hull: Uint32Array = delaunay.hull as any;
-  if (hull.length < 2) return null;
-
-  let bestDist2 = Infinity;
-  let bestX = 0;
-  let bestY = 0;
-
-  for (let i = 0; i < hull.length; i++) {
-    const iA = hull[i];
-    const iB = hull[(i + 1) % hull.length];
-    const ax = points[2 * iA],
-      ay = points[2 * iA + 1];
-    const bx = points[2 * iB],
-      by = points[2 * iB + 1];
-    const abx = bx - ax,
-      aby = by - ay;
-    const ab2 = abx * abx + aby * aby;
-
-    let t: number;
-    if (ab2 < 1e-30) {
-      t = 0;
-    } else {
-      t = Math.max(0, Math.min(1, ((qx - ax) * abx + (qy - ay) * aby) / ab2));
-    }
-
-    const px = ax + t * abx;
-    const py = ay + t * aby;
-    const d2 = (qx - px) * (qx - px) + (qy - py) * (qy - py);
-    if (d2 < bestDist2) {
-      bestDist2 = d2;
-      bestX = px;
-      bestY = py;
-    }
-  }
-
-  return { x: bestX, y: bestY };
-}
-
-/**
  * Check if (qx, qy) lies on a convex hull edge. Returns [vertA, vertB] or null.
  */
 function findHullEdge(
-  delaunay: D3Delaunay<Float64Array>,
+  points: Float64Array,
+  hull: Uint32Array,
   qx: number,
   qy: number,
   tolerance: number = 1e-10,
 ): [number, number] | null {
-  const points = delaunay.points as Float64Array;
-  const hull: Uint32Array = delaunay.hull as any;
-
   for (let i = 0; i < hull.length; i++) {
     const iA = hull[i];
     const iB = hull[(i + 1) % hull.length];
@@ -448,86 +352,25 @@ function findHullEdge(
   return null;
 }
 
-function findEnclosingTriangle(
-  delaunay: D3Delaunay<Float64Array>,
-  nearestVertex: number,
-  qx: number,
-  qy: number,
-): number {
-  const points = delaunay.points as Float64Array;
-  const { triangles, halfedges } = delaunay;
-  const inedges: Int32Array = (delaunay as any).inedges;
-
-  // Walk through triangles incident to nearestVertex.
-  // inedges[v] is a halfedge e pointing TO v: triangles[nextHe(e)] === v.
-  // To walk CW around v: e = halfedges[nextHe(e)] (next incoming edge CW).
-  // To walk CCW around v: e = prevHe(halfedges[e]) (next incoming edge CCW).
-  const startEdge = inedges[nearestVertex];
-  if (startEdge === -1) return -1;
-
-  // Walk CW around nearestVertex.
-  let e = startEdge;
-  do {
-    const t = Math.floor(e / 3);
-    if (pointInTriangle(points, triangles, t, qx, qy)) {
-      return t;
-    }
-    const next = halfedges[nextHe(e)];
-    if (next === -1) break; // hit hull
-    e = next;
-  } while (e !== startEdge);
-
-  // If we broke out (hit hull), try CCW direction.
-  if (e !== startEdge) {
-    e = startEdge;
-    while (true) {
-      const opp = halfedges[e];
-      if (opp === -1) break;
-      e = prevHe(opp);
-      if (e === startEdge) break;
-      const t = Math.floor(e / 3);
-      if (pointInTriangle(points, triangles, t, qx, qy)) {
-        return t;
-      }
-    }
-  }
-
-  // Fallback: the nearest vertex might not be part of the containing triangle.
-  // Brute-force scan all triangles.
-  const nTri = triangles.length / 3;
-  for (let t = 0; t < nTri; t++) {
-    if (pointInTriangle(points, triangles, t, qx, qy)) {
-      return t;
-    }
-  }
-
-  return -1;
-}
-
-function pointInTriangle(
+/** Compute linear interpolation weights for a point on a hull edge. */
+function hullEdgeWeights(
   points: Float64Array,
-  triangles: Uint32Array,
-  t: number,
+  [iA, iB]: [number, number],
   qx: number,
   qy: number,
-): boolean {
-  const i0 = triangles[3 * t],
-    i1 = triangles[3 * t + 1],
-    i2 = triangles[3 * t + 2];
-  const x0 = points[2 * i0],
-    y0 = points[2 * i0 + 1];
-  const x1 = points[2 * i1],
-    y1 = points[2 * i1 + 1];
-  const x2 = points[2 * i2],
-    y2 = points[2 * i2 + 1];
-
-  const d1 = (qx - x1) * (y0 - y1) - (x0 - x1) * (qy - y1);
-  const d2 = (qx - x2) * (y1 - y2) - (x1 - x2) * (qy - y2);
-  const d3 = (qx - x0) * (y2 - y0) - (x2 - x0) * (qy - y0);
-
-  const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
-  const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
-  return !(hasNeg && hasPos);
+): NaturalNeighborResult {
+  const ax = points[2 * iA],
+    ay = points[2 * iA + 1];
+  const bx = points[2 * iB],
+    by = points[2 * iB + 1];
+  const abx = bx - ax,
+    aby = by - ay;
+  const ab2 = abx * abx + aby * aby;
+  const t = ab2 > 0 ? ((qx - ax) * abx + (qy - ay) * aby) / ab2 : 0.5;
+  const weights = new Map<number, number>();
+  weights.set(iA, 1 - t);
+  weights.set(iB, t);
+  return { weights, barycentricDeviation: 0 };
 }
 
 /**
