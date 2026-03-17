@@ -169,6 +169,78 @@ describe("naturalNeighborWeights", () => {
     expect(yRecon).toBeCloseTo(3, 10);
   });
 
+  // Near hull edge: query near the edge of the convex hull should get most
+  // weight from the two hull-edge vertices, not the interior point.
+  it("interior point gets low weight near hull edge", () => {
+    const points = [
+      Vec2(150, 150), // 0: top-left
+      Vec2(450, 150), // 1: top-right
+      Vec2(450, 450), // 2: bottom-right
+      Vec2(150, 450), // 3: bottom-left
+      Vec2(300, 300), // 4: center
+    ];
+
+    // Query near the top edge, far from center
+    const q = Vec2(300, 155);
+    const result = naturalNeighborWeights(points, q);
+    assertIsWeights(result);
+
+    const centerWeight = result.weights.get(4) ?? 0;
+    const topLeftWeight = result.weights.get(0) ?? 0;
+    const topRightWeight = result.weights.get(1) ?? 0;
+
+    // The two hull edge vertices should dominate
+    expect(topLeftWeight + topRightWeight).toBeGreaterThan(0.8);
+    // The center point should contribute very little this close to the edge
+    expect(centerWeight).toBeLessThan(0.1);
+
+    // Weights should still sum to 1 and reproduce the query point
+    const sum = [...result.weights.values()].reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(1, 10);
+
+    let xRecon = 0;
+    let yRecon = 0;
+    for (const [idx, w] of result.weights) {
+      xRecon += w * points[idx].x;
+      yRecon += w * points[idx].y;
+    }
+    expect(xRecon).toBeCloseTo(q.x, 6);
+    expect(yRecon).toBeCloseTo(q.y, 6);
+  });
+
+  // Query exactly on the hull edge (not on a vertex).
+  it("returns valid weights for query exactly on hull edge", () => {
+    const points = [
+      Vec2(150, 150), // 0: top-left
+      Vec2(450, 150), // 1: top-right
+      Vec2(450, 450), // 2: bottom-right
+      Vec2(150, 450), // 3: bottom-left
+      Vec2(300, 300), // 4: center
+    ];
+
+    // Exactly on the top edge, midpoint between 0 and 1
+    const q = Vec2(300, 150);
+    const result = naturalNeighborWeights(points, q);
+
+    // Should not return null — it's on the boundary, not outside
+    assertIsWeights(result);
+
+    // The two edge vertices should get nearly all the weight
+    const topLeftWeight = result.weights.get(0) ?? 0;
+    const topRightWeight = result.weights.get(1) ?? 0;
+    expect(topLeftWeight + topRightWeight).toBeGreaterThan(0.95);
+
+    // Should reproduce the query point
+    let xRecon = 0;
+    let yRecon = 0;
+    for (const [idx, w] of result.weights) {
+      xRecon += w * points[idx].x;
+      yRecon += w * points[idx].y;
+    }
+    expect(xRecon).toBeCloseTo(q.x, 6);
+    expect(yRecon).toBeCloseTo(q.y, 6);
+  });
+
   // Symmetry test: for a regular polygon, querying the center should give equal weights
   it("gives equal weights at center of regular polygon", () => {
     const n = 6;

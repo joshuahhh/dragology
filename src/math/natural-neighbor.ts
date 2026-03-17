@@ -79,11 +79,31 @@ export function naturalNeighborWeightsFromDelaunay(
     return { coincidentIndex: nearest };
   }
 
+  // Check if query lies on a hull edge. If so, Sibson weights degenerate to
+  // linear interpolation between the two hull-edge endpoints.
+  const hullEdge = findHullEdge(delaunay, qx, qy);
+  if (hullEdge !== null) {
+    const [iA, iB] = hullEdge;
+    const ax = points[2 * iA],
+      ay = points[2 * iA + 1];
+    const bx = points[2 * iB],
+      by = points[2 * iB + 1];
+    const abx = bx - ax,
+      aby = by - ay;
+    const ab2 = abx * abx + aby * aby;
+    const t = ab2 > 0 ? ((qx - ax) * abx + (qy - ay) * aby) / ab2 : 0.5;
+    const weights = new Map<number, number>();
+    weights.set(iA, 1 - t);
+    weights.set(iB, t);
+    return { weights, barycentricDeviation: 0 };
+  }
+
   // Find the enclosing triangle.
   const encTri = findEnclosingTriangle(delaunay, nearest, qx, qy);
   if (encTri === -1) return null; // outside convex hull
 
   // Find the Bowyer-Watson cavity: all triangles whose circumcircle contains query.
+  // Use >= 0 (non-strict) so points exactly on circumcircle boundaries are included.
   const nTri = triangles.length / 3;
   const inCavity = new Uint8Array(nTri);
   const stack: number[] = [encTri];
@@ -204,7 +224,65 @@ export function naturalNeighborWeightsFromDelaunay(
       safety++;
       const opp = halfedges[n];
       if (opp === -1) {
-        return null; // hit hull edge during walk
+        // Hit hull edge — the Voronoi cell of B is unbounded.
+        // Use a point "at infinity" perpendicular to the hull edge.
+        const src = triangles[n];
+        const dst = triangles[nextHe(n)];
+        const ex = points[2 * dst] - points[2 * src];
+        const ey = points[2 * dst + 1] - points[2 * src + 1];
+        // Perpendicular pointing outward (away from interior).
+        // For CW-oriented triangles, (ey, -ex) points outward.
+        const len = Math.sqrt(ex * ex + ey * ey);
+        const scale = 1e8;
+        const mx = (points[2 * src] + points[2 * dst]) / 2 - qx;
+        const my = (points[2 * src + 1] + points[2 * dst + 1]) / 2 - qy;
+        const infCC = {
+          x: mx + (ey / len) * scale,
+          y: my + (-ex / len) * scale,
+        };
+        wThiessen += curCC.x * infCC.y - infCC.x * curCC.y;
+        curCC = infCC;
+
+        // Now walk CCW from e1 backward until we hit the other hull edge.
+        // Accumulate from that side too.
+        let m = nextHe(e1);
+        let endCC = triCircumcenter(points, triangles, m, qx, qy);
+        let revThiessen = 0;
+
+        let revSafety = 0;
+        while (revSafety < 1000) {
+          revSafety++;
+          const opp2 = halfedges[m];
+          if (opp2 === -1) {
+            // Other hull edge — use infinity point here too.
+            const src2 = triangles[m];
+            const dst2 = triangles[nextHe(m)];
+            const ex2 = points[2 * dst2] - points[2 * src2];
+            const ey2 = points[2 * dst2 + 1] - points[2 * src2 + 1];
+            const len2 = Math.sqrt(ex2 * ex2 + ey2 * ey2);
+            const infCC2 = {
+              x:
+                (points[2 * src2] + points[2 * dst2]) / 2 -
+                qx +
+                (ey2 / len2) * scale,
+              y:
+                (points[2 * src2 + 1] + points[2 * dst2 + 1]) / 2 -
+                qy +
+                (-ex2 / len2) * scale,
+            };
+            // Close the gap: infCC → ... → infCC2
+            wThiessen += curCC.x * infCC2.y - infCC2.x * curCC.y;
+            curCC = endCC;
+            break;
+          }
+          m = nextHe(opp2);
+          const cc = triCircumcenter(points, triangles, m, qx, qy);
+          revThiessen += endCC.x * cc.y - cc.x * endCC.y;
+          endCC = cc;
+        }
+
+        wThiessen += revThiessen;
+        break;
       }
       n = nextHe(opp);
       const nextCC = triCircumcenter(points, triangles, n, qx, qy);
@@ -249,6 +327,46 @@ export function naturalNeighborWeightsFromDelaunay(
  * Find the triangle index containing (qx, qy), starting from the nearest vertex.
  * Returns -1 if outside the convex hull.
  */
+/**
+ * Check if (qx, qy) lies on a convex hull edge. Returns [vertA, vertB] or null.
+ */
+function findHullEdge(
+  delaunay: D3Delaunay<Float64Array>,
+  qx: number,
+  qy: number,
+  tolerance: number = 1e-10,
+): [number, number] | null {
+  const points = delaunay.points as Float64Array;
+  const hull: Uint32Array = delaunay.hull as any;
+
+  for (let i = 0; i < hull.length; i++) {
+    const iA = hull[i];
+    const iB = hull[(i + 1) % hull.length];
+    const ax = points[2 * iA],
+      ay = points[2 * iA + 1];
+    const bx = points[2 * iB],
+      by = points[2 * iB + 1];
+
+    // Check if q is on segment A→B.
+    const abx = bx - ax,
+      aby = by - ay;
+    const ab2 = abx * abx + aby * aby;
+    if (ab2 < 1e-30) continue;
+
+    // Project q onto line AB.
+    const t = ((qx - ax) * abx + (qy - ay) * aby) / ab2;
+    if (t < -tolerance || t > 1 + tolerance) continue;
+
+    // Distance from q to line AB.
+    const cross = (qx - ax) * aby - (qy - ay) * abx;
+    const dist2 = (cross * cross) / ab2;
+    if (dist2 < tolerance * tolerance * ab2) {
+      return [iA, iB];
+    }
+  }
+  return null;
+}
+
 function findEnclosingTriangle(
   delaunay: D3Delaunay<Float64Array>,
   nearestVertex: number,
