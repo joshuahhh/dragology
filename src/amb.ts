@@ -45,6 +45,14 @@ export function amb<T>(options: T[]): T {
 }
 
 /**
+ * `if (ambBoth()) { A } else { B }` effectively runs both A and B
+ * in parallel.
+ */
+export function ambBoth(): boolean {
+  return amb([true, false]);
+}
+
+/**
  * Run a function that uses amb, exploring all possible execution
  * paths. Returns results one at a time via a generator.
  */
