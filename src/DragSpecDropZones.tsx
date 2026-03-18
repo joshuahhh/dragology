@@ -471,6 +471,11 @@ export function useDropZoneData<T extends object>(
     // with the drag's own behavior's mutable curParams).
     const samplingBehavior = dragSpecToBehavior(spec, behaviorCtx);
 
+    // TODO: If the behavior has some kind of memory, that memory
+    // will be shared through the sampling process, leading to weird
+    // results here! However, recreating the behavior on every sample
+    // can be costly, so we don't do that (yet).
+
     function sample(x: number, y: number): string {
       const frame: DragFrame = { pointer: Vec2(x, y) };
       try {

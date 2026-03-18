@@ -307,20 +307,26 @@ function closestBehavior<T extends object>(
 
   const subBehaviors = spec.specs.map((s) => dragSpecToBehavior(s, ctx));
 
+  // This is actual memory!
+  let lastBestIndex: number | null = null;
+
   return (frame) => {
     if (fixedResult) {
       return fixedResult;
     }
 
     const subResults = subBehaviors.map((b) => b(frame));
-    const best = _.minBy(subResults, (r) => r.gap)!;
-    const bestIdx = subResults.indexOf(best);
+    const [bestIndex, best] = _.minBy(
+      Array.from(subResults.entries()),
+      ([idx, r]) => r.gap - (idx === lastBestIndex ? spec.stickiness : 0),
+    )!;
+    lastBestIndex = bestIndex;
     return {
       ...best,
-      activePath: `closest/${bestIdx}/${best.activePath}`,
+      activePath: `closest/${bestIndex}/${best.activePath}`,
       tracedSpec: setTraceInfo(
         { ...spec, specs: subResults.map((r) => r.tracedSpec) },
-        { bestIndex: bestIdx },
+        { bestIndex },
       ),
     };
   };

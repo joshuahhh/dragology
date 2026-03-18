@@ -78,5 +78,6 @@ export const demoList = [
   "study-timeline-embed",
   "error-study-reorderable-list",
   "between-with-vary",
+  "stickiness",
   "controlled",
 ];

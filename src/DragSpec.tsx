@@ -21,7 +21,7 @@ export type DragSpecData<T> = {
       ghost: SVGProps<SVGElement> | undefined;
       tether: ((dist: number) => number) | undefined;
     }
-  | { type: "closest"; specs: DragSpecData<T>[] }
+  | { type: "closest"; specs: DragSpecData<T>[]; stickiness: number }
   | {
       type: "when-far";
       foreground: DragSpecData<T>;
@@ -368,10 +368,21 @@ export class DragSpecBuilder<T> {
    * it continuously switches to the behavior that gets the dragged
    * element closest to the pointer (lowest "gap").
    */
-  closest(specs: Many<DragSpecLike<T>>): DragSpec<T> {
+  closest(
+    specs: Many<DragSpecLike<T>>,
+    options?: {
+      /**
+       * Stickiness tells `d.closest` to stay on the current option
+       * until its gap is `stickiness` pixels bigger than the
+       * next-best option.
+       */
+      stickiness?: number;
+    },
+  ): DragSpec<T> {
     return attachMethods({
       type: "closest",
       specs: manyToArray(specs).map(resolveDragSpecLike),
+      stickiness: options?.stickiness ?? 0,
     });
   }
 
