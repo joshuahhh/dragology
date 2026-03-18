@@ -17,5 +17,6 @@ declare module "react" {
 
     "data-z-index"?: number;
     "data-transition"?: boolean;
+    "data-emerge-from"?: string;
   }
 }
