@@ -26,7 +26,6 @@ const initialState: State = { posIndex: 0 };
 const MODES = [
   "d.closest(states)",
   "d.closest(states).withFloating()",
-  "d.closest(states.map((s) => d.floating(s)))",
   "d.between(states)",
   "d.between(states).withFloating()",
 ] as const;
@@ -65,8 +64,6 @@ function draggableFactory(mode: Mode): Draggable<State> {
               return d.closest(states);
             case "d.closest(states).withFloating()":
               return d.closest(states).withFloating();
-            case "d.closest(states.map((s) => d.floating(s)))":
-              return d.closest(states.map((s) => d.floating(s)));
             case "d.between(states)":
               return d.between(states);
             case "d.between(states).withFloating()":

@@ -198,11 +198,13 @@ function nodeDrag(
     if (slotKind === myKind) {
       for (const i of exprOpenSlots(sn.expr)) {
         targets.push(
-          d.floating(
-            produce(base, (draft) => {
-              insertChild(draft.nodes[sid].expr, nid, i);
-            }),
-          ),
+          d
+            .fixed(
+              produce(base, (draft) => {
+                insertChild(draft.nodes[sid].expr, nid, i);
+              }),
+            )
+            .withFloating(),
         );
       }
     }
@@ -210,17 +212,19 @@ function nodeDrag(
     if (myKind === "state" && slotKind === "spec") {
       for (const i of exprOpenSlots(sn.expr)) {
         targets.push(
-          d.floating(
-            produce(base, (draft) => {
-              const fixedId = makeId();
-              draft.nodes[fixedId] = {
-                expr: { type: "fixed", childId: nid },
-                x: sn.x,
-                y: sn.y,
-              };
-              insertChild(draft.nodes[sid].expr, fixedId, i);
-            }),
-          ),
+          d
+            .fixed(
+              produce(base, (draft) => {
+                const fixedId = makeId();
+                draft.nodes[fixedId] = {
+                  expr: { type: "fixed", childId: nid },
+                  x: sn.x,
+                  y: sn.y,
+                };
+                insertChild(draft.nodes[sid].expr, fixedId, i);
+              }),
+            )
+            .withFloating(),
         );
       }
     }

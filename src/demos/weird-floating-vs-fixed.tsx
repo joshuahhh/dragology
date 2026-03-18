@@ -21,9 +21,9 @@ const draggable: Draggable<State> = ({ state, d }) => (
     dragology={() =>
       d.closest([
         d.fixed({ value: 0 }),
-        d.floating({ value: 1 }, { ghost: { opacity: 0.5 } }),
+        d.fixed({ value: 1 }).withFloating({ ghost: { opacity: 0.5 } }),
         d.fixed({ value: 2 }),
-        d.floating({ value: 3 }, { ghost: { opacity: 0.5 } }),
+        d.fixed({ value: 3 }).withFloating({ ghost: { opacity: 0.5 } }),
       ])
     }
   />

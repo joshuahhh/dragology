@@ -107,7 +107,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
               },
               `tile-${newId}`,
               dropIntoListAndTrash(state, { id: newId, label }).whenFar(
-                d.floating(state),
+                d.fixed(state).withFloating(),
               ),
             );
           },
@@ -127,7 +127,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
             });
 
             return dropIntoListAndTrash(stateWithout, draggedItem).whenFar(
-              d.floating(state),
+              d.fixed(state).withFloating(),
             );
           },
         }),

@@ -276,7 +276,7 @@ function makePickupDrag(
             fullState,
           ])
           .withFloating()
-          .whenFar(d.floating(stateWithClone));
+          .whenFar(d.fixed(stateWithClone).withFloating());
       }
 
       // Backdrop: variadic parent → splice out, fixed parent → leave ◯ hole
@@ -367,14 +367,18 @@ function makePickupDrag(
             ])
             .withFloating(),
           d
-            .floating(removeStageHoles(eraseState))
+            .fixed(removeStageHoles(eraseState))
+            .withFloating()
             .onDrop(removeStageHoles(cleanState)),
         ])
         .whenFar(
-          d.floating(cleanedWithout).onDrop({
-            ...cleanedWithout,
-            voidStack: newVoidStack,
-          }),
+          d
+            .fixed(cleanedWithout)
+            .withFloating()
+            .onDrop({
+              ...cleanedWithout,
+              voidStack: newVoidStack,
+            }),
         );
     });
   };
@@ -521,14 +525,18 @@ function makePaletteDrag(
             ])
             .withFloating(),
           d
-            .floating(removeStageHoles(eraseState))
+            .fixed(removeStageHoles(eraseState))
+            .withFloating()
             .onDrop(removeStageHoles(cleanState)),
         ])
         .whenFar(
-          d.floating(stateWithout).onDrop({
-            ...stateWithout,
-            voidStack: newVoidStack,
-          }),
+          d
+            .fixed(stateWithout)
+            .withFloating()
+            .onDrop({
+              ...stateWithout,
+              voidStack: newVoidStack,
+            }),
         );
     });
 }
@@ -573,7 +581,7 @@ function makeVoidDrag(
     return d
       .closest([holeTargets, insertTargets, paletteTargets, stageTargets])
       .withFloating()
-      .whenFar(d.floating(stateWithout).onDrop(state));
+      .whenFar(d.fixed(stateWithout).withFloating().onDrop(state));
   };
 }
 

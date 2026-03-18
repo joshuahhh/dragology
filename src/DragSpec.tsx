@@ -336,15 +336,6 @@ export class DragSpecBuilder<T> {
   }
 
   /**
-   * Shortcut for d.fixed(state).withFloating(). If you have more
-   * than one state, you'll want to use
-   * d.closest(states).withFloating().
-   */
-  floating(state: T, opts?: FloatingOptions): DragSpec<T> {
-    return this.fixed(state).withFloating(opts);
-  }
-
-  /**
    * This drag behavior lets you interpolate smoothly between states
    * by dragging inside their convex hull.
    */
