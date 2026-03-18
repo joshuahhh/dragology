@@ -20,7 +20,7 @@ export type DragSpecTraceInfoByType = {
   during: { outputRendered: LayeredSvgx };
   vary: { renderedStates: RenderedState[]; currentParams: number[] };
   "change-result": Record<string, never>;
-  "change-distance": Record<string, never>;
+  "change-gap": Record<string, never>;
   "with-snap-radius": {
     snapped: boolean;
     outputRendered: LayeredSvgx;
@@ -255,7 +255,7 @@ export function debugOverlay<T>(
     case "on-drop":
     case "during":
     case "change-result":
-    case "change-distance":
+    case "change-gap":
     case "with-snap-radius":
     case "with-drop-transition":
     case "with-branch-transition":

@@ -72,7 +72,7 @@ export type DragResult<T> = {
   dropState: T;
   dropTransition?: Transition | false;
   activePathTransition?: Transition | false;
-  distance: number;
+  gap: number;
   activePath: string;
   chainNow?: Chaining<T>;
   /**
@@ -119,8 +119,8 @@ export function dragSpecToBehavior<T extends object>(
       return varyBehavior(spec, ctx);
     case "change-result":
       return changeResultBehavior(spec, ctx);
-    case "change-distance":
-      return changeDistanceBehavior(spec, ctx);
+    case "change-gap":
+      return changeGapBehavior(spec, ctx);
     case "with-snap-radius":
       return withSnapRadiusBehavior(spec, ctx);
     case "with-drop-transition":
@@ -158,11 +158,11 @@ function fixedBehavior<T extends object>(
     renderedStates: [{ layered: rendered, position: elementPos }],
   });
   return (frame) => {
-    const distance = frame.pointer.dist(elementPos);
+    const gap = frame.pointer.dist(elementPos);
     return {
       rendered,
       dropState: spec.state,
-      distance,
+      gap,
       activePath: "fixed",
       tracedSpec,
     };
@@ -276,7 +276,7 @@ function withFloatingBehavior<T extends object>(
     return {
       rendered,
       dropState: innerResult.dropState,
-      distance: innerResult.distance,
+      gap: innerResult.gap,
       activePath: `with-floating/${innerResult.activePath}`,
       tracedSpec: setTraceInfo(
         { ...spec, inner: innerResult.tracedSpec },
@@ -299,7 +299,7 @@ function closestBehavior<T extends object>(
     fixedResult = {
       rendered: renderStateReadOnly(ctx, ctx.startState),
       dropState: ctx.startState,
-      distance: Infinity,
+      gap: Infinity,
       activePath: "closest/none",
       tracedSpec: spec,
     };
@@ -313,7 +313,7 @@ function closestBehavior<T extends object>(
     }
 
     const subResults = subBehaviors.map((b) => b(frame));
-    const best = _.minBy(subResults, (r) => r.distance)!;
+    const best = _.minBy(subResults, (r) => r.gap)!;
     const bestIdx = subResults.indexOf(best);
     return {
       ...best,
@@ -334,7 +334,7 @@ function whenFarBehavior<T extends object>(
   const backdropBehavior = dragSpecToBehavior(spec.background, ctx);
   return (frame) => {
     const foregroundResult = foregroundBehavior(frame);
-    const inForeground = foregroundResult.distance <= spec.distance;
+    const inForeground = foregroundResult.gap <= spec.gap;
     if (!inForeground) {
       const bgResult = backdropBehavior(frame);
       return {
@@ -387,7 +387,7 @@ function duringBehavior<T extends object>(
       ...result,
       rendered,
       dropState: transformedState,
-      distance: frame.pointer.dist(elementPos),
+      gap: frame.pointer.dist(elementPos),
       activePath: `during/${result.activePath}`,
       tracedSpec: setTraceInfo(
         { ...spec, inner: result.tracedSpec },
@@ -464,11 +464,11 @@ function varyBehavior<T extends object>(
     const newState = stateFromParams(resultParams);
     const rendered = renderStateReadOnly(ctx, newState);
     const achievedPos = getElementPosition(ctx, rendered);
-    const distance = achievedPos.dist(frame.pointer);
+    const gap = achievedPos.dist(frame.pointer);
     return {
       rendered,
       dropState: newState,
-      distance,
+      gap,
       activePath: "vary",
       tracedSpec: setTraceInfo(spec, {
         renderedStates: [{ layered: rendered, position: achievedPos }],
@@ -503,12 +503,12 @@ function changeResultBehavior<T extends object>(
   return changeResultBehaviorBase(spec, ctx, spec.f);
 }
 
-function changeDistanceBehavior<T extends object>(
-  spec: DragSpecData<T> & { type: "change-distance" },
+function changeGapBehavior<T extends object>(
+  spec: DragSpecData<T> & { type: "change-gap" },
   ctx: DragBehaviorInitContext<T>,
 ): DragBehavior<T> {
   return changeResultBehaviorBase(spec, ctx, (result) => ({
-    distance: spec.f(result.distance),
+    gap: spec.f(result.gap),
   }));
 }
 
@@ -658,7 +658,7 @@ function betweenProjectAndRender<T extends object>(
   return {
     rendered,
     dropState: closest.state,
-    distance: projection.dist,
+    gap: projection.dist,
     activePath: "between",
     tracedSpec: setTraceInfo(spec, {
       renderedStates: renderedStates.map((rs) => ({
@@ -832,11 +832,11 @@ function dropTargetBehavior<T extends object>(
   return (frame) => {
     const localPointer = globalToLocal(transforms, frame.pointer);
     const inside = pointInBounds(localPointer, localBounds);
-    const distance = inside ? 0 : Infinity;
+    const gap = inside ? 0 : Infinity;
     return {
       rendered,
       dropState: spec.state,
-      distance,
+      gap,
       activePath: "drop-target",
       tracedSpec: setTraceInfo(spec, {
         renderedStates: [{ layered: rendered, position: Vec2(0, 0) }],

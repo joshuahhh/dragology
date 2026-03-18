@@ -269,7 +269,7 @@ function nodeDrag(
     param("nodes", nid, "y"),
   ]);
 
-  return d.closest(targets).whenFar(free, { distance: 40 });
+  return d.closest(targets).whenFar(free, { gap: 40 });
 }
 
 // ─── Initial State ───

@@ -90,7 +90,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
                 param("x"),
                 param("y"),
               ]),
-              { distance: 50 },
+              { gap: 50 },
             );
         }}
       >

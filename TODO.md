@@ -12,7 +12,9 @@
 - feature: demo "reset" button
 - feature: scene-3d: drag to rotate
 - tesselation: figure out how to make d.closest([]).whenFar(...) work (empty closest)
-- whenFar: support for a "transition range" of distances, which interpolates between close & far behaviors?
+- whenFar: support for a "transition range" of gaps, which interpolates between close & far behaviors?
+- invert dropTarget args
+- include results in traces automatically?
 
 ## meh
 - memoize a lot of rendering of states? (but only if it's actually a problem; no premature stuff!)

@@ -540,10 +540,7 @@ function processChainNow<T extends object>(
   // Don't chain if the new state isn't strictly closer than what we had.
   // Skip this check for explicit chains (switchToStateAndFollow) which
   // provide a followSpec — those should always proceed.
-  if (
-    !result.chainNow!.followSpec &&
-    chainedResult.result.distance >= result.distance
-  ) {
+  if (!result.chainNow!.followSpec && chainedResult.result.gap >= result.gap) {
     return null;
   }
   // Try to chain further from the new state.

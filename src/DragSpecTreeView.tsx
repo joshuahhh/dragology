@@ -156,7 +156,7 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
     );
   } else if (spec.type === "when-far") {
     return (
-      <Box label={`whenFar (d=${spec.distance})`}>
+      <Box label={`whenFar (d=${spec.gap})`}>
         <div style={{ display: "flex", flexDirection: "row", gap: 4 }}>
           <Slot label="fg">
             <SpecNode spec={spec.foreground} path={path + "fg/"} />
@@ -191,10 +191,10 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
         <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
-  } else if (spec.type === "change-distance") {
+  } else if (spec.type === "change-gap") {
     const { childPath } = info(spec);
     return (
-      <Box label="changeDistance">
+      <Box label="changeGap">
         <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );

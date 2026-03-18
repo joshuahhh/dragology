@@ -26,7 +26,7 @@ export type DragSpecData<T> = {
       type: "when-far";
       foreground: DragSpecData<T>;
       background: DragSpecData<T>;
-      distance: number;
+      gap: number;
     }
   | {
       type: "on-drop";
@@ -45,9 +45,9 @@ export type DragSpecData<T> = {
       f: Reader<Partial<DragResult<T>>, DragResult<T>>;
     }
   | {
-      type: "change-distance";
+      type: "change-gap";
       inner: DragSpecData<T>;
-      f: (distance: number) => number;
+      f: (gap: number) => number;
     }
   | {
       type: "with-snap-radius";
@@ -151,13 +151,10 @@ export interface DragSpecMethods<T> {
 
   /**
    * Switch to an alternate behavior when the pointer gets more than
-   * a certain distance away. This distance is 50 pixels by default,
-   * but can be configured via the `distance` option.
+   * a certain distance ("gap") away. This distance is 50 pixels by
+   * default, but can be configured via the `gap` option.
    */
-  whenFar(
-    background: DragSpecLike<T>,
-    opts?: { distance?: number },
-  ): DragSpec<T>;
+  whenFar(background: DragSpecLike<T>, opts?: { gap?: number }): DragSpec<T>;
 
   /**
    * Set a "snap radius" for the behavior. If the dragged element
@@ -194,16 +191,16 @@ export interface DragSpecMethods<T> {
   /**
    * Advanced: Transform the behavior's entire result on each frame.
    * This is the most general wrapper — you can change any field of
-   * the DragResult (rendered output, drop state, distance, etc.).
+   * the DragResult (rendered output, drop state, gap, etc.).
    */
   changeResult(f: (result: DragResult<T>) => DragResult<T>): DragSpec<T>;
 
   /**
-   * Advanced: Change the behavior's reported "distance" measurement
-   * via the provided function. Use this, e.g., to "reweight" the
+   * Advanced: Change the behavior's reported "gap" measurement via
+   * the provided function. Use this, e.g., to "reweight" the
    * behavior's drop target in a `closest`.
    */
-  changeDistance(f: (distance: number) => number): DragSpec<T>;
+  changeGap(f: (gap: number) => number): DragSpec<T>;
 
   /**
    * Wrap this behavior with floating: on each frame, the inner
@@ -250,12 +247,12 @@ const dragSpecMethods: DragSpecMethods<any> & ThisType<DragSpec<any>> = {
       onDropState: state,
     });
   },
-  whenFar(bg, { distance = 50 } = {}) {
+  whenFar(bg, { gap = 50 } = {}) {
     return attachMethods({
       type: "when-far",
       foreground: this,
       background: resolveDragSpecLike(bg),
-      distance,
+      gap,
     });
   },
   withSnapRadius(radius, { transition = false, chain = false } = {}) {
@@ -284,8 +281,8 @@ const dragSpecMethods: DragSpecMethods<any> & ThisType<DragSpec<any>> = {
   changeResult(f) {
     return attachMethods({ type: "change-result", inner: this, f });
   },
-  changeDistance(f) {
-    return attachMethods({ type: "change-distance", inner: this, f });
+  changeGap(f) {
+    return attachMethods({ type: "change-gap", inner: this, f });
   },
   withFloating({ ghost, tether } = {}) {
     return attachMethods({
@@ -369,7 +366,7 @@ export class DragSpecBuilder<T> {
   /**
    * This drag behavior combines multiple behaviors. During the drag,
    * it continuously switches to the behavior that gets the dragged
-   * element closest to the pointer.
+   * element closest to the pointer (lowest "gap").
    */
   closest(specs: Many<DragSpecLike<T>>): DragSpec<T> {
     return attachMethods({
@@ -409,7 +406,7 @@ export class DragSpecBuilder<T> {
   /**
    * This drag behavior renders a state and checks whether the
    * pointer is inside the bounds of a target element (identified by
-   * ID). Distance is 0 when inside, Infinity when outside.
+   * ID). Gap is 0 when inside, Infinity when outside.
    */
   dropTarget(state: T, targetId: string): DragSpec<T> {
     return attachMethods({ type: "drop-target", state, targetId });

@@ -132,7 +132,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       );
     }
 
-    return d.closest(snapSpecs).whenFar(varySpec, { distance: 20 });
+    return d.closest(snapSpecs).whenFar(varySpec, { gap: 20 });
   }
 
   return (
