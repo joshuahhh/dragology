@@ -7,16 +7,16 @@ import { inOrder, param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 type Interval = { left: number; right: number; track: number };
-type State = { intervals: { [key: string]: Interval } };
+type State = { intervals: Interval[] };
 
 const initialState: State = {
-  intervals: {
-    a: { left: 20, right: 100, track: 0 },
-    b: { left: 60, right: 160, track: 1 },
-    c: { left: 10, right: 70, track: 2 },
-    d: { left: 120, right: 200, track: 0 },
-    e: { left: 80, right: 140, track: 2 },
-  },
+  intervals: [
+    { left: 20, right: 100, track: 0 },
+    { left: 60, right: 160, track: 1 },
+    { left: 10, right: 70, track: 2 },
+    { left: 120, right: 200, track: 0 },
+    { left: 80, right: 140, track: 2 },
+  ],
 };
 
 const NUM_TRACKS = 4;
@@ -29,13 +29,7 @@ const MIN_WIDTH = 10;
 const GRAPH_X = TRACK_W + 40;
 const NODE_R = 10;
 
-const COLORS: Record<string, string> = {
-  a: "#3b82f6",
-  b: "#06b6d4",
-  c: "#22c55e",
-  d: "#f59e0b",
-  e: "#8b5cf6",
-};
+const COLORS = ["#3b82f6", "#06b6d4", "#22c55e", "#f59e0b", "#8b5cf6"];
 
 function overlaps(a: Interval, b: Interval) {
   return a.left < b.right && b.left < a.right;
@@ -44,20 +38,17 @@ function overlaps(a: Interval, b: Interval) {
 const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   const trackY = (track: number) => track * (TRACK_H + GAP) + TRACK_H / 2;
 
-  const entries = Object.entries(state.intervals);
-
-  // Node positions in graph
   const nodePos = (iv: Interval) => ({
     x: GRAPH_X + (iv.left + iv.right) / 2,
     y: trackY(iv.track),
   });
 
   // All overlapping pairs
-  const edges: [string, string][] = [];
-  for (let i = 0; i < entries.length; i++) {
-    for (let j = i + 1; j < entries.length; j++) {
-      if (overlaps(entries[i][1], entries[j][1])) {
-        edges.push([entries[i][0], entries[j][0]]);
+  const edges: [number, number][] = [];
+  for (let i = 0; i < state.intervals.length; i++) {
+    for (let j = i + 1; j < state.intervals.length; j++) {
+      if (overlaps(state.intervals[i], state.intervals[j])) {
+        edges.push([i, j]);
       }
     }
   }
@@ -79,33 +70,27 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       ))}
 
       {/* Intervals */}
-      {entries.map(([key, iv]) => {
+      {state.intervals.map((iv, i) => {
         const y = trackY(iv.track);
-        const color = COLORS[key] ?? "#666";
-        const isDraggedBar = draggedId === `bar-${key}`;
+        const color = COLORS[i % COLORS.length];
+        const isDraggedBar = draggedId === `bar-${i}`;
 
         const endpointDrag = (endpoint: "left" | "right") =>
-          d.vary(state, param("intervals", key, endpoint), {
+          d.vary(state, param("intervals", i, endpoint), {
             constraint: (s) =>
-              inOrder(
-                0,
-                s.intervals[key].left,
-                s.intervals[key].right,
-                TRACK_W,
-              ),
+              inOrder(0, s.intervals[i].left, s.intervals[i].right, TRACK_W),
           });
 
         const barStates = _.range(NUM_TRACKS).map((t) =>
           produce<State>(state, (draft) => {
-            draft.intervals[key].track = t;
+            draft.intervals[i].track = t;
           }),
         );
 
         return (
-          <g id={`interval-${key}`} data-z-index={isDraggedBar ? 1 : 0}>
+          <g id={`interval-${i}`} data-z-index={isDraggedBar ? 1 : 0}>
             {/* Bar — drag to change track */}
             <rect
-              id={`bar-${key}`}
               transform={translate(iv.left, y - BAR_H / 2)}
               width={Math.max(iv.right - iv.left, MIN_WIDTH)}
               height={BAR_H}
@@ -119,7 +104,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
 
             {/* Left dot */}
             <circle
-              id={`left-${key}`}
+              id={`left-${i}`}
               transform={translate(iv.left, y)}
               r={DOT_R}
               fill={color}
@@ -131,7 +116,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
 
             {/* Right dot */}
             <circle
-              id={`right-${key}`}
+              id={`right-${i}`}
               transform={translate(iv.right, y)}
               r={DOT_R}
               fill={color}
@@ -157,11 +142,11 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       })}
 
       {/* Graph: edges */}
-      {edges.map(([ka, kb]) => {
-        const a = nodePos(state.intervals[ka]);
-        const b = nodePos(state.intervals[kb]);
+      {edges.map(([ia, ib]) => {
+        const a = nodePos(state.intervals[ia]);
+        const b = nodePos(state.intervals[ib]);
         const sameTrack =
-          state.intervals[ka].track === state.intervals[kb].track;
+          state.intervals[ia].track === state.intervals[ib].track;
         return (
           <g>
             <line
