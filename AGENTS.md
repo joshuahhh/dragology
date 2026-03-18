@@ -147,7 +147,7 @@ Tags in `demo()` use prefixes to distinguish builder methods from spec chain met
 - **Positioning**: Always use `transform={translate(x, y)}`, never `x`/`y` attributes directly
 - **Layering**: Use `dragologyZIndex={isDragged ? 2 : 1}` to control draw order
 - **Conditional drag**: `dragology={condition && drag(...)}` to make things conditionally draggable
-- **`data-transition={false}`**: Elements with this skip spring animation and track the cursor directly
+- **`dragologyTransition={false}`**: Elements with this skip spring animation and track the cursor directly
 
 ### Registration
 

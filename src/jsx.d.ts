@@ -16,7 +16,7 @@ declare module "react" {
     dragology?: (() => DragSpecBrand) | false | null | undefined;
 
     dragologyZIndex?: number;
-    "data-transition"?: boolean;
+    dragologyTransition?: boolean;
     "data-emerge-from"?: string;
   }
 }

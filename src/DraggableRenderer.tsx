@@ -400,7 +400,7 @@ function DraggableRendererControlled<T extends object>({
  * Blends a target render with a spring's startLayered.
  * The target is used as the base (first arg to lerpLayered) so its
  * non-interpolatable props (like event handlers) are preserved.
- * Layers with data-transition={false} are never sprung — they
+ * Layers with dragologyTransition={false} are never sprung — they
  * always show the target's version so they track the cursor.
  */
 function runSpring(
@@ -414,7 +414,7 @@ function runSpring(
   // Replace non-transitioning layers with the target's version so they
   // track the cursor without spring lag.
   for (const [key, element] of lerped.byId.entries()) {
-    if (element.props["data-transition"] === false) {
+    if (element.props["dragologyTransition"] === false) {
       const targetVal = target.byId.get(key);
       if (targetVal) {
         lerped.byId.set(key, targetVal);

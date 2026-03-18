@@ -269,7 +269,7 @@ function withFloatingBehavior<T extends object>(
       backdrop,
       pipe(
         floatPositioned,
-        (h) => layeredSetAttributes(h, { "data-transition": false }),
+        (h) => layeredSetAttributes(h, { dragologyTransition: false }),
         (h) => layeredShiftZIndices(h, 1000000),
       ),
     );

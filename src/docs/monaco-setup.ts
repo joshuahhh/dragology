@@ -116,7 +116,7 @@ export function configureMonaco(monaco: Monaco) {
       interface SVGAttributes<T> {
         "dragology"?: (() => DragSpec<any>) | false | null | undefined | 0 | "";
         "dragologyZIndex"?: number;
-        "data-transition"?: boolean;
+        "dragologyTransition"?: boolean;
       }
     }
     declare const _: {
