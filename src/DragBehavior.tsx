@@ -434,7 +434,7 @@ function varyBehavior<T extends object>(
   // Bake pins into the constraint function: evaluate pin at the
   // initial state to capture targets, then add equal() constraints.
   const pinTargets = pin ? manyReaderToArray(pin, spec.state) : undefined;
-  const constraintWithPin: ManyReader<number, T> = pin
+  const constraintWithPin: ManyReader<number, [T]> = pin
     ? [
         constraint,
         (s) => {

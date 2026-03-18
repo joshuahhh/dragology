@@ -46,27 +46,32 @@ export function readerToValue<T, S>(a: Reader<T, S>, s: S): T {
 }
 
 /**
- * ManyReader<T, S> is convenient sugar for (s: S) => T[]. Like
+ * ManyReader<T, S> is convenient sugar for (...s: S) => T[]. Like
  * Many<T>, it automatically flattens nested arrays and turns
  * undefined/null/false into []. It also evaluates any functions that
- * take an S input.
+ * take S (as spread args).
  *
  * (Note that this means T cannot overlap with array types or
  * function types!)
  */
-export type ManyReader<T, S> = Many<T | ((s: S) => ManyReader<T, S>)>;
+export type ManyReader<T, S extends unknown[]> = Many<
+  T | ((...s: S) => ManyReader<T, S>)
+>;
 
 /**
  * Turn a ManyReader<T, S> into a T[], given the S value to read.
  */
-export function manyReaderToArray<T, S>(a: ManyReader<T, S>, s: S): T[] {
+export function manyReaderToArray<T, S extends unknown[]>(
+  a: ManyReader<T, S>,
+  ...s: S
+): T[] {
   const result: T[] = [];
   function helper(a: ManyReader<T, S>) {
     for (const leaf of manyToArray(a)) {
       // Cast below corresponds to the assumption that T doesn't
       // overlap with function types
       if (typeof leaf === "function") {
-        helper((leaf as (s: S) => ManyReader<T, S>)(s));
+        helper((leaf as (...s: S) => ManyReader<T, S>)(...s));
       } else {
         result.push(leaf);
       }

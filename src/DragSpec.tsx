@@ -481,13 +481,13 @@ export type VaryOptions<T> = {
    * `lessThan`, `inOrder`, and `equal` to make your constrait
    * readable.
    */
-  constraint?: ManyReader<number, T>;
+  constraint?: ManyReader<number, [T]>;
   /**
    * A pin function returns one or more numbers that will be
    * constrained to remain constant throughout the drag. (This is a
    * convenience built on top of `constraint`.)
    */
-  pin?: ManyReader<number, T>;
+  pin?: ManyReader<number, [T]>;
 };
 
 export { and, equal, inOrder, lessThan, moreThan } from "./math/optimization";
