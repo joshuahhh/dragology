@@ -408,7 +408,7 @@ export class DragSpecBuilder<T> {
    * pointer is inside the bounds of a target element (identified by
    * ID). Gap is 0 when inside, Infinity when outside.
    */
-  dropTarget(state: T, targetId: string): DragSpec<T> {
+  dropTarget(targetId: string, state: T): DragSpec<T> {
     return attachMethods({ type: "drop-target", state, targetId });
   }
 

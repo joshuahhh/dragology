@@ -13,7 +13,6 @@
 - feature: scene-3d: drag to rotate
 - tesselation: figure out how to make d.closest([]).whenFar(...) work (empty closest)
 - whenFar: support for a "transition range" of gaps, which interpolates between close & far behaviors?
-- invert dropTarget args
 - include results in traces automatically?
 
 ## meh

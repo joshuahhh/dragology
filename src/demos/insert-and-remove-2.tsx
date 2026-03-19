@@ -74,7 +74,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
       d.closest(rearrangeStates).withFloating(),
       // we leave "withFloating" off this part, so we see the tile
       // disappear
-      d.dropTarget(state, "delete-bin"),
+      d.dropTarget("delete-bin", state),
     ]);
   };
 

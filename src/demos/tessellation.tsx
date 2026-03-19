@@ -262,7 +262,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
               });
 
               return d
-                .closest([snapStates, d.dropTarget(stateWithout, "trash-bin")])
+                .closest([snapStates, d.dropTarget("trash-bin", stateWithout)])
                 .whenFar(
                   d.vary(state, [
                     param("shapes", i, "x"),

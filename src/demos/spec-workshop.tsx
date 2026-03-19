@@ -266,7 +266,7 @@ function nodeDrag(
   const deleted = produce(base, (draft) => {
     for (const id of idsToDelete) delete draft.nodes[id];
   });
-  targets.push(d.dropTarget(deleted, "trash-bin"));
+  targets.push(d.dropTarget("trash-bin", deleted));
 
   const free = d.vary(base, [
     param("nodes", nid, "x"),
