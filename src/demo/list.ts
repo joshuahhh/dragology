@@ -63,6 +63,7 @@ export const demoList = [
   "magnetic-targets",
   "bluefish-static",
   "bluefish-perm",
+  "bluefish-list-of-lists-sizes",
   "emerge-from",
   "spec-workshop",
   "floating-dynamic-switch",
