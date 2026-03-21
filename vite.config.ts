@@ -76,6 +76,10 @@ export default defineConfig({
   ],
   test: {
     exclude: gitignoreExclude,
+    typecheck: {
+      enabled: true,
+      tsconfig: "./tsconfig.app.json",
+    },
   },
   define: {
     "process.env": {},
