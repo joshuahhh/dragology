@@ -436,8 +436,8 @@ function advanceFrame<T extends object>(
 
     // Handle chaining: restart drag from new state
     const updatedDs: DragStatusDragging<T> = { ...status, result };
-    const chained = processChainNow(updatedDs, frame);
-    if (chained) return chained;
+    const chained = resolveChainNows(updatedDs, frame);
+    if (chained !== updatedDs) return chained;
 
     let springOrigin = status.springOrigin;
 
@@ -476,15 +476,15 @@ function advanceFrame<T extends object>(
 /**
  * If a drag result has chainNow set (e.g. from switchToStateAndFollow),
  * process it immediately: find the new element, set up a new drag from it,
- * and return the new drag state. Returns null if no chaining needed.
+ * and return the new drag state. Returns the original status if no chaining needed.
  */
-function processChainNow<T extends object>(
+function resolveChainNows<T extends object>(
   status: DragStatusDragging<T>,
   frame: DragFrame,
-): DragStatusDragging<T> | null {
+): DragStatusDragging<T> {
   const result = status.result;
   if (!result.chainNow || _.isEqual(result.dropState, status.startState))
-    return null;
+    return status;
 
   const newState = result.dropState;
   const newDraggedId =
@@ -507,7 +507,7 @@ function processChainNow<T extends object>(
   const newDragSpec =
     result.chainNow.followSpec ??
     getDragSpecCallbackOnElement<T>(found.element)?.();
-  if (!newDragSpec) return null;
+  if (!newDragSpec) return status;
 
   const newSpringOrigin = makeSpringOrigin(true, () =>
     runSpring(status.springOrigin, result.preview),
@@ -522,7 +522,7 @@ function processChainNow<T extends object>(
     pointerLocal,
   );
 
-  const chainedResult = initDrag(
+  return initDrag(
     newDragSpec,
     {
       ...status.behaviorCtx,
@@ -536,16 +536,6 @@ function processChainNow<T extends object>(
     frame,
     newSpringOrigin,
   );
-  // TODO: this is a hack
-  // Don't chain if the new state isn't strictly closer than what we had.
-  // Skip this check for explicit chains (switchToStateAndFollow) which
-  // provide a followSpec — those should always proceed.
-  if (!result.chainNow!.followSpec && chainedResult.result.gap >= result.gap) {
-    return null;
-  }
-  // Try to chain further from the new state.
-  const furtherChained = processChainNow(chainedResult, frame);
-  return furtherChained ?? chainedResult;
 }
 
 function initDrag<T extends object>(
@@ -571,10 +561,7 @@ function initDrag<T extends object>(
   // If the result chains immediately (e.g. switchToStateAndFollow),
   // process it now so the first rendered frame is the chained drag,
   // avoiding a single-frame flash of the intermediate state.
-  const chained = processChainNow(status, frame);
-  if (chained) return chained;
-
-  return status;
+  return resolveChainNows(status, frame);
 }
 
 // # Render context
