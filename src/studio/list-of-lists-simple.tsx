@@ -42,7 +42,7 @@ const tileColors: Record<
   },
 };
 
-const draggable: Draggable<State> = ({ state, d }) => {
+const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   const TILE_SIZE = 50;
   const TILE_GAP = 8;
   const ROW_PADDING = 8;
@@ -50,6 +50,11 @@ const draggable: Draggable<State> = ({ state, d }) => {
 
   return (
     <g transform={translate(20, 20)}>
+      <defs>
+        <filter id="tile-shadow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.25" />
+        </filter>
+      </defs>
       {state.rows.map((row, rowIdx) => (
         <g
           id={`row-${rowIdx}`}
@@ -63,10 +68,10 @@ const draggable: Draggable<State> = ({ state, d }) => {
               row.length * (TILE_SIZE + TILE_GAP) - TILE_GAP + ROW_PADDING * 2
             }
             height={TILE_SIZE + ROW_PADDING * 2}
-            fill="#f0f4ff"
-            stroke="#aaa"
-            strokeWidth={1.5}
-            rx={6}
+            fill="#f5f7fa"
+            stroke="#d4d8e0"
+            strokeWidth={1}
+            rx={10}
           />
           {row.map((p, idx) => (
             <g
@@ -110,7 +115,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
                 stroke={tileColors[p]?.stroke ?? "#aaa"}
                 strokeWidth={1.5}
                 fill={tileColors[p]?.fill ?? "white"}
-                rx={4}
+                rx={8}
+                filter={draggedId === p ? "url(#tile-shadow)" : undefined}
               />
               <text
                 x={TILE_SIZE / 2}
@@ -118,7 +124,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
                 dominantBaseline="middle"
                 textAnchor="middle"
                 fontSize={18}
-                fontWeight="500"
+                fontWeight="600"
+                fontFamily="system-ui, sans-serif"
                 fill={tileColors[p]?.text ?? "#555"}
               >
                 {p}

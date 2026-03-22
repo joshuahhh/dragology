@@ -29,14 +29,21 @@ export function Lens({
   children: ReactNode;
 }) {
   return (
-    <div style={{ zoom, padding: QR_SIZE, width: "fit-content" }}>
+    <div
+      style={{
+        zoom,
+        paddingLeft: QR_SIZE,
+        paddingRight: QR_SIZE,
+        width: "fit-content",
+      }}
+    >
       <div style={{ position: "relative", outline: "1px solid #ccc" }}>
         {children}
         <img
           src={qrA}
           style={{
             position: "absolute",
-            top: -QR_SIZE,
+            top: 0,
             left: -QR_SIZE,
             width: QR_SIZE,
             height: QR_SIZE,
@@ -48,7 +55,7 @@ export function Lens({
           src={qrA}
           style={{
             position: "absolute",
-            bottom: -QR_SIZE,
+            bottom: 0,
             right: -QR_SIZE,
             width: QR_SIZE,
             height: QR_SIZE,
