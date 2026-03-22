@@ -107,7 +107,7 @@ export function DemoSettingsProvider({
 
 const settingsEntries = [
   { key: "showStateViewer", label: "State viewer", mobileHidden: true },
-  { key: "showDebugOverlay", label: "Debug overlay", mobileHidden: false },
+  { key: "showDebugOverlay", label: "Overlay", mobileHidden: false },
   { key: "showTreeView", label: "Spec tree", mobileHidden: true },
   { key: "showDropZones", label: "Drop zones", mobileHidden: false },
   { key: "showTimingMeter", label: "Timing", mobileHidden: true },
