@@ -1,6 +1,8 @@
+import { useContext } from "react";
 import { DragSpecData } from "./DragSpec";
 import { getTraceInfo } from "./DragSpecTraceInfo";
 import { Vec2 } from "./math/vec2";
+import { StudioHackContext } from "./studio/StudioHackContext";
 import { boundsCenter } from "./svgx/bounds";
 import { path as svgPath } from "./svgx/helpers";
 import { assertNever } from "./utils/assert";
@@ -15,7 +17,8 @@ export function OverlayVis<T extends object>({
   pointer: Vec2;
   active?: boolean;
 }) {
-  const opacity = active ? 0.8 : 0.2;
+  const { overlayFullOpacity } = useContext(StudioHackContext);
+  const opacity = overlayFullOpacity ? 1 : active ? 0.8 : 0.2;
   switch (spec.type) {
     case "fixed": {
       const info = getTraceInfo(spec);
@@ -253,6 +256,7 @@ function DistanceLine({
   to: Vec2;
   distance: number;
 }) {
+  const { overlayHideDistances } = useContext(StudioHackContext);
   const [label, fontSize] =
     distance === Infinity ? ["∞", 24] : [`${Math.round(distance)}px`, 11];
   return (
@@ -271,19 +275,21 @@ function DistanceLine({
         strokeWidth={1.5}
         strokeDasharray="4 3"
       />
-      <text
-        {...from.lerp(to, 0.5).xy()}
-        fill="magenta"
-        stroke="white"
-        strokeWidth={3}
-        paintOrder="stroke"
-        fontSize={fontSize}
-        fontFamily="monospace"
-        textAnchor="middle"
-        dominantBaseline="central"
-      >
-        {label}
-      </text>
+      {!overlayHideDistances && (
+        <text
+          {...from.lerp(to, 0.5).xy()}
+          fill="magenta"
+          stroke="white"
+          strokeWidth={3}
+          paintOrder="stroke"
+          fontSize={fontSize}
+          fontFamily="monospace"
+          textAnchor="middle"
+          dominantBaseline="central"
+        >
+          {label}
+        </text>
+      )}
     </g>
   );
 }
