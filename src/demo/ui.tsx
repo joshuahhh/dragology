@@ -45,13 +45,15 @@ const defaultToggles: DemoToggleSettings = {
   showTimingMeter: false,
 };
 
-const DemoContext = createContext<{
-  settings: DemoSettings;
-  setToggles: React.Dispatch<React.SetStateAction<DemoToggleSettings>>;
-}>({
+export const defaultDemoContext = {
   settings: { ...defaultToggles, thumbArea: defaultThumbArea },
   setToggles: () => {},
-});
+};
+
+export const DemoContext = createContext<{
+  settings: DemoSettings;
+  setToggles: React.Dispatch<React.SetStateAction<DemoToggleSettings>>;
+}>(defaultDemoContext);
 
 export const useDemoSettings = () => useContext(DemoContext).settings;
 

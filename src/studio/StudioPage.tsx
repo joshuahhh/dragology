@@ -1,0 +1,78 @@
+import { ReactNode } from "react";
+import qrA from "./qr_A.png";
+import { Teaser } from "./Teaser";
+
+export function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="min-h-screen flex flex-col max-w-4xl mx-auto w-full px-8 py-24">
+      <h2 className="text-sm font-medium uppercase tracking-widest text-gray-400 mb-8">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+const QR_SIZE = 23 * 2;
+
+export function Lens({
+  zoom,
+  children,
+}: {
+  zoom: number;
+  children: ReactNode;
+}) {
+  return (
+    <div style={{ zoom, padding: QR_SIZE, width: "fit-content" }}>
+      <div style={{ position: "relative", outline: "1px solid #ccc" }}>
+        {children}
+        <img
+          src={qrA}
+          style={{
+            position: "absolute",
+            top: -QR_SIZE,
+            left: -QR_SIZE,
+            width: QR_SIZE,
+            height: QR_SIZE,
+            pointerEvents: "none",
+            imageRendering: "pixelated",
+          }}
+        />
+        <img
+          src={qrA}
+          style={{
+            position: "absolute",
+            bottom: -QR_SIZE,
+            right: -QR_SIZE,
+            width: QR_SIZE,
+            height: QR_SIZE,
+            pointerEvents: "none",
+            imageRendering: "pixelated",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Divider() {
+  return <hr className="border-t border-gray-200 m-0" />;
+}
+
+export const StudioPage = () => {
+  return (
+    <div className="bg-white min-h-screen text-gray-700">
+      <Teaser />
+      <Divider />
+      <Section title="Section 2"></Section>
+      <Divider />
+      <Section title="Section 3"></Section>
+    </div>
+  );
+};

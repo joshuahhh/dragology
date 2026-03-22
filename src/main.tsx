@@ -8,6 +8,7 @@ import { DocsIndexPage } from "./docs/DocsIndexPage";
 import "./index.css";
 import { IndexPage } from "./IndexPage";
 import { NaturalNeighborTestPage } from "./NaturalNeighborTestPage";
+import { StudioPage } from "./studio/StudioPage";
 import { SingleStudyPage } from "./study/SingleStudyPage";
 import { StudyPage } from "./study/StudyPage";
 
@@ -30,6 +31,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           {autoRoute("/demos", DemoPage)}
           {autoRoute("/demos/:id", SingleDemoPage)}
           {autoRoute("/natural-neighbor", NaturalNeighborTestPage)}
+          {autoRoute("/studio", StudioPage)}
         </Routes>
       </Suspense>
     </HashRouter>
