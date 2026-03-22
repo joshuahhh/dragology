@@ -752,6 +752,18 @@ function betweenProjectAndRender<T extends object>(
     assertNever(interpolation);
   }
 
+  if (spec.sharpness !== undefined) {
+    let totalWeight = 0;
+    for (const [key, weight] of weights.entries()) {
+      const newWeight = Math.pow(weight, spec.sharpness);
+      weights.set(key, newWeight);
+      totalWeight += newWeight;
+    }
+    for (const [key, weight] of weights.entries()) {
+      weights.set(key, weight / totalWeight);
+    }
+  }
+
   const preview = lerpLayeredWeighted(
     renderedStates.map((rs) => rs.layered),
     weights,

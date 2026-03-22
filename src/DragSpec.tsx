@@ -65,6 +65,7 @@ export type DragSpecData<T extends object> = {
       type: "between";
       specs: DragSpecData<T>[];
       interpolation?: BetweenInterpolation;
+      sharpness?: number;
     }
   | {
       type: "switch-to-state-and-follow";
@@ -347,7 +348,22 @@ export class DragSpecBuilder<T extends object> {
    */
   between(
     specs: Many<DragSpecLike<T>>,
-    options?: { interpolation?: BetweenInterpolation },
+    options?: {
+      /**
+       * Specifies how to distribute weight to different targets,
+       * based on where everything is in space. Two options:
+       * "delaunay" (look up where pointer is in a triangulation of
+       * targets and give weight to the vertices of its triangle) and
+       * "natural-neighbor" (something fancier & smoother). */
+      interpolation?: BetweenInterpolation;
+      /**
+       * A way to create a magnetic attraction between the dragged
+       * object and its targets. 1 is the default (no attraction) and
+       * as you go higher, the object preferentially goes towards the
+       * targets it is closest to, limiting to d.closest at infinity.
+       */
+      sharpness?: number;
+    },
   ): DragSpec<T> {
     const resolved = manyToArray(specs).map(resolveDragSpecLike);
     assert(resolved.length > 0, "between requires at least one state");
@@ -355,6 +371,7 @@ export class DragSpecBuilder<T extends object> {
       type: "between",
       specs: resolved,
       interpolation: options?.interpolation,
+      sharpness: options?.sharpness,
     });
   }
 
