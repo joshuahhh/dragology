@@ -433,9 +433,7 @@ function augmentWithEmerging(
 ) {
   for (const [key, val] of source) {
     if (!target.has(key)) {
-      const emergeFromId = (val.props as Record<string, unknown>)[
-        "dragologyEmergeFrom"
-      ];
+      const emergeFromId = val.props["dragologyEmergeFrom"];
       if (emergeFromId && typeof emergeFromId === "string") {
         const originElement = origins.get(emergeFromId);
         if (originElement) {
