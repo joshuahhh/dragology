@@ -197,13 +197,13 @@ export function debugOverlay<T extends object>(
                   {/* indicator circle */}
                   <circle
                     {...rs.position.cxy()}
-                    r={isDropState ? maxR + 4 : 4}
+                    r={isDropState ? maxR : 3}
                     fill="none"
                     stroke="magenta"
                     strokeWidth={1.5}
                   />
-                  {/* weight disk */}
-                  {r > 0.5 && (
+                  {/* weight disk (only when active) */}
+                  {active && r > 0.5 && (
                     <circle {...rs.position.cxy()} r={r} fill="magenta" />
                   )}
                 </g>
