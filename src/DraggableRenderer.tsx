@@ -16,8 +16,8 @@ import {
   dragSpecToBehavior,
 } from "./DragBehavior";
 import { DragSpec } from "./DragSpec";
-import { debugOverlay } from "./DragSpecTraceInfo";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { OverlayVis } from "./OverlayVis";
 import {
   Draggable,
   getDragSpecCallbackOnElement,
@@ -722,7 +722,7 @@ const DrawDraggingMode = memoGeneric(
         {drawLayered(rendered)}
         {showDebugOverlay && pointer && (
           <ErrorBoundary>
-            {debugOverlay(status.result.tracedSpec, pointer)}
+            <OverlayVis spec={status.result.tracedSpec} pointer={pointer} />
           </ErrorBoundary>
         )}
       </>
