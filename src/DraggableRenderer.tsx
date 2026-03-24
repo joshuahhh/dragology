@@ -28,7 +28,12 @@ import {
   renderDraggableInert,
   renderDraggableInertUnlayered,
 } from "./renderDraggable";
-import { Svgx, findElement, updatePropsDownTree } from "./svgx";
+import {
+  Svgx,
+  findElement,
+  shouldRecurseIntoChildren,
+  updatePropsDownTree,
+} from "./svgx";
 import { LayeredSvgx, drawLayered, layerSvg } from "./svgx/layers";
 import { lerpLayered } from "./svgx/lerp";
 import { assignPaths, findByPath, getPath } from "./svgx/path";
@@ -583,6 +588,31 @@ type RenderContext<T extends object> = {
   dragThreshold: number;
 };
 
+/**
+ * Checks whether the element at `targetPath` or any of its ancestors
+ * in the JSX tree has an onClick or onDoubleClick handler.
+ */
+function treeHasClickHandler(root: Svgx, targetPath: string): boolean {
+  const nodePath = getPath(root);
+
+  // Not on the path to the target — skip this subtree
+  if (nodePath && !targetPath.startsWith(nodePath)) return false;
+
+  if (root.props.onClick || root.props.onDoubleClick) return true;
+
+  // Reached the target — no need to go deeper
+  if (nodePath === targetPath) return false;
+
+  if (!shouldRecurseIntoChildren(root)) return false;
+  const children = React.Children.toArray(root.props.children);
+  for (const child of children) {
+    if (React.isValidElement(child)) {
+      if (treeHasClickHandler(child as Svgx, targetPath)) return true;
+    }
+  }
+  return false;
+}
+
 function postProcessForInteraction<T extends object>(
   content: Svgx,
   state: T,
@@ -638,10 +668,9 @@ function postProcessForInteraction<T extends object>(
               null,
             );
 
-            if (
-              ctx.dragThreshold <= 0 ||
-              (!el.props.onClick && !el.props.onDoubleClick)
-            ) {
+            const hasClickHandler = treeHasClickHandler(withPaths, draggedPath);
+
+            if (ctx.dragThreshold <= 0 || !hasClickHandler) {
               ctx.setStatus(draggingStatus);
             } else {
               // Stay idle with pending — DOM is preserved, clicks still work.

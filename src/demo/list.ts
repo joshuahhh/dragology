@@ -71,6 +71,7 @@ export const demoList = [
   "tessellation",
   "switch-with-sharpness",
   "study-switch",
+  "study-switch-clickable",
   "study-three-way-switch",
   "study-reorderable-list",
   "study-slider",
