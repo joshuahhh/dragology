@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { NoolTreeSection } from "./NoolTreeSection";
 import { OrderPreservingSection } from "./OrderPreservingSection";
 import qrA from "./qr_A.png";
 import { RingOfBeadsSection } from "./RingOfBeadsSection";
@@ -82,6 +83,8 @@ export const StudioPage = () => {
       <RingOfBeadsSection />
       <Divider />
       <OrderPreservingSection />
+      <Divider />
+      <NoolTreeSection />
     </div>
   );
 };

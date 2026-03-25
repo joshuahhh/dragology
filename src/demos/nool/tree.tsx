@@ -24,7 +24,7 @@ import {
 
 type State = Tree;
 
-const initialState: State = {
+export const initialState: State = {
   id: "root",
   label: "+",
   children: [
@@ -81,7 +81,7 @@ type RewriteSet = {
   defaultEnabled?: boolean;
 };
 
-const rewriteSets: RewriteSet[] = [
+export const rewriteSets: RewriteSet[] = [
   {
     title: <>Identity</>,
     rewrites: [rewr("(+ (0) #A)", "A"), rewr("(+ #A (0))", "A")],
@@ -197,13 +197,13 @@ const defaultActiveRewriteSets = rewriteSets.map(
 
 // # Tree rendering
 
-type Config = {
+export type Config = {
   activeRewriteSets: boolean[];
   enableEmergeAnimation: boolean;
   forceTransformScale: boolean;
 };
 
-function draggableFactory(config: Config): Draggable<State> {
+export function draggableFactory(config: Config): Draggable<State> {
   const activeRewrites = _.zip(rewriteSets, config.activeRewriteSets).flatMap(
     ([set, enabled]) => (enabled ? set!.rewrites : []),
   );
