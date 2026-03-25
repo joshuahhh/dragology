@@ -1,4 +1,4 @@
-import { ReactElement, SetStateAction } from "react";
+import { SetStateAction } from "react";
 import { DragSpec, DragSpecBuilder } from "./DragSpec";
 import { getAtPath, PathIn, setAtPath, ValueAtPath } from "./paths";
 import { Svgx, updatePropsDownTree } from "./svgx";
@@ -65,9 +65,10 @@ export type DragSpecCallback<T extends object> = () => DragSpec<T>;
 export const DRAGOLOGY_PROP_NAME = "dragology";
 
 export function getDragSpecCallbackOnElement<T extends object>(
-  element: ReactElement,
+  element: Svgx,
 ): DragSpecCallback<T> | undefined {
-  return (element.props as any)[DRAGOLOGY_PROP_NAME] || undefined;
+  const callback = element.props[DRAGOLOGY_PROP_NAME];
+  return callback ? (callback as unknown as DragSpecCallback<T>) : undefined;
 }
 
 // # embed
