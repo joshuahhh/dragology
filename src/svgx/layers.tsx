@@ -143,6 +143,8 @@ export function drawLayered(layered: LayeredSvgx): Svgx {
               const newProps: React.SVGProps<SVGElement> = {};
               for (const propName of objectKeys(el.props)) {
                 if (propName.startsWith("dragology")) {
+                  // For debugging, uncomment this and get dragology props as data props
+                  // (newProps as any)[`data-${propName}`] = el.props[propName];
                   newProps[propName] = undefined;
                 }
               }

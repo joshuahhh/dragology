@@ -207,8 +207,9 @@ function draggableFactory(config: Config): Draggable<State> {
   const activeRewrites = _.zip(rewriteSets, config.activeRewriteSets).flatMap(
     ([set, enabled]) => (enabled ? set!.rewrites : []),
   );
-  return ({ state, d }) =>
-    renderTree(state, state, d, activeRewrites, config, 0).element;
+  return ({ state, d, draggedId }) =>
+    renderTree(state, state, d, activeRewrites, config, 0, draggedId, false)
+      .element;
 }
 
 function renderTree(
@@ -218,19 +219,32 @@ function renderTree(
   activeRewrites: Rewrite[],
   config: Config,
   depth: number,
+  draggedId: string | null,
+  isDragged: boolean,
 ): {
   element: Svgx;
   w: number;
   h: number;
   id: string;
 } {
+  isDragged = isDragged || tree.id === draggedId;
+
   const GAP = 10;
   const PADDING = 5;
   const LABEL_WIDTH = 20;
   const LABEL_MIN_HEIGHT = 20;
 
   const renderedChildren = tree.children.map((child) =>
-    renderTree(state, child, d, activeRewrites, config, depth + 1),
+    renderTree(
+      state,
+      child,
+      d,
+      activeRewrites,
+      config,
+      depth + 1,
+      draggedId,
+      isDragged,
+    ),
   );
 
   const renderedChildrenElements: Svgx[] = [];
@@ -257,11 +271,17 @@ function renderTree(
   const h = innerH + PADDING * 2;
   const rx = Math.min(14, 0.3 * Math.min(w, h));
 
+  // Subtle warm fill that deepens with nesting
+  const alpha = Math.min(0.02 + depth * 0.03, 0.15);
+  const fill = `rgba(180, 170, 150, ${alpha})`;
+  const strokeAlpha = Math.min(0.25 + depth * 0.08, 0.5);
+  const stroke = `rgba(140, 130, 115, ${strokeAlpha})`;
+
   const element = (
     <g
       id={tree.id}
       dragologyOnDrag={() => dragTargets(d, state, tree.id, activeRewrites)}
-      dragologyZIndex={depth}
+      dragologyZIndex={depth + (isDragged ? 1000 : 0)}
       dragologyEmergeFrom={
         config.enableEmergeAnimation ? tree.emergeFrom : undefined
       }
@@ -275,17 +295,18 @@ function renderTree(
         width={w}
         height={h}
         rx={rx}
-        stroke="gray"
-        strokeWidth={1}
-        fill="transparent"
+        stroke={stroke}
+        strokeWidth={0.75}
+        fill={fill}
+        // fill="transparent"
       />
       <text
         x={PADDING + LABEL_WIDTH / 2}
         y={PADDING + innerH / 2}
         dominantBaseline="middle"
         textAnchor="middle"
-        fontSize={20}
-        fill="black"
+        fontSize={18}
+        fill="#3a3a38"
       >
         {tree.label}
       </text>
