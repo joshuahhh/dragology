@@ -315,11 +315,13 @@ export function DemoDraggable<T extends object>({
   initialState,
   width,
   height,
+  onDropState,
 }: {
   draggable: Draggable<T>;
   initialState: T;
   width: number;
   height: number;
+  onDropState?: (state: T) => void;
 }) {
   const {
     showTreeView,
@@ -351,6 +353,7 @@ export function DemoDraggable<T extends object>({
               height={height}
               onDragStatus={setStatus}
               showDebugOverlay={showDebugOverlay}
+              onDropState={onDropState}
             />
             {showDropZones && overlayData && (
               <DropZonesSvg data={overlayData} width={width} height={height} />

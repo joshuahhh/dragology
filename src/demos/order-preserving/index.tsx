@@ -77,12 +77,12 @@ type State = {
 
 // Pre-compute allMorphs at module level
 const allMorphs3 = getAllMorphs(tree3, tree3);
-const allMorphs7 = getAllMorphs(tree7, tree7);
+export const allMorphs7 = getAllMorphs(tree7, tree7);
 
 const initialState3: State = { morph: allMorphs3[0] };
 const initialState7: State = { morph: allMorphs7[0] };
 
-function draggableFactory(
+export function draggableFactory(
   domainTree: TreeNode,
   codomainTree: TreeNode,
   allMorphs: TreeMorph[],
