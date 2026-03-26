@@ -419,6 +419,15 @@ function* computeDropZones(
 
   const colorMap = assignColors([...pathSet]);
 
+  // TODO: Special case - If there's exactly one bg zone, make it
+  // pale gray. Match "bg" as any path segment (e.g. "bg/...",
+  // "with-floating/bg/...").
+  const isBgPath = (p: string) => p.split("/").includes("bg");
+  const bgPaths = [...pathSet].filter(isBgPath);
+  if (bgPaths.length === 1) {
+    colorMap.set(bgPaths[0], "rgb(180, 180, 180)");
+  }
+
   const regions: { activePath: string; svgPath: string; color: string }[] = [];
   for (const path of pathSet) {
     const polygons = traceContours(
