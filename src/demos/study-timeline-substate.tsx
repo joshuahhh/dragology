@@ -2,7 +2,7 @@ import _ from "lodash";
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { lessThan } from "../DragSpec";
+import { inOrder, param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 type Block = { id: string; pos: number; track: number; color: string };
@@ -44,17 +44,14 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => (
         <g
           id={block.id}
           transform={translate(block.pos, block.track * (TRACK_H + GAP))}
-          data-z-index={isDragged ? 1 : 0}
-          dragology={() =>
+          dragologyZIndex={isDragged ? 1 : 0}
+          dragologyOnDrag={() =>
             d.substate(state, ["blocks", i], (d) =>
               d
                 .closest(
                   _.range(NUM_TRACKS).map((t) =>
-                    d.vary({ ...block, track: t }, [["pos"]], {
-                      constraint: (s) => [
-                        lessThan(0, s.pos),
-                        lessThan(s.pos, TRACK_W - BLOCK_W),
-                      ],
+                    d.vary({ ...block, track: t }, param("pos"), {
+                      constraint: (s) => inOrder(0, s.pos, TRACK_W - BLOCK_W),
                     }),
                   ),
                 )
@@ -113,7 +110,7 @@ export default demo(
   {
     tags: [
       "d.substate",
-      "d.vary [w/constraint]",
+      "d.vary [constraint]",
       "d.closest",
       "spec.withBranchTransition",
     ],

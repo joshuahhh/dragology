@@ -53,7 +53,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
             stroke="gray"
             strokeWidth={1}
             fill="none"
-            data-z-index={-5}
+            dragologyZIndex={-5}
           />
         )),
       )}
@@ -70,8 +70,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
           stroke="black"
           strokeWidth={2}
           transform={translate(car.x * TILE_SIZE, car.y * TILE_SIZE)}
-          data-z-index={5}
-          dragology={() => {
+          dragologyZIndex={5}
+          dragologyOnDrag={() => {
             const nextStates: State[] = [state];
 
             function tryMove(dx: number, dy: number) {
@@ -135,7 +135,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
         stroke="gray"
         strokeWidth={BORDER_WIDTH}
         fill="none"
-        data-z-index={-10}
+        dragologyZIndex={-10}
         id="border"
       />
 

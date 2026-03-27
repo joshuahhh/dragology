@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
+import { useTitle } from "../useTitle";
 import { studies } from "./registry";
 
 export const StudyPage = () => {
+  useTitle("Study — Dragology");
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <div className="py-10 px-5 max-w-3xl mx-auto w-full">

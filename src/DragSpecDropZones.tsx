@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  DragBehaviorInitContext,
-  DragFrame,
-  dragSpecToBehavior,
-} from "./DragBehavior";
-import { DragSpec } from "./DragSpec";
+import { DragFrame, dragSpecToBehavior } from "./DragBehavior";
+import { DragStatus } from "./DraggableRenderer";
 import { Vec2 } from "./math/vec2";
 
 // # Types
@@ -159,6 +155,23 @@ function traceContours(
     return vertices[vi(r, c)] === region;
   }
 
+  function cornerValue(r: number, c: number): string {
+    if (r < 0 || r > fineRows || c < 0 || c > fineCols) return "";
+    return vertices[vi(r, c)];
+  }
+
+  // Detect cells where 3+ distinct regions meet. In these cells, straight
+  // edge-midpoint-to-edge-midpoint lines leave small uncovered triangles.
+  // Routing through the cell center makes all regions meet at one point.
+  function isMultiLabel(cellRow: number, cellCol: number): boolean {
+    const vals = new Set<string>();
+    vals.add(cornerValue(cellRow, cellCol));
+    vals.add(cornerValue(cellRow, cellCol + 1));
+    vals.add(cornerValue(cellRow + 1, cellCol + 1));
+    vals.add(cornerValue(cellRow + 1, cellCol));
+    return vals.size >= 3;
+  }
+
   function caseAt(cellRow: number, cellCol: number): number {
     const tl = isInside(cellRow, cellCol) ? 8 : 0;
     const tr = isInside(cellRow, cellCol + 1) ? 4 : 0;
@@ -198,6 +211,16 @@ function traceContours(
           if (exitEdge === undefined) break;
 
           traced.add(ek(curCol, curRow, curEntry));
+
+          // For multi-label cells (3+ regions), route through center so
+          // adjacent regions meet at a point instead of leaving a gap.
+          // Skip for saddle cases (5, 10) which have two segments per cell.
+          if (isMultiLabel(curRow, curCol) && curCase !== 5 && curCase !== 10) {
+            polygon.push(
+              Vec2((curCol + 0.5) * cellSize, (curRow + 0.5) * cellSize),
+            );
+          }
+
           polygon.push(edgeMidpoint(curCol, curRow, exitEdge, cellSize));
 
           const nb = neighbor(
@@ -423,6 +446,15 @@ function* computeDropZones(
 
   const colorMap = assignColors([...pathSet]);
 
+  // TODO: Special case - If there's exactly one bg zone, make it
+  // pale gray. Match "bg" as any path segment (e.g. "bg/...",
+  // "with-floating/bg/...").
+  const isBgPath = (p: string) => p.split("/").includes("bg");
+  const bgPaths = [...pathSet].filter(isBgPath);
+  if (bgPaths.length === 1) {
+    colorMap.set(bgPaths[0], "rgb(180, 180, 180)");
+  }
+
   const regions: { activePath: string; svgPath: string; color: string }[] = [];
   for (const path of pathSet) {
     const polygons = traceContours(
@@ -446,17 +478,11 @@ function* computeDropZones(
 // # Hook: drives the generator cooperatively
 
 export function useDropZoneData<T extends object>(
-  dragging: {
-    spec: DragSpec<T>;
-    behaviorCtx: DragBehaviorInitContext<T>;
-    pointerStart: Vec2;
-  } | null,
+  status: (DragStatus<T> & { type: "dragging" }) | null,
   width: number,
   height: number,
 ): { data: DropZoneData | null; computing: boolean } {
-  const spec = dragging?.spec ?? null;
-  const behaviorCtx = dragging?.behaviorCtx ?? null;
-  const pointerStart = dragging?.pointerStart ?? null;
+  const { specForDropZoneVis: spec, behaviorCtx } = status ?? {};
 
   const [data, setData] = useState<DropZoneData | null>(null);
   const [computing, setComputing] = useState(false);
@@ -465,7 +491,7 @@ export function useDropZoneData<T extends object>(
   dataRef.current = data;
 
   useEffect(() => {
-    if (!spec || !behaviorCtx || !pointerStart) {
+    if (!spec || !behaviorCtx) {
       setData(null);
       setComputing(false);
       return;
@@ -476,14 +502,18 @@ export function useDropZoneData<T extends object>(
     specRef.current = spec;
 
     setComputing(true);
-    const ps = pointerStart;
 
     // Create a separate behavior instance for sampling (doesn't interfere
     // with the drag's own behavior's mutable curParams).
     const samplingBehavior = dragSpecToBehavior(spec, behaviorCtx);
 
+    // TODO: If the behavior has some kind of memory, that memory
+    // will be shared through the sampling process, leading to weird
+    // results here! However, recreating the behavior on every sample
+    // can be costly, so we don't do that (yet).
+
     function sample(x: number, y: number): string {
-      const frame: DragFrame = { pointer: Vec2(x, y), pointerStart: ps };
+      const frame: DragFrame = { pointer: Vec2(x, y) };
       try {
         return samplingBehavior(frame).activePath;
       } catch {
@@ -511,7 +541,7 @@ export function useDropZoneData<T extends object>(
       cancelled = true;
       setComputing(false);
     };
-  }, [spec, behaviorCtx, pointerStart, width, height]);
+  }, [spec, behaviorCtx, width, height]);
 
   return { data, computing };
 }

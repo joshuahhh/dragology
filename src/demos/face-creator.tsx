@@ -8,8 +8,7 @@ import {
   DemoWithConfig,
 } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { lessThan, moreThan } from "../DragSpec";
-import { PathIn } from "../paths";
+import { VaryPath, lessThan, moreThan, param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 // Face center (fixed)
@@ -642,7 +641,7 @@ function makeDraggable(
     const pinX = FACE_CX + state.faceRx + 18;
 
     function eyeDragology() {
-      const spec = d.vary(state, [["eyeY"], ["eyeDx"]], {
+      const spec = d.vary(state, [param("eyeY"), param("eyeDx")], {
         constraint: featureConstraint,
       });
       if (mouthPinned && !eyesAboveMouth) return spec;
@@ -672,7 +671,7 @@ function makeDraggable(
     }
 
     function endpointDragology() {
-      const spec = d.vary(state, [["mouthDx"], ["mouthEy"]], {
+      const spec = d.vary(state, [param("mouthDx"), param("mouthEy")], {
         constraint: featureConstraint,
       });
       const origDx = state.mouthDx;
@@ -702,12 +701,12 @@ function makeDraggable(
     }
 
     function curveDragology(t: number) {
-      const paths: PathIn<State, number>[] =
+      const paths: VaryPath<State>[] =
         t < 0.4
-          ? [["cp1dx"], ["cp1dy"]]
+          ? [param("cp1dx"), param("cp1dy")]
           : t > 0.6
-            ? [["cp2dx"], ["cp2dy"]]
-            : [["cp1dx"], ["cp1dy"], ["cp2dx"], ["cp2dy"]];
+            ? [param("cp2dx"), param("cp2dy")]
+            : [param("cp1dx"), param("cp1dy"), param("cp2dx"), param("cp2dy")];
       const spec = d.vary(state, paths, { constraint: featureConstraint });
       return spec.during((s) => {
         const result = eyesPinned ? s : pushEyesAway(s);
@@ -758,16 +757,16 @@ function makeDraggable(
 
     // Face perimeter: pin-by-t selects which param to vary per segment.
     // [startParam, midParam (bulge), endParam] for each segment.
-    const faceSegParams: [PathIn<State, number>, PathIn<State, number>, PathIn<State, number>][] = [
-      [["faceRyTop"], ["faceBulgeTR"], ["faceRx"]],   // seg 0: top → right
-      [["faceRx"], ["faceBulgeBR"], ["faceRyBot"]],   // seg 1: right → bottom
-      [["faceRyBot"], ["faceBulgeBR"], ["faceRx"]],   // seg 2: bottom → left (mirror)
-      [["faceRx"], ["faceBulgeTR"], ["faceRyTop"]],   // seg 3: left → top (mirror)
+    const faceSegParams: [VaryPath<State>, VaryPath<State>, VaryPath<State>][] = [
+      [param("faceRyTop"), param("faceBulgeTR"), param("faceRx")],   // seg 0: top → right
+      [param("faceRx"), param("faceBulgeBR"), param("faceRyBot")],   // seg 1: right → bottom
+      [param("faceRyBot"), param("faceBulgeBR"), param("faceRx")],   // seg 2: bottom → left (mirror)
+      [param("faceRx"), param("faceBulgeTR"), param("faceRyTop")],   // seg 3: left → top (mirror)
     ];
 
     function facePerimeterDragology(segIdx: number, t: number) {
       const [startP, midP, endP] = faceSegParams[segIdx];
-      const paths: PathIn<State, number>[] =
+      const paths: VaryPath<State>[] =
         t < 0.35 ? [startP] : t > 0.65 ? [endP] : [midP];
       return d
         .vary(state, paths, { constraint: faceConstraint })
@@ -783,7 +782,7 @@ function makeDraggable(
           fill="#ffe0b2"
           stroke="#e6a756"
           strokeWidth={FACE_STROKE}
-          data-z-index={0}
+          dragologyZIndex={0}
         />
 
         {/* Face perimeter drag handles (invisible, like mouth curve handles) */}
@@ -798,8 +797,8 @@ function makeDraggable(
                 transform={translate(pt.x, pt.y)}
                 r={isDragged ? 6 : 12}
                 fill={isDragged ? "rgba(230, 167, 86, 0.4)" : "transparent"}
-                data-z-index={5}
-                dragology={() => facePerimeterDragology(segIdx, t)}
+                dragologyZIndex={5}
+                dragologyOnDrag={() => facePerimeterDragology(segIdx, t)}
               />
             );
           }),
@@ -811,16 +810,16 @@ function makeDraggable(
           transform={translate(le.x, le.y)}
           r={EYE_R}
           fill="#333"
-          data-z-index={1}
-          dragology={eyeDragology}
+          dragologyZIndex={1}
+          dragologyOnDrag={eyeDragology}
         />
         <circle
           id="right-eye"
           transform={translate(re.x, re.y)}
           r={EYE_R}
           fill="#333"
-          data-z-index={1}
-          dragology={eyeDragology}
+          dragologyZIndex={1}
+          dragologyOnDrag={eyeDragology}
         />
 
         {/* Mouth curve */}
@@ -832,7 +831,7 @@ function makeDraggable(
           strokeWidth={4}
           strokeLinecap="round"
           style={{ pointerEvents: "none" }}
-          data-z-index={1}
+          dragologyZIndex={1}
         />
 
         {/* Drag handles along the mouth curve */}
@@ -846,8 +845,8 @@ function makeDraggable(
               transform={translate(pt.x, pt.y)}
               r={isDragged ? 8 : 14}
               fill={isDragged ? "rgba(192, 57, 43, 0.4)" : "transparent"}
-              data-z-index={2}
-              dragology={() => curveDragology(t)}
+              dragologyZIndex={2}
+              dragologyOnDrag={() => curveDragology(t)}
             />
           );
         })}
@@ -860,8 +859,8 @@ function makeDraggable(
           fill={draggedId === "mouth-endpoint-left" ? "#e74c3c" : "#c0392b"}
           stroke="#c0392b"
           strokeWidth={1.5}
-          data-z-index={3}
-          dragology={endpointDragology}
+          dragologyZIndex={3}
+          dragologyOnDrag={endpointDragology}
         />
         <circle
           id="mouth-endpoint-right"
@@ -870,19 +869,19 @@ function makeDraggable(
           fill={draggedId === "mouth-endpoint-right" ? "#e74c3c" : "#c0392b"}
           stroke="#c0392b"
           strokeWidth={1.5}
-          data-z-index={3}
-          dragology={endpointDragology}
+          dragologyZIndex={3}
+          dragologyOnDrag={endpointDragology}
         />
 
         {/* Pin toggles (hidden unless showLockHandles is on) */}
-        <g id="pin-eyes" data-z-index={4} opacity={showLockHandles ? 1 : 0}>
+        <g id="pin-eyes" dragologyZIndex={4} opacity={showLockHandles ? 1 : 0}>
           <circle
             transform={translate(pinX, state.eyeY)}
             r={PIN_R}
             fill={eyesPinned ? "#666" : "transparent"}
             stroke={eyesPinned ? "#666" : "#ccc"}
             strokeWidth={1.5}
-            dragology={
+            dragologyOnDrag={
               showLockHandles
                 ? () =>
                     d.fixed({
@@ -903,14 +902,14 @@ function makeDraggable(
             opacity={eyesPinned ? 1 : 0}
           />
         </g>
-        <g id="pin-mouth" data-z-index={4} opacity={showLockHandles ? 1 : 0}>
+        <g id="pin-mouth" dragologyZIndex={4} opacity={showLockHandles ? 1 : 0}>
           <circle
             transform={translate(pinX, state.mouthEy)}
             r={PIN_R}
             fill={mouthPinned ? "#666" : "transparent"}
             stroke={mouthPinned ? "#666" : "#ccc"}
             strokeWidth={1.5}
-            dragology={
+            dragologyOnDrag={
               showLockHandles
                 ? () =>
                     d.fixed({

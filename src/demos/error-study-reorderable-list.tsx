@@ -18,7 +18,7 @@ const draggable: Draggable<State> = ({ state, d }) => (
     {state.items.map((item, i) => (
       <g
         transform={translate(0, i * (H + GAP))}
-        dragology={() => {
+        dragologyOnDrag={() => {
           const newStates = state.items.map((_item, j) => ({
             items: moveItem(state.items, i, j),
           }));

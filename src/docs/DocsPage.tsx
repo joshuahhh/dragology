@@ -1,5 +1,6 @@
 import { ComponentType } from "react";
 import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
+import { useTitle } from "../useTitle";
 import * as Components from "./components";
 import { LiveEditor } from "./LiveEditor";
 import { MDXPage } from "./MDXPage";
@@ -10,6 +11,7 @@ const mdxFiles = import.meta.glob<{ default: ComponentType }>("./*.mdx", {
 });
 
 export function DocsPage({ slug }: { slug: string }) {
+  useTitle(`${slug} — Dragology`);
   // Convert slug to file path
   const filePath = `./${slug}.mdx`;
   const mdxModule = mdxFiles[filePath];

@@ -19,6 +19,10 @@ export function shouldRecurseIntoChildren(element: Svgx): boolean {
  * A helpful utility to map over an element's children and/or update
  * its props. Not inherently recursive – feel free to recurse in
  * childFn.
+ *
+ * One special feature: If any newProps values are undefined, the
+ * keys will be entirely removed from the element's props.
+ * (React.cloneElement doesn't do this.)
  */
 export function updateElement(
   element: Svgx,
@@ -45,7 +49,18 @@ export function updateElement(
     }
   }
 
-  return newProps ? React.cloneElement(element, newProps) : element;
+  if (!newProps) return element;
+
+  // Rebuild rather than cloneElement so that undefined values
+  // actually remove props (cloneElement would keep them).
+  const merged = { ...element.props, ...newProps };
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(merged)) {
+    if (v !== undefined) cleaned[k] = v;
+  }
+
+  if (element.key != null) cleaned.key = element.key;
+  return React.createElement(element.type, cleaned);
 }
 
 export type FindElementResult = {

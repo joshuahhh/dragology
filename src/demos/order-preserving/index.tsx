@@ -6,13 +6,17 @@ import { demo } from "../../demo";
 import {
   ConfigCheckbox,
   ConfigPanel,
+  ConfigSelect,
   DemoDraggable,
   DemoLink,
   DemoNotes,
   DemoWithConfig,
 } from "../../demo/ui";
 import { Draggable } from "../../draggable";
-import { type DragSpecBuilder } from "../../DragSpec";
+import {
+  type BetweenInterpolation,
+  type DragSpecBuilder,
+} from "../../DragSpec";
 import { Vec2 } from "../../math/vec2";
 import { Svgx } from "../../svgx";
 import { Finalizers, pointRef, PointRef } from "../../svgx/finalizers";
@@ -58,11 +62,13 @@ const nodeDist = (a: TreeNode, b: TreeNode) =>
 type Config = {
   oneNodeAtATime: boolean;
   showTradRep: boolean;
+  interpolation: BetweenInterpolation;
 };
 
 const defaultConfig: Config = {
   oneNodeAtATime: false,
   showTradRep: false,
+  interpolation: "natural-neighbor",
 };
 
 type State = {
@@ -71,12 +77,12 @@ type State = {
 
 // Pre-compute allMorphs at module level
 const allMorphs3 = getAllMorphs(tree3, tree3);
-const allMorphs7 = getAllMorphs(tree7, tree7);
+export const allMorphs7 = getAllMorphs(tree7, tree7);
 
 const initialState3: State = { morph: allMorphs3[0] };
 const initialState7: State = { morph: allMorphs7[0] };
 
-function draggableFactory(
+export function draggableFactory(
   domainTree: TreeNode,
   codomainTree: TreeNode,
   allMorphs: TreeMorph[],
@@ -158,7 +164,12 @@ function dragSpec(draggedNodeId: string, ctx: Ctx) {
   }
 
   return ctx.d
-    .between(newMorphs.map((morph) => ({ morph })))
+    .between(
+      newMorphs.map((morph) => ({ morph })),
+      {
+        interpolation: ctx.config.interpolation,
+      },
+    )
     .withSnapRadius(20, { transition: true });
 }
 
@@ -269,7 +280,7 @@ function drawBgSubtree(
           y2={to.y}
           stroke="lightgray"
           strokeWidth={12}
-          data-z-index={-2}
+          dragologyZIndex={-2}
         />
       );
     });
@@ -336,7 +347,7 @@ function drawBgNodeWithFgNodesInside(
           cy={nodeCenterInCircle.y}
           r={circleRadius}
           fill="lightgray"
-          data-z-index={-1}
+          dragologyZIndex={-1}
         />
         <g transform={translate(offset)}>{elementsInRect}</g>
       </g>
@@ -401,7 +412,7 @@ function drawFgSubtreeInBgNode(
             fill="none"
             stroke="black"
             strokeWidth={2}
-            data-z-index={-1}
+            dragologyZIndex={-1}
           />
         );
       });
@@ -463,7 +474,7 @@ function drawFgSubtreeInBgNode(
           cy={0}
           r={FG_NODE_SIZE / 2}
           fill="black"
-          dragology={() => dragSpec(fgNode.id, ctx)}
+          dragologyOnDrag={() => dragSpec(fgNode.id, ctx)}
         />
         {childrenContainer}
       </g>
@@ -515,7 +526,7 @@ function drawTradRep(ctx: Ctx): Svgx[] {
             direction: to.sub(mid),
             headLength: 15,
             fill: "#4287f5",
-            dragology: () => dragSpec(domElem, ctx),
+            dragologyOnDrag: () => dragSpec(domElem, ctx),
           })}
         </g>
       );
@@ -674,6 +685,12 @@ export default demo(
             >
               Show traditional representation
             </ConfigCheckbox>
+            <ConfigSelect
+              label="Interpolation"
+              value={config.interpolation}
+              onChange={(v) => setConfig((c) => ({ ...c, interpolation: v }))}
+              options={["natural-neighbor", "delaunay"] as const}
+            />
           </ConfigPanel>
         </DemoWithConfig>
       </div>

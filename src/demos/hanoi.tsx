@@ -88,7 +88,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
             <g
               id={diskId.toString()}
               transform={translate(x, y)}
-              dragology={
+              dragologyOnDrag={
                 isTopDisk &&
                 (() => {
                   const stateWithout = produce(state, (draft) => {
@@ -106,7 +106,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
                     .withFloating({ ghost: { opacity: 0.5 } });
                 })
               }
-              data-z-index={1}
+              dragologyZIndex={1}
             >
               <rect
                 x={0}
@@ -161,6 +161,6 @@ export default demo(
     </div>
   ),
   {
-    tags: ["d.closest", "spec.withFloating [w/ghost]", "puzzle"],
+    tags: ["d.closest", "spec.withFloating [ghost]", "puzzle"],
   },
 );

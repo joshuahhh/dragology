@@ -18,7 +18,7 @@ const defaultConfig: Config = { snap: false };
 
 function draggableFactory(config: Config): Draggable<State> {
   return ({ state, d }) => {
-    let spec = d.between({ right: false }, { right: true });
+    let spec = d.between([{ right: false }, { right: true }]);
     if (config.snap) spec = spec.withSnapRadius(20);
 
     return (
@@ -27,14 +27,18 @@ function draggableFactory(config: Config): Draggable<State> {
         <g
           id="dot"
           transform={translate(state.right ? 200 : 100, 20)}
-          dragology={() => spec}
+          dragologyOnDrag={() => spec}
         >
           <circle r={14} fill="#7cb3f0" stroke="#4a90d9" strokeWidth={2} />
         </g>
 
         {/* The emerging dot — only present in state 2 */}
         {state.right && (
-          <g id="dot2" transform={translate(200, 100)} data-emerge-from="dot">
+          <g
+            id="dot2"
+            transform={translate(200, 100)}
+            dragologyEmergeFrom="dot"
+          >
             <circle r={14} fill="#f0a07c" stroke="#d9824a" strokeWidth={2} />
           </g>
         )}
@@ -67,5 +71,5 @@ export default demo(
       </DemoWithConfig>
     );
   },
-  { tags: ["d.between", "spec.withSnapRadius"] },
+  { tags: ["d.between", "spec.withSnapRadius", "dragologyEmergeFrom"] },
 );

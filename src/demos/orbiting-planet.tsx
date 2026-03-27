@@ -1,5 +1,6 @@
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 
 import { demo } from "../demo";
 import { translate } from "../svgx/helpers";
@@ -66,11 +67,14 @@ const draggable: Draggable<State> = ({ state, d }) => {
       <g
         id="planet"
         transform={translate(planetX, planetY)}
-        data-z-index={1}
-        dragology={() =>
+        dragologyZIndex={1}
+        dragologyOnDrag={() =>
           d.closest(
             STARS.map((_, starIdx) =>
-              d.vary({ currentStar: starIdx, angle: state.angle }, [["angle"]]),
+              d.vary(
+                { currentStar: starIdx, angle: state.angle },
+                param("angle"),
+              ),
             ),
           )
         }

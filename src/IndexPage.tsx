@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
+import { useTitle } from "./useTitle";
 
 export function IndexPage() {
+  useTitle("Dragology");
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
       <div className="text-center py-10 px-5 max-w-3xl mx-auto">

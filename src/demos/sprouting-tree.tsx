@@ -200,7 +200,7 @@ function draggableFactory(config: Config): Draggable<State> {
                 y2={childPos.y}
                 stroke="#ccc"
                 strokeWidth={2}
-                data-emerge-from={node.emergeFrom || child.emergeFrom}
+                dragologyEmergeFrom={node.emergeFrom || child.emergeFrom}
               />
             );
           })}
@@ -212,21 +212,27 @@ function draggableFactory(config: Config): Draggable<State> {
           <g
             id={node.id}
             transform={translate(pos.x, pos.y)}
-            data-z-index={draggedId === node.id ? 3 : 1}
-            data-emerge-from={node.emergeFrom}
-            dragology={
+            dragologyZIndex={draggedId === node.id ? 3 : 1}
+            dragologyEmergeFrom={node.emergeFrom}
+            dragologyOnDrag={
               leaf &&
               (() => {
                 return d
-                  .closest(
+                  .closest([
                     // to children
-                    d.between(state, { root: sprout(state.root, node.id, 0) }),
-                    d.between(state, { root: sprout(state.root, node.id, 1) }),
+                    d.between([
+                      state,
+                      { root: sprout(state.root, node.id, 0) },
+                    ]),
+                    d.between([
+                      state,
+                      { root: sprout(state.root, node.id, 1) },
+                    ]),
                     // to parent (if not root)
                     state.root.id !== node.id
-                      ? d.between(state, { root: prune(state.root, node.id) })
+                      ? d.between([state, { root: prune(state.root, node.id) }])
                       : null,
-                  )
+                  ])
                   .withSnapRadius(5, { chain: true });
               })
             }
@@ -270,5 +276,5 @@ export default demo(
       </DemoWithConfig>
     );
   },
-  { tags: ["spec.withSnapRadius [w/chain]", "d.between"] },
+  { tags: ["spec.withSnapRadius [chain]", "d.between", "dragologyEmergeFrom"] },
 );

@@ -26,7 +26,7 @@ const draggable: Draggable<State> = ({ state, d, setState }) => (
     {/* Main carousel container */}
     <rect
       id="background-rect"
-      data-z-index={-1}
+      dragologyZIndex={-1}
       x={0}
       y={0}
       width={WIDTH}
@@ -45,7 +45,7 @@ const draggable: Draggable<State> = ({ state, d, setState }) => (
         <g
           id={`slide-${idx}`}
           transform={translate(xOffset, 0)}
-          dragology={() => {
+          dragologyOnDrag={() => {
             const specs = [];
             if (state.slideIdx > 0)
               specs.push(d.between([state, { slideIdx: state.slideIdx - 1 }]));
@@ -63,7 +63,6 @@ const draggable: Draggable<State> = ({ state, d, setState }) => (
             height={HEIGHT - 60}
             fill={slide.color}
             rx={8}
-            style={{ cursor: "grab" }}
           />
           <text
             x={WIDTH / 2}
@@ -122,7 +121,9 @@ const draggable: Draggable<State> = ({ state, d, setState }) => (
         )}
         r={DOT_RADIUS}
         fill="transparent"
-        dragology={() => d.between(SLIDES.map((_, idx) => ({ slideIdx: idx })))}
+        dragologyOnDrag={() =>
+          d.between(SLIDES.map((_, idx) => ({ slideIdx: idx })))
+        }
       />
     </g>
 

@@ -5,7 +5,7 @@ import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
 import { translate } from "../svgx/helpers";
-import { assertDefined } from "../utils";
+import { assertDefined } from "../utils/assert";
 
 type State = {
   rows: {
@@ -69,7 +69,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
           <g
             id={`row-${row.id}`}
             transform={translate(0, origY)}
-            dragology={() => {
+            dragologyOnDrag={() => {
               const stateWithout = produce(state, (draft) => {
                 draft.rows.splice(rowIdx, 1);
               });
@@ -114,12 +114,12 @@ const draggable: Draggable<State> = ({ state, d }) => {
               return (
                 <g
                   id={p.id}
-                  data-z-index={1}
+                  dragologyZIndex={1}
                   transform={translate(
                     GRIP_WIDTH + GRIP_PADDING + origX + ROW_PADDING,
                     ROW_PADDING,
                   )}
-                  dragology={() => {
+                  dragologyOnDrag={() => {
                     const stateWithout = produce(state, (draft) => {
                       draft.rows[rowIdx].items.splice(idx, 1);
                     });

@@ -29,7 +29,7 @@ const draggable: Draggable<State> = ({ state, d }) => (
       width={SIZE}
       height={SIZE}
       rx={4}
-      dragology={() =>
+      dragologyOnDrag={() =>
         d
           .closest([
             state.value > 0 && d.between([state, { value: state.value - 1 }]),
@@ -50,5 +50,5 @@ export default demo(
       height={100}
     />
   ),
-  { tags: ["spec.withSnapRadius [w/chain]", "d.between"] },
+  { tags: ["spec.withSnapRadius [chain]", "d.between"] },
 );

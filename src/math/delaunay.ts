@@ -1,6 +1,6 @@
 import { Delaunay as D3Delaunay } from "d3-delaunay";
 import _ from "lodash";
-import { assert, assertWarning, clamp } from "../utils";
+import { assert, assertWarning } from "../utils/assert";
 import { Vec2, Vec2able } from "./vec2";
 
 export class CoincidentPointsError extends Error {
@@ -18,6 +18,10 @@ export class CoincidentPointsError extends Error {
 // and 2. we can add our own methods.
 export class Delaunay {
   private _inner: D3Delaunay<D3Delaunay.Point>;
+
+  get d3(): D3Delaunay<D3Delaunay.Point> {
+    return this._inner;
+  }
 
   constructor(points: Vec2able[]) {
     this._inner = D3Delaunay.from(points.map((p) => Vec2(p).arr()));
@@ -181,75 +185,83 @@ export class Delaunay {
         ]
       : this._inner.hull;
     const points = this._inner.points;
+    const qx = pt.x,
+      qy = pt.y;
 
-    let bestProjection: ConvexHullProjection | null = null;
+    // Scalar loop — no Vec2 allocations.
+    let bestDist2 = Infinity;
+    let bestType: "vertex" | "edge" = "vertex";
+    let bestPtIdx = 0;
+    let bestPtIdx0 = 0;
+    let bestPtIdx1 = 0;
+    let bestT = 0;
+    let bestX = 0;
+    let bestY = 0;
 
-    // Check each edge of the convex hull
     for (let i = 0; i < hull.length; i++) {
-      const ptIdx0 = hull[i];
-      const ptIdx1 = hull[(i + 1) % hull.length];
+      const iA = hull[i];
+      const iB = hull[(i + 1) % hull.length];
+      const ax = points[2 * iA],
+        ay = points[2 * iA + 1];
+      const bx = points[2 * iB],
+        by = points[2 * iB + 1];
+      const abx = bx - ax,
+        aby = by - ay;
+      const ab2 = abx * abx + aby * aby;
 
-      const p0 = Vec2(points[2 * ptIdx0], points[2 * ptIdx0 + 1]);
-      const p1 = Vec2(points[2 * ptIdx1], points[2 * ptIdx1 + 1]);
-
-      // Project pt onto the line segment from p0 to p1
-      const edge = p1.sub(p0);
-      const edgeLen2 = edge.len2();
-
-      if (edgeLen2 < 1e-10) {
-        // Degenerate edge, treat as vertex
-        const dist = pt.dist(p0);
-        if (!bestProjection || dist < bestProjection.dist) {
-          bestProjection = {
-            type: "vertex",
-            ptIdx: ptIdx0,
-            projectedPt: p0,
-            dist,
-          };
+      if (ab2 < 1e-10) {
+        const d2 = (qx - ax) * (qx - ax) + (qy - ay) * (qy - ay);
+        if (d2 < bestDist2) {
+          bestDist2 = d2;
+          bestType = "vertex";
+          bestPtIdx = iA;
+          bestX = ax;
+          bestY = ay;
         }
         continue;
       }
 
-      // Parameter t for projection onto infinite line
-      const t = pt.sub(p0).dot(edge) / edgeLen2;
+      const t = Math.max(
+        0,
+        Math.min(1, ((qx - ax) * abx + (qy - ay) * aby) / ab2),
+      );
+      const px = ax + t * abx;
+      const py = ay + t * aby;
+      const d2 = (qx - px) * (qx - px) + (qy - py) * (qy - py);
 
-      // Clamp to [0, 1] to stay on the line segment
-      const tClamped = clamp(0, t, 1);
-
-      // Closest point on the edge
-      const closestPt = p0.lerp(p1, tClamped);
-      const dist = pt.dist(closestPt);
-
-      if (!bestProjection || dist < bestProjection.dist) {
-        // Check if we're at a vertex or along the edge
-        if (tClamped < 1e-6) {
-          bestProjection = {
-            type: "vertex",
-            ptIdx: ptIdx0,
-            projectedPt: p0,
-            dist,
-          };
-        } else if (tClamped > 1 - 1e-6) {
-          bestProjection = {
-            type: "vertex",
-            ptIdx: ptIdx1,
-            projectedPt: p1,
-            dist,
-          };
+      if (d2 < bestDist2) {
+        bestDist2 = d2;
+        bestX = px;
+        bestY = py;
+        if (t < 1e-6) {
+          bestType = "vertex";
+          bestPtIdx = iA;
+        } else if (t > 1 - 1e-6) {
+          bestType = "vertex";
+          bestPtIdx = iB;
         } else {
-          bestProjection = {
-            type: "edge",
-            ptIdx0,
-            ptIdx1,
-            t: tClamped,
-            projectedPt: closestPt,
-            dist,
-          };
+          bestType = "edge";
+          bestPtIdx0 = iA;
+          bestPtIdx1 = iB;
+          bestT = t;
         }
       }
     }
 
-    return bestProjection!;
+    const dist = Math.sqrt(bestDist2);
+    const projectedPt = Vec2(bestX, bestY);
+    if (bestType === "vertex") {
+      return { type: "vertex", ptIdx: bestPtIdx, projectedPt, dist };
+    } else {
+      return {
+        type: "edge",
+        ptIdx0: bestPtIdx0,
+        ptIdx1: bestPtIdx1,
+        t: bestT,
+        projectedPt,
+        dist,
+      };
+    }
   }
 }
 
@@ -297,7 +309,7 @@ function d3DelaunayCollinearIdxs(
   return (delaunay as any).collinear;
 }
 
-type ConvexHullProjection =
+export type ConvexHullProjection =
   | { type: "vertex"; ptIdx: number; projectedPt: Vec2; dist: number }
   | {
       type: "edge";

@@ -18,10 +18,24 @@ import { DragSpecTreeView } from "../DragSpecTreeView";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { Draggable } from "../draggable";
-import { assert } from "../utils";
+import { assert } from "../utils/assert";
 import { OpenInEditor } from "./OpenInEditor";
 import type { Demo } from "./registry";
 import { parseTag, type TagNode, tagStringFromPath } from "./tags";
+
+// # window.dumpState
+
+const dumpStateCallbacks = new Set<() => void>();
+declare global {
+  interface Window {
+    dumpState?: () => void;
+  }
+}
+if (typeof window !== "undefined") {
+  window.dumpState = () => {
+    for (const cb of dumpStateCallbacks) cb();
+  };
+}
 
 export type DemoToggleSettings = {
   showTreeView: boolean;
@@ -45,13 +59,15 @@ const defaultToggles: DemoToggleSettings = {
   showTimingMeter: false,
 };
 
-const DemoContext = createContext<{
-  settings: DemoSettings;
-  setToggles: React.Dispatch<React.SetStateAction<DemoToggleSettings>>;
-}>({
+export const defaultDemoContext = {
   settings: { ...defaultToggles, thumbArea: defaultThumbArea },
   setToggles: () => {},
-});
+};
+
+export const DemoContext = createContext<{
+  settings: DemoSettings;
+  setToggles: React.Dispatch<React.SetStateAction<DemoToggleSettings>>;
+}>(defaultDemoContext);
 
 export const useDemoSettings = () => useContext(DemoContext).settings;
 
@@ -107,7 +123,7 @@ export function DemoSettingsProvider({
 
 const settingsEntries = [
   { key: "showStateViewer", label: "State viewer", mobileHidden: true },
-  { key: "showDebugOverlay", label: "Debug overlay", mobileHidden: false },
+  { key: "showDebugOverlay", label: "Overlay", mobileHidden: false },
   { key: "showTreeView", label: "Spec tree", mobileHidden: true },
   { key: "showDropZones", label: "Drop zones", mobileHidden: false },
   { key: "showTimingMeter", label: "Timing", mobileHidden: true },
@@ -313,11 +329,15 @@ export function DemoDraggable<T extends object>({
   initialState,
   width,
   height,
+  onDropState,
+  stateRef,
 }: {
   draggable: Draggable<T>;
   initialState: T;
   width: number;
   height: number;
+  onDropState?: (state: T) => void;
+  stateRef?: React.RefObject<T | null>;
 }) {
   const {
     showTreeView,
@@ -328,6 +348,28 @@ export function DemoDraggable<T extends object>({
     thumbArea,
   } = useDemoSettings();
   const [status, setStatus] = useState<DragStatus<T> | null>(null);
+
+  useEffect(() => {
+    if (stateRef) {
+      if (status?.type === "idle") {
+        stateRef.current = status.state;
+      } else {
+        stateRef.current = null;
+      }
+    }
+  }, [stateRef, status]);
+
+  useEffect(() => {
+    const cb = () => {
+      if (status?.type === "idle") {
+        console.log(status.state);
+      }
+    };
+    dumpStateCallbacks.add(cb);
+    return () => {
+      dumpStateCallbacks.delete(cb);
+    };
+  }, [status]);
 
   const draggingStatus = status?.type === "dragging" ? status : null;
 
@@ -349,6 +391,7 @@ export function DemoDraggable<T extends object>({
               height={height}
               onDragStatus={setStatus}
               showDebugOverlay={showDebugOverlay}
+              onDropState={onDropState}
             />
             {showDropZones && overlayData && (
               <DropZonesSvg data={overlayData} width={width} height={height} />
@@ -409,17 +452,49 @@ export function DemoDraggable<T extends object>({
               )}
               {showStateViewer && status && (
                 <ErrorBoundary>
-                  <PrettyPrint
-                    value={
-                      status.type === "dragging"
-                        ? status.result.dropState
-                        : status.state
-                    }
-                    precision={2}
-                    style={{ fontSize: "11px" }}
-                    niceId={false}
-                    niceType={false}
-                  />
+                  <div className="flex gap-4">
+                    <div className="min-w-[50%]">
+                      <div className="text-xs text-slate-500">drop state</div>
+                      <PrettyPrint
+                        value={
+                          status.type === "dragging"
+                            ? status.startState
+                            : status.state
+                        }
+                        precision={2}
+                        style={{ fontSize: "11px" }}
+                        niceId={false}
+                        niceType={false}
+                      />
+                    </div>
+                    {status.type === "dragging" && (
+                      <div className="min-w-[50%]">
+                        <div className="text-xs text-slate-500">drag state</div>
+                        <PrettyPrint
+                          value={status.result.dropState}
+                          precision={2}
+                          style={{ fontSize: "11px" }}
+                          niceId={false}
+                          niceType={false}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {/* {status.springOrigin && (
+                    <div>
+                      <div className="text-xs text-slate-500 mb-1">
+                        Spring origin
+                      </div>
+                      <svg
+                        width={120}
+                        height={120 * (height / width)}
+                        viewBox={`0 0 ${width} ${height}`}
+                        className="border border-slate-200 rounded bg-white"
+                      >
+                        {drawLayered(status.springOrigin.layered)}
+                      </svg>
+                    </div>
+                  )} */}
                 </ErrorBoundary>
               )}
             </div>
@@ -618,7 +693,7 @@ export function ConfigPanel({
   children,
 }: {
   title?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
     <div className="bg-gray-50 rounded p-3 shrink-0 md:sticky md:top-4">
@@ -669,6 +744,40 @@ export function ConfigSelect<T>({
         })}
       </select>
     </label>
+  );
+}
+
+export function ConfigRadio<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label?: string;
+  value: T;
+  onChange: (newValue: T) => void;
+  options: Record<T, React.ReactNode> | readonly T[];
+}) {
+  const entries: [T, React.ReactNode][] = Array.isArray(options)
+    ? options.map((k) => [k, k])
+    : (Object.entries(options) as [T, React.ReactNode][]);
+  return (
+    <fieldset className="flex flex-col gap-1 text-xs">
+      {label && (
+        <legend className="font-medium text-gray-600 mb-1">{label}</legend>
+      )}
+      {entries.map(([key, node]) => (
+        <label key={key} className="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="radio"
+            checked={value === key}
+            onChange={() => onChange(key)}
+            className="accent-blue-500"
+          />
+          {node}
+        </label>
+      ))}
+    </fieldset>
   );
 }
 

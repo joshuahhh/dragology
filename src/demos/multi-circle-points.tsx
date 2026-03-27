@@ -2,7 +2,7 @@ import { produce } from "immer";
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { lessThan } from "../DragSpec";
+import { lessThan, param } from "../DragSpec";
 import { Vec2 } from "../math/vec2";
 import { translate } from "../svgx/helpers";
 
@@ -69,11 +69,11 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
               stroke={circle.color}
               strokeWidth={isCircleDragged ? 3 : 2}
               strokeDasharray={isCircleDragged ? undefined : "6 4"}
-              data-z-index={isCircleDragged ? 2 : 1}
-              dragology={() =>
+              dragologyZIndex={isCircleDragged ? 2 : 1}
+              dragologyOnDrag={() =>
                 d.vary(state, [
-                  ["circles", circleIdx, "x"],
-                  ["circles", circleIdx, "y"],
+                  param("circles", circleIdx, "x"),
+                  param("circles", circleIdx, "y"),
                 ])
               }
             />
@@ -103,10 +103,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
 
           return d.vary(
             stateInCircle,
-            [
-              ["points", pointIdx, "dx"],
-              ["points", pointIdx, "dy"],
-            ],
+            [param("points", pointIdx, "dx"), param("points", pointIdx, "dy")],
             {
               constraint: (s) => {
                 const p = s.points[pointIdx];
@@ -126,8 +123,8 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
             fill={circle.color}
             stroke="white"
             strokeWidth={2}
-            data-z-index={isPointDragged ? 10 : 3}
-            dragology={() => d.closest(varySpecs)}
+            dragologyZIndex={isPointDragged ? 10 : 3}
+            dragologyOnDrag={() => d.closest(varySpecs)}
           />
         );
       })}
@@ -144,5 +141,5 @@ export default demo(
       height={350}
     />
   ),
-  { tags: ["d.vary [w/constraint]", "d.closest"] },
+  { tags: ["d.vary [constraint]", "d.closest"] },
 );

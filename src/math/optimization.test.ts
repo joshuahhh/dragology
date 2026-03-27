@@ -208,6 +208,82 @@ describe("DistanceMinimizer", () => {
     });
   });
 
+  describe("non-uniform scaling with box constraints (timeline)", () => {
+    // Emulates 060 - Timeline: pos maps 1:1 to x, track maps 1:42 to y
+    const TRACK_H = 36;
+    const GAP = 6;
+    const BLOCK_W = 80;
+    const TRACK_W = 340;
+    const NUM_TRACKS = 4;
+    const SCALE_Y = TRACK_H + GAP; // 42
+
+    const paramsToPoint = ([pos, track]: number[]) =>
+      Vec2(pos, track * SCALE_Y);
+
+    const constraints = ([pos, track]: number[]) => [
+      lessThan(0, pos),
+      lessThan(pos + BLOCK_W, TRACK_W),
+      lessThan(0, track),
+      lessThan(track, NUM_TRACKS - 1),
+    ];
+    const opts = { constraints };
+
+    it("converges at top-right corner", () => {
+      // Start in the middle, drag to the top-right corner
+      const m = new DistanceMinimizer([100, 1], 4);
+      const result = minimizeAndCheckStable(
+        m,
+        Vec2(400, -50),
+        paramsToPoint,
+        opts,
+      );
+      expect(result[0]).toBeCloseTo(TRACK_W - BLOCK_W); // 260
+      expect(result[1]).toBeCloseTo(0);
+    });
+
+    it("does not oscillate when held past the top-right corner", () => {
+      const m = new DistanceMinimizer([100, 1], 4);
+      // Drag toward the corner over several frames
+      for (let i = 0; i < 5; i++) {
+        const t = i / 4;
+        m.minimize(Vec2(100 + 200 * t, (1 - t) * SCALE_Y), paramsToPoint, opts);
+      }
+      // Now hold the pointer well past the top-right corner
+      const target = Vec2(500, -100);
+      const results: number[][] = [];
+      for (let i = 0; i < 20; i++) {
+        results.push(m.minimize(target, paramsToPoint, opts));
+      }
+      // Every frame should produce the same result
+      for (let i = 1; i < results.length; i++) {
+        expect(results[i][0]).toBeCloseTo(results[0][0]);
+        expect(results[i][1]).toBeCloseTo(results[0][1]);
+      }
+      // And it should be at the corner
+      expect(results[0][0]).toBeCloseTo(TRACK_W - BLOCK_W);
+      expect(results[0][1]).toBeCloseTo(0);
+    });
+
+    it("stays at the corner when pointer sweeps past it", () => {
+      const m = new DistanceMinimizer([200, 0], 4);
+      // Warm up near the right edge, top track
+      m.minimize(Vec2(260, -20), paramsToPoint, opts);
+
+      // Sweep the pointer past the corner in an arc — the constrained
+      // optimum should stay pinned at (260, 0) throughout.
+      for (let i = 0; i < 30; i++) {
+        const angle = (Math.PI / 2) * (i / 29); // 0 to π/2
+        const target = Vec2(
+          TRACK_W - BLOCK_W + 80 * Math.cos(angle),
+          -80 * Math.sin(angle),
+        );
+        const result = m.minimize(target, paramsToPoint, opts);
+        expect(result[0]).toBeCloseTo(TRACK_W - BLOCK_W);
+        expect(result[1]).toBeCloseTo(0);
+      }
+    });
+  });
+
   describe.todo("Cassini oval constraint", () => {
     // Matches the point-on-curve demo exactly:
     // center=(200,150), scale=100, a=1.1, c=1

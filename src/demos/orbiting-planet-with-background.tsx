@@ -1,5 +1,6 @@
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 
 import { demo } from "../demo";
 import { translate } from "../svgx/helpers";
@@ -72,21 +73,24 @@ const draggable: Draggable<State> = ({ state, d }) => {
       <g
         id="planet"
         transform={translate(planetX, planetY)}
-        data-z-index={1}
-        dragology={() => {
+        dragologyZIndex={1}
+        dragologyOnDrag={() => {
           const angle = state.mode === "orbiting" ? state.angle : 0;
           return d
             .closest(
               STARS.map((_, starIdx) =>
                 d.vary(
                   { mode: "orbiting" as const, currentStar: starIdx, angle },
-                  [["angle"]],
+                  param("angle"),
                 ),
               ),
             )
             .whenFar(
-              d.vary({ mode: "free", x: planetX, y: planetY }, [["x"], ["y"]]),
-              { distance: 50 },
+              d.vary({ mode: "free", x: planetX, y: planetY }, [
+                param("x"),
+                param("y"),
+              ]),
+              { gap: 50 },
             );
         }}
       >

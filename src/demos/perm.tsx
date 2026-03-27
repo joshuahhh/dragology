@@ -24,8 +24,8 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           <g
             id={p}
             transform={translate(idx * TILE_SIZE, isDragged ? -10 : 0)}
-            data-z-index={isDragged ? 1 : 0}
-            dragology={() => {
+            dragologyZIndex={isDragged ? 1 : 0}
+            dragologyOnDrag={() => {
               const draggedIdx = state.perm.indexOf(p);
               return d.between(
                 _.range(state.perm.length).map((idx) =>

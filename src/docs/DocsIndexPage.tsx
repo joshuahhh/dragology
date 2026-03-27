@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
+import { useTitle } from "../useTitle";
 
 // Import all .mdx files from docs directory
 const mdxFiles = import.meta.glob("./*.mdx");
 
 export function DocsIndexPage() {
+  useTitle("Docs — Dragology");
   // Extract slugs from file paths
   const slugs = Object.keys(mdxFiles)
     .map((path) => {

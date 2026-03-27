@@ -2,6 +2,7 @@ import _ from "lodash";
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 import { rotateDeg, translate } from "../svgx/helpers";
 
 type State = { angle: number };
@@ -21,7 +22,7 @@ const draggable: Draggable<State> = ({ state, d }) => (
         stroke="#d1d5db"
         strokeWidth={2}
         filter="url(#shadow)"
-        dragology={() => d.vary(state, [["angle"]])}
+        dragologyOnDrag={() => d.vary(state, param("angle"))}
       />
       <line
         x1={0}

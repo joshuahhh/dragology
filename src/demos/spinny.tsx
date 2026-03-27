@@ -37,8 +37,8 @@ const draggable: Draggable<State> = ({ state, d }) => (
           transform={
             rotateDeg(angle) + translate(RADIUS, 0) + rotateDeg(-angle)
           }
-          data-z-index={1}
-          dragology={() => {
+          dragologyZIndex={1}
+          dragologyOnDrag={() => {
             const newState1 = produce(state, (s) => {
               s.perm.push(s.perm.shift()!);
             });
@@ -90,5 +90,5 @@ export default demo(
       />
     </div>
   ),
-  { tags: ["spec.withSnapRadius [w/chain]", "d.between", "reordering"] },
+  { tags: ["spec.withSnapRadius [chain]", "d.between", "reordering"] },
 );

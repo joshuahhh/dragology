@@ -59,21 +59,21 @@ function draggableFactory(config: Config): Draggable<State> {
       {drawState(state, boardLevel, cellSize)}
       <rect
         id="missing-square"
-        data-z-index={1}
+        dragologyZIndex={1}
         transform={translate(state.missingSquare.mul(cellSize).add(padding))}
         width={cellSize - 2 * padding}
         height={cellSize - 2 * padding}
         fill="black"
-        dragology={() => {
+        dragologyOnDrag={() => {
           if (config.mazeMode) {
             const singleRotations = singleRotationStates(state, boardLevel);
             return config.snappyMode
               ? d
-                  .closest(state, singleRotations)
+                  .closest([state, singleRotations])
                   .withFloating({ ghost: { opacity: 0.2 } })
                   .withChaining()
               : d
-                  .closest(singleRotations.map((s) => d.between(state, s)))
+                  .closest(singleRotations.map((s) => d.between([state, s])))
                   .withSnapRadius(1, { chain: true });
           } else {
             const all = allStates(boardLevel);
@@ -268,11 +268,11 @@ export default demo(
   },
   {
     tags: [
-      "spec.withSnapRadius [w/chain]",
+      "spec.withSnapRadius [chain]",
       "math",
       "fancy",
       "d.closest",
-      "spec.withFloating [w/ghost]",
+      "spec.withFloating [ghost]",
       "d.between",
       "spec.withChaining",
       "puzzle",

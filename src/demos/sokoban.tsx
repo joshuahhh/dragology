@@ -1,5 +1,6 @@
 import _ from "lodash";
 import { useMemo, useState } from "react";
+import { demo } from "../demo";
 import {
   ConfigCheckbox,
   ConfigPanel,
@@ -7,12 +8,10 @@ import {
   DemoWithConfig,
 } from "../demo/ui";
 import { Draggable } from "../draggable";
-
-import { demo } from "../demo";
 import { Vec2 } from "../math/vec2";
 import { inXYWH } from "../math/xywh";
 import { translate } from "../svgx/helpers";
-import { defined } from "../utils";
+import { defined } from "../utils/js";
 
 type GameObject = {
   type: "wall" | "box" | "goal";
@@ -107,7 +106,7 @@ function draggableFactory(config: Config): Draggable<State> {
               stroke="gray"
               strokeWidth={1}
               fill="none"
-              data-z-index={-5}
+              dragologyZIndex={-5}
             />
           )),
         )}
@@ -120,8 +119,8 @@ function draggableFactory(config: Config): Draggable<State> {
               object.pos.x * TILE_SIZE,
               object.pos.y * TILE_SIZE,
             )}
-            data-z-index={object.type === "goal" ? 1 : 0}
-            dragology={
+            dragologyZIndex={object.type === "goal" ? 1 : 0}
+            dragologyOnDrag={
               config.levelEditable
                 ? () =>
                     d
@@ -191,8 +190,8 @@ function draggableFactory(config: Config): Draggable<State> {
             state.player.x * TILE_SIZE,
             state.player.y * TILE_SIZE,
           )}
-          data-z-index={2}
-          dragology={() =>
+          dragologyZIndex={2}
+          dragologyOnDrag={() =>
             d
               .closest(
                 (
@@ -286,5 +285,5 @@ export default demo(
       </DemoWithConfig>
     );
   },
-  { tags: ["spec.withSnapRadius [w/chain]", "d.between", "puzzle"] },
+  { tags: ["spec.withSnapRadius [chain]", "d.between", "puzzle"] },
 );

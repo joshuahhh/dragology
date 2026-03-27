@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { demo } from "../demo";
 import {
+  ConfigCheckbox,
   ConfigPanel,
   ConfigSlider,
   DemoDraggable,
@@ -9,6 +10,8 @@ import {
   DemoWithConfig,
 } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
+import { inOrder } from "../math/optimization";
 import { Vec2 } from "../math/vec2";
 import { Svgx } from "../svgx";
 import { translate } from "../svgx/helpers";
@@ -27,7 +30,7 @@ const initialState: State = {
   tilt: 0,
 };
 
-function makeDraggable(levels: number): Draggable<State> {
+function makeDraggable(levels: number, tiltEnabled: boolean): Draggable<State> {
   return ({ state, d, draggedId, isTracking }) => {
     function dragon(
       p1: Vec2,
@@ -48,7 +51,15 @@ function makeDraggable(levels: number): Draggable<State> {
             stroke="black"
             strokeWidth={4}
             strokeLinecap="round"
-            dragology={() => d.vary(state, [["squareness"]])}
+            dragologyOnDrag={() =>
+              d.vary(
+                state,
+                [param("squareness"), tiltEnabled && param("tilt")],
+                {
+                  constraint: (s) => inOrder(-0.8, s.squareness, 0.8),
+                },
+              )
+            }
           />,
         ];
       } else {
@@ -73,11 +84,8 @@ function makeDraggable(levels: number): Draggable<State> {
           transform={translate(state.from)}
           r={8}
           fill="red"
-          dragology={() =>
-            d.vary(state, [
-              ["from", "x"],
-              ["from", "y"],
-            ])
+          dragologyOnDrag={() =>
+            d.vary(state, [param("from", "x"), param("from", "y")])
           }
         />
         <circle
@@ -85,11 +93,8 @@ function makeDraggable(levels: number): Draggable<State> {
           transform={translate(state.to)}
           r={8}
           fill="blue"
-          dragology={() =>
-            d.vary(state, [
-              ["to", "x"],
-              ["to", "y"],
-            ])
+          dragologyOnDrag={() =>
+            d.vary(state, [param("to", "x"), param("to", "y")])
           }
         />
       </g>
@@ -99,15 +104,18 @@ function makeDraggable(levels: number): Draggable<State> {
 
 export default demo(
   () => {
-    const [levels, setLevels] = useState(7);
-    const draggable = useMemo(() => makeDraggable(levels), [levels]);
+    const [levels, setLevels] = useState(9);
+    const [tiltEnabled, setTiltEnabled] = useState(true);
+    const draggable = useMemo(
+      () => makeDraggable(levels, tiltEnabled),
+      [levels, tiltEnabled],
+    );
     return (
       <div>
         <DemoNotes>
           Adapted from{" "}
           <DemoLink href="https://omrelli.ug/g9/">g9's famous example</DemoLink>
-          . Nice performance stress test (which we are failing; try larger
-          "Levels").
+          . Nice performance stress test.
         </DemoNotes>
         <DemoWithConfig>
           <DemoDraggable
@@ -123,6 +131,11 @@ export default demo(
               onChange={setLevels}
               min={1}
               max={13}
+            />
+            <ConfigCheckbox
+              label="Control tilt with drag"
+              value={tiltEnabled}
+              onChange={setTiltEnabled}
             />
           </ConfigPanel>
         </DemoWithConfig>

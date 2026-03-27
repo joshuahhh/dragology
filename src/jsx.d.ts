@@ -1,6 +1,5 @@
 import "react";
 import { DragSpecBrand } from "./DragSpec";
-import { DragParams } from "./draggable";
 
 declare module "react" {
   interface SVGAttributes<T> {
@@ -9,18 +8,16 @@ declare module "react" {
      * Set to a function returning a DragSpec.
      *
      * @example
-     * <circle dragology={() => d.vary(state, [["x"], ["y"]])} />
+     * <circle dragologyOnDrag={() => d.vary(state, [["x"], ["y"]])} />
      *
      * @example
-     * <rect dragology={() => d.between([state1, state2])} />
+     * <rect dragologyOnDrag={() => d.between([state1, state2])} />
      */
-    dragology?:
-      | ((params: DragParams) => DragSpecBrand)
-      | false
-      | null
-      | undefined;
+    dragologyOnDrag?: (() => DragSpecBrand) | false | null | undefined;
 
-    "data-z-index"?: number;
-    "data-transition"?: boolean;
+    dragologyZIndex?: number;
+    dragologyTransition?: boolean;
+    dragologyEmergeFrom?: string;
+    dragologyEmergeMode?: "clone" | "scale";
   }
 }

@@ -75,7 +75,7 @@ export function addParents(
 ): TreeNode {
   const n: TreeNode = {
     id: node.id,
-    parentId: parentId,
+    parentId,
     parent,
   } as TreeNode;
   n.children = node.children.map((child) => addParents(child, node.id, n));

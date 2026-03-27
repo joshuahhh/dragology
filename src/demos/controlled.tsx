@@ -1,7 +1,13 @@
 import { useCallback, useState } from "react";
 import { demo } from "../demo";
 import { DemoNotes } from "../demo/ui";
-import { and, Draggable, DraggableRenderer, lessThan, translate } from "../lib";
+import {
+  Draggable,
+  DraggableRenderer,
+  inOrder,
+  param,
+  translate,
+} from "../lib";
 
 type SwitchState = {
   value: boolean;
@@ -31,7 +37,7 @@ const switchDraggable: Draggable<SwitchState> = ({ state, d }) => (
       width={SQUARE_SIZE}
       height={SQUARE_SIZE}
       rx={4}
-      dragology={() =>
+      dragologyOnDrag={() =>
         d
           .between([{ value: true }, { value: false }])
           .withSnapRadius(10)
@@ -56,9 +62,9 @@ const sliderDraggable: Draggable<SliderState> = ({ state, d }) => (
       id="knob"
       transform={translate(state.t * 100, 10)}
       r={8}
-      dragology={() =>
-        d.vary(state, [["t"]], {
-          constraint: (s) => and(lessThan(0, s.t), lessThan(s.t, 1)),
+      dragologyOnDrag={() =>
+        d.vary(state, param("t"), {
+          constraint: (s) => inOrder(0, s.t, 1),
         })
       }
     />
@@ -135,15 +141,11 @@ const DoubleSwitchDemo = ({ handlerName }: DemoProps) => {
 const RejectionDemo = ({ handlerName }: DemoProps) => {
   const [state, setState] = useState<SwitchState>({ value: false });
 
-  const onDropState = useCallback(
-    (newState: SwitchState) => {
-      console.log("onDropState", newState, "old was", state.value);
-      if (newState.value === true) {
-        setState(newState);
-      }
-    },
-    [state.value],
-  );
+  const onDropState = useCallback((newState: SwitchState) => {
+    if (newState.value === true) {
+      setState(newState);
+    }
+  }, []);
 
   return (
     <>

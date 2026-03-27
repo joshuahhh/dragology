@@ -4,10 +4,9 @@ import * as d3Interpolate from "d3-interpolate";
 import { interpolatePath } from "d3-interpolate-path";
 import React, { cloneElement } from "react";
 import { shouldRecurseIntoChildren, Svgx } from ".";
-import { DRAGOLOGY_PROP_NAME } from "../draggable";
 import { ErrorWithJSX } from "../ErrorBoundary";
 import { lerp } from "../math/vec2";
-import { emptyToUndefined } from "../utils";
+import { objectKeys } from "../utils/js";
 import { LayeredSvgx } from "./layers";
 import { lerpTransformString } from "./transform";
 
@@ -26,7 +25,7 @@ const COLOR_PROPS = new Set([
 ]);
 
 // Color interpolator must be chosen carefully. When we do three-way
-// interpolation (via `lerpLayered3`), interpolators like
+// interpolation (via `lerpLayeredWeights`), interpolators like
 // `interpolateCubehelix` which do "shortest path between hues"
 // behave erratically. `interpolateCubehelixLong` is ok, and keeps
 // things vibrant, but it means you go through blue on the way from
@@ -213,8 +212,8 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
     );
   }
 
-  const propsA = a.props as any;
-  const propsB = b.props as any;
+  const propsA = a.props;
+  const propsB = b.props;
 
   // Lerp transform if present
   const transformA = propsA.transform || "";
@@ -223,13 +222,13 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
 
   // Lerp numeric props (x, y, width, height, etc.)
   const lerpedNumericProps: any = {};
-  const allPropKeys = new Set([...Object.keys(propsA), ...Object.keys(propsB)]);
+  const allPropKeys = new Set([...objectKeys(propsA), ...objectKeys(propsB)]);
 
   for (const key of allPropKeys) {
     if (key === "children" || key === "transform") continue;
     // TODO: audit handling of data- props
     if (key.startsWith("data-")) continue;
-    if (key === DRAGOLOGY_PROP_NAME) continue;
+    if (key.startsWith("dragology")) continue;
     if (/^on[A-Z]/.test(key)) continue;
     if (NO_LERP_PROPS.has(key)) continue;
 
@@ -246,8 +245,8 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
       const styleB = valB || {};
       const lerpedStyle: any = {};
       const allStyleKeys = new Set([
-        ...Object.keys(styleA),
-        ...Object.keys(styleB),
+        ...objectKeys(styleA),
+        ...objectKeys(styleB),
       ]);
 
       for (const styleKey of allStyleKeys) {
@@ -300,7 +299,7 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
   return React.cloneElement(a, {
     ...lerpedNumericProps,
     ...(lerpedTransform ? { transform: lerpedTransform } : {}),
-    children: emptyToUndefined(lerpedChildren),
+    children: lerpedChildren.length === 0 ? undefined : lerpedChildren,
   });
 }
 
@@ -314,9 +313,7 @@ type EmergeBounds = {
 
 /** Finds the first <rect>'s dimensions and first <text>'s y position (direct children only). */
 function findEmergeBounds(element: Svgx): EmergeBounds | null {
-  const children = React.Children.toArray(
-    (element.props as any).children,
-  ) as Svgx[];
+  const children = React.Children.toArray(element.props.children) as Svgx[];
 
   let rectWidth: number | null = null;
   let rectHeight: number | null = null;
@@ -324,6 +321,7 @@ function findEmergeBounds(element: Svgx): EmergeBounds | null {
 
   for (const child of children) {
     if (React.isValidElement(child)) {
+      // TODO: fix "as any" below
       if (child.type === "rect" && rectWidth === null) {
         const props = child.props as any;
         rectWidth = parseFloat(props.width);
@@ -352,7 +350,7 @@ function findEmergeBounds(element: Svgx): EmergeBounds | null {
 
 /** Clone element with modified first <rect> dimensions and first <text> y. */
 function cloneWithBounds(element: Svgx, bounds: EmergeBounds): Svgx {
-  const props = element.props as any;
+  const props = element.props;
   const children = React.Children.toArray(props.children) as Svgx[];
 
   let foundRect = false;
@@ -380,13 +378,13 @@ function cloneWithBounds(element: Svgx, bounds: EmergeBounds): Svgx {
  * Creates a synthetic "before" version of an emerging element.
  *
  * Strategy:
- * 1. If data-emerge-mode="clone", position at origin with full opacity (split/merge)
+ * 1. If dragologyEmergeMode="clone", position at origin with full opacity (split/merge)
  * 2. If both elements have rect+text structure, use bounds interpolation
  * 3. Otherwise, fall back to transform scale(0) + opacity 0
  */
 function createSyntheticBefore(newElement: Svgx, originElement: Svgx): Svgx {
-  const originTransform = (originElement.props as any).transform || "";
-  const emergeMode = (newElement.props as any)["data-emerge-mode"];
+  const originTransform = originElement.props.transform || "";
+  const emergeMode = newElement.props.dragologyEmergeMode;
 
   if (emergeMode === "clone") {
     const originBounds = findEmergeBounds(originElement);
@@ -423,7 +421,7 @@ function createSyntheticBefore(newElement: Svgx, originElement: Svgx): Svgx {
 }
 
 /**
- * For each element in `source` that has a `data-emerge-from` attribute and is
+ * For each element in `source` that has a `dragologyEmergeFrom` attribute and is
  * missing from `target`, inject a synthetic "before" version into `target`
  * using the referenced origin element from `origins`.
  */
@@ -434,9 +432,7 @@ function augmentWithEmerging(
 ) {
   for (const [key, val] of source) {
     if (!target.has(key)) {
-      const emergeFromId = (val.props as Record<string, unknown>)[
-        "data-emerge-from"
-      ];
+      const emergeFromId = val.props.dragologyEmergeFrom;
       if (emergeFromId && typeof emergeFromId === "string") {
         const originElement = origins.get(emergeFromId);
         if (originElement) {
@@ -501,13 +497,32 @@ export function lerpLayered(
   };
 }
 
-export function lerpLayered3(
-  a: LayeredSvgx,
-  b: LayeredSvgx,
-  c: LayeredSvgx,
-  { l0, l1, l2 }: { l0: number; l1: number; l2: number },
+/**
+ * Weighted interpolation of N LayeredSvgx values.
+ * `weights` maps index (into `items`) → weight; weights must sum to 1.
+ */
+export function lerpLayeredWeighted(
+  items: LayeredSvgx[],
+  weights: Map<number, number>,
 ): LayeredSvgx {
-  if (l0 + l1 < 1e-6) return c;
-  const ab = lerpLayered(a, b, l1 / (l0 + l1));
-  return lerpLayered(ab, c, l2);
+  // Sort entries so we fold deterministically.
+  const entries = [...weights.entries()]
+    .filter(([, w]) => w > 1e-10)
+    .sort((a, b) => a[0] - b[0]);
+
+  if (entries.length === 0) return items[0];
+  if (entries.length === 1) return items[entries[0][0]];
+
+  // Fold pairwise: accumulate = lerp(accumulate, next, next_weight / remaining_weight)
+  let acc = items[entries[0][0]];
+  let accWeight = entries[0][1];
+
+  for (let i = 1; i < entries.length; i++) {
+    const [idx, w] = entries[i];
+    const t = w / (accWeight + w);
+    acc = lerpLayered(acc, items[idx], t);
+    accWeight += w;
+  }
+
+  return acc;
 }

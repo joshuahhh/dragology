@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import { OpenInEditor } from "../demo/OpenInEditor";
 import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
+import { useTitle } from "../useTitle";
 import { ApiReference } from "./ApiReference";
 import { studiesById } from "./registry";
 
 export function SingleStudyPage({ id }: { id: string }) {
+  useTitle(`${id} — Dragology`);
   const study = studiesById.get(id);
 
   if (!study) {

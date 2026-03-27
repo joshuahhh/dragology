@@ -1,6 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 import { Vec2 } from "../math/vec2";
 import { translate } from "../svgx/helpers";
 
@@ -23,7 +24,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
         transform={translate(knobPos)}
         r={20}
         fill="black"
-        dragology={() => d.vary(state, [["angle"]])}
+        dragologyOnDrag={() => d.vary(state, param("angle"))}
       />
       <line
         {...center.xy1()}

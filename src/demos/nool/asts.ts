@@ -1,5 +1,7 @@
 import { produce } from "immer";
-import { assert, hasKey, templateLiteralTagOrNot } from "../../utils";
+import { templateLiteralTagOrNot } from "../../utils";
+import { assert } from "../../utils/assert";
+import { hasKey } from "../../utils/js";
 import * as PeggyPattern from "./peggy/pattern";
 
 export type Tree = {
@@ -11,7 +13,7 @@ export type Tree = {
   /** For new nodes created by expanding rewrites, the ID of the element they emerge from */
   emergeFrom?: string;
   /** Controls emerge animation style: "clone" for split/merge, undefined for default fade */
-  emergeMode?: string;
+  emergeMode?: "clone";
 };
 
 export function isOp(node: Tree): boolean {

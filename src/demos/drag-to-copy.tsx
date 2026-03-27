@@ -1,6 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 import { makeId } from "../utils";
 
@@ -34,7 +35,7 @@ const draggable: Draggable<State> = ({ state, d, setState }) => (
           const { [id]: _, ...rest } = state.dots;
           setState({ dots: rest });
         }}
-        dragology={() => {
+        dragologyOnDrag={() => {
           const copyId = makeId();
           const newState: State = {
             dots: {
@@ -49,8 +50,8 @@ const draggable: Draggable<State> = ({ state, d, setState }) => (
             newState,
             `dot-${copyId}`,
             d.vary(newState, [
-              ["dots", copyId, "x"],
-              ["dots", copyId, "y"],
+              param("dots", copyId, "x"),
+              param("dots", copyId, "y"),
             ]),
           );
         }}

@@ -73,8 +73,8 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           <g
             id={`column-${column.id}`}
             transform={translate(colX, 0)}
-            data-z-index={draggedId === `column-${column.id}` ? 5 : 0}
-            dragology={() =>
+            dragologyZIndex={draggedId === `column-${column.id}` ? 5 : 0}
+            dragologyOnDrag={() =>
               d.between([state, ...columnReorderStates]).withSnapRadius(20, {
                 transition: true,
               })
@@ -124,10 +124,10 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
                 <g
                   id={`card-${card.id}`}
                   transform={translate(COLUMN_PADDING, cardY)}
-                  data-z-index={
+                  dragologyZIndex={
                     isDragged ? 10 : draggedId === `column-${column.id}` ? 6 : 1
                   }
-                  dragology={() =>
+                  dragologyOnDrag={() =>
                     d.closest(cardMoveStates).withFloating({
                       ghost: { opacity: 0.3 },
                     })
@@ -175,7 +175,7 @@ export default demo(
     tags: [
       "d.between",
       "d.closest",
-      "spec.withFloating [w/ghost]",
+      "spec.withFloating [ghost]",
       "spec.withSnapRadius",
       "reordering",
     ],

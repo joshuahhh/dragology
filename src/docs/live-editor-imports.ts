@@ -5,12 +5,7 @@
 // Pull in jsx.d.ts so the compiler sees custom SVG attribute augmentations
 import "../jsx.d";
 
-export type {
-  DragParams,
-  Draggable,
-  DraggableProps,
-  SetState,
-} from "../draggable";
+export type { Draggable, DraggableProps, SetState } from "../draggable";
 
 export { lessThan } from "../DragSpec";
 export type {
@@ -25,7 +20,7 @@ export type { Transition, TransitionLike } from "../transition";
 
 export type { PathIn } from "../paths";
 
-export type { Many } from "../utils";
+export type { Many } from "../utils/flexible-types";
 
 export type { Svgx } from "../svgx";
 

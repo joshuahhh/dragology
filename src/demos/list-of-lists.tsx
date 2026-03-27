@@ -64,7 +64,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
               0,
               rowIdx * (TILE_SIZE + ROW_PADDING * 2 + ROW_GAP),
             )}
-            dragology={() => {
+            dragologyOnDrag={() => {
               const stateWithout = produce(state, (draft) => {
                 draft.rows.splice(rowIdx, 1);
               });
@@ -106,7 +106,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
             {row.items.map((p, idx) => (
               <g
                 id={p.id}
-                data-z-index={1}
+                dragologyZIndex={1}
                 transform={translate(
                   GRIP_WIDTH +
                     GRIP_PADDING +
@@ -114,7 +114,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
                     ROW_PADDING,
                   ROW_PADDING,
                 )}
-                dragology={() => {
+                dragologyOnDrag={() => {
                   const stateWithout = produce(state, (draft) => {
                     draft.rows[rowIdx].items.splice(idx, 1);
                   });

@@ -11,7 +11,7 @@ import {
   DemoDraggable,
   DemoWithConfig,
 } from "../../demo/ui";
-import { Draggable, DragologyPropValue } from "../../draggable";
+import { Draggable, OnDragCallback } from "../../draggable";
 import { DragSpecBuilder } from "../../DragSpec";
 import { Svgx } from "../../svgx";
 import { translate } from "../../svgx/helpers";
@@ -257,17 +257,17 @@ function renderNormalMode(
 ): Svgx {
   const activeRewrites = config.userRules;
 
-  function dragTargets(draggedKey: string): DragologyPropValue<State> {
+  function dragTargets(draggedKey: string): OnDragCallback<State> {
     const newTrees = allPossibleRewrites(
       state.tree,
       activeRewrites,
       draggedKey,
     );
     return () =>
-      d.closest(
-        d.between(state),
+      d.closest([
+        d.between([state]),
         ...newTrees.map((t) => d.fixed({ ...state, tree: t, gutter: [] })),
-      );
+      ]);
   }
 
   return renderNormalTree(state.tree, d, dragTargets, config, 0).element;
@@ -276,7 +276,7 @@ function renderNormalMode(
 function renderNormalTree(
   tree: Tree,
   d: DragSpecBuilder<State>,
-  dragTargets: (id: string) => DragologyPropValue<State>,
+  dragTargets: (id: string) => OnDragCallback<State>,
   config: Config,
   depth: number,
 ): { element: Svgx; w: number; h: number } {
@@ -311,12 +311,12 @@ function renderNormalTree(
   const element = (
     <g
       id={tree.id}
-      dragology={dragTargets(tree.id)}
-      data-z-index={depth}
-      data-emerge-from={
+      dragologyOnDrag={dragTargets(tree.id)}
+      dragologyZIndex={depth}
+      dragologyEmergeFrom={
         config.enableEmergeAnimation ? tree.emergeFrom : undefined
       }
-      data-emerge-mode={tree.emergeMode}
+      dragologyEmergeMode={tree.emergeMode}
     >
       <rect
         x={0}
@@ -357,7 +357,7 @@ function renderMacroTree(
   fullState: State,
   depth: number,
   opts?: {
-    rootDragology?: DragologyPropValue<State>;
+    rootDragology?: OnDragCallback<State>;
     rootTransform?: string;
     pointerEventsNone?: boolean;
     opacity?: number;
@@ -399,7 +399,7 @@ function renderMacroTree(
     : T_LABEL_MIN_HEIGHT;
 
   // Pick-up drag for freeform rearrangement
-  const pickUpDrag: DragologyPropValue<State> = () => {
+  const pickUpDrag: OnDragCallback<State> = () => {
     const nodeId = tree.id;
     const parentInfo = findParentAndIndex(fullState.tree, nodeId);
 
@@ -412,7 +412,7 @@ function renderMacroTree(
       };
       const gutterTargets = gutterInsertionTargets(stateWithout, tree);
       return d
-        .closest(gutterTargets, fullState)
+        .closest([gutterTargets, fullState])
         .whenFar(stateWithout)
         .withFloating();
     }
@@ -450,12 +450,12 @@ function renderMacroTree(
     const gutterTargets = gutterInsertionTargets(stateWithout, tree);
 
     return d
-      .closest(
+      .closest([
         insertTargets,
         swapTargets,
         gutterTargets,
         fullState, // put back
-      )
+      ])
       .whenFar(stateWithout)
       .withFloating();
   };
@@ -471,8 +471,8 @@ function renderMacroTree(
     <g
       id={tree.id}
       transform={opts?.rootTransform}
-      dragology={opts?.rootDragology || pickUpDrag}
-      data-z-index={zIndex}
+      dragologyOnDrag={opts?.rootDragology || pickUpDrag}
+      dragologyZIndex={zIndex}
       opacity={opts?.opacity}
     >
       <rect
@@ -578,7 +578,7 @@ function renderMacroMode(
         strokeDasharray="8,4"
         rx={12}
         id="macro-border"
-        data-z-index={-20}
+        dragologyZIndex={-20}
       />
 
       {/* Toolkit */}
@@ -592,7 +592,7 @@ function renderMacroMode(
         strokeWidth={1}
         rx={Math.min(14, 0.3 * Math.min(toolkitWidth, toolkitHeight))}
         id="macro-toolkit-bg"
-        data-z-index={-10}
+        dragologyZIndex={-10}
       />
       {toolkitItems.map(({ block, tree }, idx) => (
         <g transform={translate(TOOLKIT_PADDING, toolkitPositions[idx])}>
@@ -601,41 +601,37 @@ function renderMacroMode(
               pointerEventsNone: true,
               flatZIndex: true,
               opacity: insertionPoints.length > 0 ? undefined : 0.35,
-              rootDragology:
-                insertionPoints.length > 0
-                  ? () => {
-                      // Clone-and-refresh: new node gets original key,
-                      // toolkit item gets refreshed key so the dragged
-                      // element (original key) isn't anchored to toolkit
-                      const stateWithout = produce(state, (draft) => {
-                        draft.toolkit[idx].key += "-r";
-                      });
-                      const newNode: Tree = {
-                        id: block.key,
-                        label: block.label,
-                        children: [],
-                      };
-                      const points = allInsertionPoints(
-                        stateWithout.tree,
-                        (t) => isOp(t.label),
-                      );
-                      const targetStates: State[] = points.map(
-                        ({ parentId, index }) => ({
-                          ...stateWithout,
-                          tree: insertChild(
-                            stateWithout.tree,
-                            parentId,
-                            index,
-                            newNode,
-                          ),
-                        }),
-                      );
-                      return d
-                        .closest(targetStates)
-                        .whenFar(stateWithout)
-                        .withFloating();
-                    }
-                  : undefined,
+              rootDragology: () => {
+                // Clone-and-refresh: new node gets original key,
+                // toolkit item gets refreshed key so the dragged
+                // element (original key) isn't anchored to toolkit
+                const stateWithout = produce(state, (draft) => {
+                  draft.toolkit[idx].key += "-r";
+                });
+                const newNode: Tree = {
+                  id: block.key,
+                  label: block.label,
+                  children: [],
+                };
+                const points = allInsertionPoints(stateWithout.tree, (t) =>
+                  isOp(t.label),
+                );
+                const targetStates: State[] = points.map(
+                  ({ parentId, index }) => ({
+                    ...stateWithout,
+                    tree: insertChild(
+                      stateWithout.tree,
+                      parentId,
+                      index,
+                      newNode,
+                    ),
+                  }),
+                );
+                return d
+                  .closest(targetStates)
+                  .whenFar(stateWithout)
+                  .withFloating();
+              },
             }).element
           }
         </g>
@@ -657,7 +653,7 @@ function renderMacroMode(
             Math.min(gutterContentWidth, Math.max(gutterHeight, toolkitHeight)),
         )}
         id="macro-gutter-bg"
-        data-z-index={-10}
+        dragologyZIndex={-10}
       />
       {gutterItemData.map(
         ({ block }, idx) =>
@@ -686,7 +682,7 @@ function renderMacroMode(
                 block,
               );
               return d
-                .closest(placeTargets, reorderTargets)
+                .closest([placeTargets, reorderTargets])
                 .whenFar(stateWithout)
                 .withFloating();
             },
@@ -873,6 +869,12 @@ export default demo(
     );
   },
   {
-    tags: ["d.between", "d.closest", "spec.withFloating", "spec.whenFar"],
+    tags: [
+      "d.between",
+      "d.closest",
+      "spec.withFloating",
+      "spec.whenFar",
+      "dragologyEmergeFrom",
+    ],
   },
 );

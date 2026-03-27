@@ -2,7 +2,7 @@ import _ from "lodash";
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { lessThan } from "../DragSpec";
+import { lessThan, param } from "../DragSpec";
 import { Vec2 } from "../math/vec2";
 import { translate } from "../svgx/helpers";
 
@@ -53,8 +53,10 @@ const draggable: Draggable<State> = ({ state, d }) => {
         transform={translate(state)}
         r={14}
         fill="black"
-        dragology={() =>
-          d.vary(state, [["x"], ["y"]], { constraint: polygonConstraint })
+        dragologyOnDrag={() =>
+          d.vary(state, [param("x"), param("y")], {
+            constraint: polygonConstraint,
+          })
         }
       />
     </g>
@@ -70,5 +72,5 @@ export default demo(
       height={300}
     />
   ),
-  { tags: ["d.vary [w/constraint]"] },
+  { tags: ["d.vary [constraint]"] },
 );

@@ -32,7 +32,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           {row.map((p, idx) => (
             <g
               id={p}
-              data-z-index={
+              dragologyZIndex={
                 p === draggedId
                   ? 2
                   : draggedRow && row.includes(draggedId!)
@@ -40,7 +40,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
                     : 0
               }
               transform={translate(idx * TILE_SIZE + ROW_PADDING, ROW_PADDING)}
-              dragology={() => {
+              dragologyOnDrag={() => {
                 const draggedRowIdx = state.rows.findIndex((r) =>
                   r.includes(p),
                 );

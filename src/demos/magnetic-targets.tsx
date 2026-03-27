@@ -45,13 +45,11 @@ const draggable: Draggable<State> = ({ state, d }) => {
         fill="#333"
         stroke="white"
         strokeWidth={2}
-        data-z-index={2}
-        dragology={() =>
+        dragologyZIndex={2}
+        dragologyOnDrag={() =>
           d.closest(
             targets.map((t, i) =>
-              d
-                .fixed({ current: i })
-                .changeDistance((dist) => dist * t.strength),
+              d.fixed({ current: i }).changeGap((dist) => dist * t.strength),
             ),
           )
         }
@@ -64,9 +62,9 @@ export default demo(
   () => (
     <div>
       <DemoNotes>
-        <span className="font-mono">changeDistance</span> reweights distances
-        going into a <span className="font-mono">d.closest</span>, resulting in
-        some funny drop zones. (Take a look with the "Drop zones" viewer!)
+        <span className="font-mono">changeGap</span> reweights gaps going into a{" "}
+        <span className="font-mono">d.closest</span>, resulting in some funny
+        drop zones. (Take a look with the "Drop zones" viewer!)
       </DemoNotes>
       <DemoDraggable
         draggable={draggable}
@@ -76,5 +74,5 @@ export default demo(
       />
     </div>
   ),
-  { tags: ["d.closest", "d.fixed", "spec.changeDistance"] },
+  { tags: ["d.closest", "d.fixed", "spec.changeGap"] },
 );

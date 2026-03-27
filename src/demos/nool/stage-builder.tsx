@@ -15,19 +15,13 @@ import { produce } from "immer";
 import _ from "lodash";
 import { demo } from "../../demo";
 import { DemoDraggable } from "../../demo/ui";
-import { Draggable, DragologyPropValue } from "../../draggable";
+import { Draggable, OnDragCallback } from "../../draggable";
 import { DragSpecBuilder } from "../../DragSpec";
+import { altKey } from "../../modifierKeys";
 import { Svgx } from "../../svgx";
 import { translate } from "../../svgx/helpers";
 import { Pattern, Rewrite, Tree } from "./asts";
 import {
-  OP_DEFS,
-  T_EMPTY_CHILD_H,
-  T_EMPTY_CHILD_W,
-  T_GAP,
-  T_LABEL_MIN_HEIGHT,
-  T_LABEL_WIDTH,
-  T_PADDING,
   allInsertionPointsInTrees,
   arityOk,
   cloneTreeWithFreshIds,
@@ -37,9 +31,16 @@ import {
   insertInTrees,
   isOp,
   isRewriteArrow,
+  OP_DEFS,
   removeInTrees,
   replaceInTrees,
   swapChildrenAtParent,
+  T_EMPTY_CHILD_H,
+  T_EMPTY_CHILD_W,
+  T_GAP,
+  T_LABEL_MIN_HEIGHT,
+  T_LABEL_WIDTH,
+  T_PADDING,
   treeSize,
 } from "./nool-tree";
 
@@ -222,33 +223,35 @@ function makePickupDrag(
   d: DragSpecBuilder<State>,
   fullState: State,
   treeIdx: number,
-): DragologyPropValue<State> | undefined {
+): OnDragCallback<State> | undefined {
   const isHole = tree.label === "◯";
   if (isHole) return undefined;
 
-  return ({ altKey }) => {
+  return () => {
     const nodeId = tree.id;
     const thisTree = fullState.trees[treeIdx];
     const parentInfo = findParentAndIndex(thisTree, nodeId);
 
-    if (altKey) {
-      const clone = cloneTreeWithFreshIds(tree);
-      const stateWithClone: State = {
-        ...fullState,
-        trees: replaceInTrees(fullState.trees, treeIdx, nodeId, clone),
-      };
-      const cloneHoles = new Set(findAllHoles(clone));
-      const availableHoles = findAllHolesInTrees(stateWithClone.trees).filter(
-        ({ holeId }) => !cloneHoles.has(holeId),
-      );
-      const holeTargets = availableHoles.map(({ treeIdx: ti, holeId }) =>
-        removeStageHoles({
-          ...stateWithClone,
-          trees: replaceInTrees(stateWithClone.trees, ti, holeId, tree),
-        }),
-      );
-      const insertTargets = allInsertionPointsInTrees(stateWithClone.trees).map(
-        ({ treeIdx: ti, parentId, index }) =>
+    return d.reactTo(altKey, (altKey) => {
+      if (altKey) {
+        const clone = cloneTreeWithFreshIds(tree);
+        const stateWithClone: State = {
+          ...fullState,
+          trees: replaceInTrees(fullState.trees, treeIdx, nodeId, clone),
+        };
+        const cloneHoles = new Set(findAllHoles(clone));
+        const availableHoles = findAllHolesInTrees(stateWithClone.trees).filter(
+          ({ holeId }) => !cloneHoles.has(holeId),
+        );
+        const holeTargets = availableHoles.map(({ treeIdx: ti, holeId }) =>
+          removeStageHoles({
+            ...stateWithClone,
+            trees: replaceInTrees(stateWithClone.trees, ti, holeId, tree),
+          }),
+        );
+        const insertTargets = allInsertionPointsInTrees(
+          stateWithClone.trees,
+        ).map(({ treeIdx: ti, parentId, index }) =>
           removeStageHoles({
             ...stateWithClone,
             trees: insertInTrees(
@@ -259,118 +262,125 @@ function makePickupDrag(
               tree,
             ),
           }),
-      );
-      const paletteTargets = fullState.paletteExpanded
-        ? paletteInsertionTargets(stateWithClone, tree).map(removeStageHoles)
-        : [];
-      const stageTargets = emptyStageTarget(stateWithClone, tree);
-      return d
-        .closest(
-          holeTargets,
-          insertTargets,
-          paletteTargets,
-          stageTargets,
-          fullState,
-        )
-        .withFloating()
-        .whenFar(d.floating(stateWithClone));
-    }
-
-    // Backdrop: variadic parent → splice out, fixed parent → leave ◯ hole
-    let stateWithout: State;
-    let pickupHoleId: string | null = null;
-    if (parentInfo && parentInfo.parent.variadic) {
-      stateWithout = {
-        ...fullState,
-        trees: removeInTrees(
-          fullState.trees,
-          treeIdx,
-          parentInfo.parent.id,
-          parentInfo.index,
-        ),
-      };
-    } else {
-      pickupHoleId = `pickup-${nextPickupId++}`;
-      const hole: Tree = { id: pickupHoleId, label: "◯", children: [] };
-      stateWithout = {
-        ...fullState,
-        trees: replaceInTrees(fullState.trees, treeIdx, nodeId, hole),
-      };
-    }
-
-    const allHoles = findAllHolesInTrees(stateWithout.trees).filter(
-      ({ holeId }) => holeId !== pickupHoleId,
-    );
-    const holeTargets = allHoles.map(({ treeIdx: ti, holeId }) =>
-      removeStageHoles({
-        ...stateWithout,
-        trees: replaceInTrees(stateWithout.trees, ti, holeId, tree),
-      }),
-    );
-
-    const insertTargets = allInsertionPointsInTrees(stateWithout.trees).map(
-      ({ treeIdx: ti, parentId, index }) =>
-        removeStageHoles({
-          ...stateWithout,
-          trees: insertInTrees(stateWithout.trees, ti, parentId, index, tree),
-        }),
-    );
-
-    const swapTargets: State[] = [];
-    if (parentInfo) {
-      const { parent, index } = parentInfo;
-      for (let i = 0; i < parent.children.length; i++) {
-        if (i !== index && parent.children[i].label !== "◯") {
-          swapTargets.push({
-            ...fullState,
-            trees: fullState.trees.map((t, ti) =>
-              ti === treeIdx ? swapChildrenAtParent(t, parent.id, index, i) : t,
-            ),
-          });
-        }
-      }
-    }
-
-    const paletteTargets = fullState.paletteExpanded
-      ? paletteInsertionTargets(stateWithout, tree).map(removeStageHoles)
-      : [];
-    // Clean up bare pickup hole, offer "put back on stage" only if stage is now empty.
-    const cleanedWithout = removeStageHoles(stateWithout);
-    const stageTargets = emptyStageTarget(cleanedWithout, tree);
-    const newVoidStack = [tree, ...fullState.voidStack].slice(0, 10);
-    const eraseState: State = {
-      ...stateWithout,
-      voided: tree,
-      voidStack: newVoidStack,
-    };
-    const cleanState: State = {
-      ...stateWithout,
-      voided: undefined,
-      voidStack: newVoidStack,
-    };
-
-    return d
-      .closest(
-        d
-          .closest(
+        );
+        const paletteTargets = fullState.paletteExpanded
+          ? paletteInsertionTargets(stateWithClone, tree).map(removeStageHoles)
+          : [];
+        const stageTargets = emptyStageTarget(stateWithClone, tree);
+        return d
+          .closest([
             holeTargets,
             insertTargets,
-            swapTargets,
             paletteTargets,
             stageTargets,
             fullState,
-          )
-          .withFloating(),
-        d
-          .floating(removeStageHoles(eraseState))
-          .onDrop(removeStageHoles(cleanState)),
-      )
-      .whenFar(
-        d.floating(cleanedWithout).onDrop({
-          ...cleanedWithout,
-          voidStack: newVoidStack,
+          ])
+          .withFloating()
+          .whenFar(d.fixed(stateWithClone).withFloating());
+      }
+
+      // Backdrop: variadic parent → splice out, fixed parent → leave ◯ hole
+      let stateWithout: State;
+      let pickupHoleId: string | null = null;
+      if (parentInfo && parentInfo.parent.variadic) {
+        stateWithout = {
+          ...fullState,
+          trees: removeInTrees(
+            fullState.trees,
+            treeIdx,
+            parentInfo.parent.id,
+            parentInfo.index,
+          ),
+        };
+      } else {
+        pickupHoleId = `pickup-${nextPickupId++}`;
+        const hole: Tree = { id: pickupHoleId, label: "◯", children: [] };
+        stateWithout = {
+          ...fullState,
+          trees: replaceInTrees(fullState.trees, treeIdx, nodeId, hole),
+        };
+      }
+
+      const allHoles = findAllHolesInTrees(stateWithout.trees).filter(
+        ({ holeId }) => holeId !== pickupHoleId,
+      );
+      const holeTargets = allHoles.map(({ treeIdx: ti, holeId }) =>
+        removeStageHoles({
+          ...stateWithout,
+          trees: replaceInTrees(stateWithout.trees, ti, holeId, tree),
         }),
       );
+
+      const insertTargets = allInsertionPointsInTrees(stateWithout.trees).map(
+        ({ treeIdx: ti, parentId, index }) =>
+          removeStageHoles({
+            ...stateWithout,
+            trees: insertInTrees(stateWithout.trees, ti, parentId, index, tree),
+          }),
+      );
+
+      const swapTargets: State[] = [];
+      if (parentInfo) {
+        const { parent, index } = parentInfo;
+        for (let i = 0; i < parent.children.length; i++) {
+          if (i !== index && parent.children[i].label !== "◯") {
+            swapTargets.push({
+              ...fullState,
+              trees: fullState.trees.map((t, ti) =>
+                ti === treeIdx
+                  ? swapChildrenAtParent(t, parent.id, index, i)
+                  : t,
+              ),
+            });
+          }
+        }
+      }
+
+      const paletteTargets = fullState.paletteExpanded
+        ? paletteInsertionTargets(stateWithout, tree).map(removeStageHoles)
+        : [];
+      // Clean up bare pickup hole, offer "put back on stage" only if stage is now empty.
+      const cleanedWithout = removeStageHoles(stateWithout);
+      const stageTargets = emptyStageTarget(cleanedWithout, tree);
+      const newVoidStack = [tree, ...fullState.voidStack].slice(0, 10);
+      const eraseState: State = {
+        ...stateWithout,
+        voided: tree,
+        voidStack: newVoidStack,
+      };
+      const cleanState: State = {
+        ...stateWithout,
+        voided: undefined,
+        voidStack: newVoidStack,
+      };
+
+      return d
+        .closest([
+          d
+            .closest([
+              holeTargets,
+              insertTargets,
+              swapTargets,
+              paletteTargets,
+              stageTargets,
+              fullState,
+            ])
+            .withFloating(),
+          d
+            .fixed(removeStageHoles(eraseState))
+            .withFloating()
+            .onDrop(removeStageHoles(cleanState)),
+        ])
+        .whenFar(
+          d
+            .fixed(cleanedWithout)
+            .withFloating()
+            .onDrop({
+              ...cleanedWithout,
+              voidStack: newVoidStack,
+            }),
+        );
+    });
   };
 }
 
@@ -381,7 +391,7 @@ function makeBrushDrag(
   brushIdx: number,
   allHoles: { treeIdx: number; holeId: string }[],
   allInsertPts: { treeIdx: number; parentId: string; index: number }[],
-): DragologyPropValue<State> {
+): OnDragCallback<State> {
   return () => {
     const stateWithout = produce(state, (draft) => {
       draft.brushes[brushIdx].key += "-r";
@@ -415,7 +425,7 @@ function makeBrushDrag(
       : [];
 
     return d
-      .closest(holeTargets, insertTargets, stageTargets, paletteTargets)
+      .closest([holeTargets, insertTargets, stageTargets, paletteTargets])
       .whenFar(stateWithout)
       .withFloating();
   };
@@ -426,21 +436,23 @@ function makePaletteDrag(
   d: DragSpecBuilder<State>,
   block: Tree,
   idx: number,
-): DragologyPropValue<State> {
-  return ({ altKey }) => {
-    if (altKey) {
-      const stateWithClone = produce(state, (draft) => {
-        draft.palette[idx] = cloneTreeWithFreshIds(block);
-      });
-      const holes = findAllHolesInTrees(stateWithClone.trees);
-      const placeTargets = holes.map(({ treeIdx: ti, holeId }) =>
-        removeStageHoles({
-          ...stateWithClone,
-          trees: replaceInTrees(stateWithClone.trees, ti, holeId, block),
-        }),
-      );
-      const insertTargets = allInsertionPointsInTrees(stateWithClone.trees).map(
-        ({ treeIdx: ti, parentId, index }) =>
+): OnDragCallback<State> {
+  return () =>
+    d.reactTo(altKey, (altKey) => {
+      if (altKey) {
+        const stateWithClone = produce(state, (draft) => {
+          draft.palette[idx] = cloneTreeWithFreshIds(block);
+        });
+        const holes = findAllHolesInTrees(stateWithClone.trees);
+        const placeTargets = holes.map(({ treeIdx: ti, holeId }) =>
+          removeStageHoles({
+            ...stateWithClone,
+            trees: replaceInTrees(stateWithClone.trees, ti, holeId, block),
+          }),
+        );
+        const insertTargets = allInsertionPointsInTrees(
+          stateWithClone.trees,
+        ).map(({ treeIdx: ti, parentId, index }) =>
           removeStageHoles({
             ...stateWithClone,
             trees: insertInTrees(
@@ -451,67 +463,88 @@ function makePaletteDrag(
               block,
             ),
           }),
-      );
-      const stageTargets = emptyStageTarget(stateWithClone, block);
-      const palTargets = paletteInsertionTargets(stateWithClone, block);
-      return d
-        .closest(placeTargets, insertTargets, stageTargets, palTargets, state)
-        .whenFar(stateWithClone)
-        .withFloating();
-    }
+        );
+        const stageTargets = emptyStageTarget(stateWithClone, block);
+        const palTargets = paletteInsertionTargets(stateWithClone, block);
+        return d
+          .closest([
+            placeTargets,
+            insertTargets,
+            stageTargets,
+            palTargets,
+            state,
+          ])
+          .whenFar(stateWithClone)
+          .withFloating();
+      }
 
-    const stateWithout = produce(state, (draft) => {
-      draft.palette.splice(idx, 1);
-    });
-    const holes = findAllHolesInTrees(stateWithout.trees);
-    const placeTargets = holes.map(({ treeIdx: ti, holeId }) =>
-      removeStageHoles({
-        ...stateWithout,
-        trees: replaceInTrees(stateWithout.trees, ti, holeId, block),
-      }),
-    );
-    const insertTargets = allInsertionPointsInTrees(stateWithout.trees).map(
-      ({ treeIdx: ti, parentId, index }) =>
+      const stateWithout = produce(state, (draft) => {
+        draft.palette.splice(idx, 1);
+      });
+      const holes = findAllHolesInTrees(stateWithout.trees);
+      const placeTargets = holes.map(({ treeIdx: ti, holeId }) =>
         removeStageHoles({
           ...stateWithout,
-          trees: insertInTrees(stateWithout.trees, ti, parentId, index, block),
-        }),
-    );
-    const stageTargets = emptyStageTarget(stateWithout, block);
-    const reorderTargets = paletteInsertionTargets(stateWithout, block);
-    const newVoidStack = [block, ...state.voidStack].slice(0, 10);
-    const eraseState: State = {
-      ...stateWithout,
-      voided: block,
-      voidStack: newVoidStack,
-    };
-    const cleanState: State = {
-      ...stateWithout,
-      voided: undefined,
-      voidStack: newVoidStack,
-    };
-    return d
-      .closest(
-        d
-          .closest(placeTargets, insertTargets, stageTargets, reorderTargets)
-          .withFloating(),
-        d
-          .floating(removeStageHoles(eraseState))
-          .onDrop(removeStageHoles(cleanState)),
-      )
-      .whenFar(
-        d.floating(stateWithout).onDrop({
-          ...stateWithout,
-          voidStack: newVoidStack,
+          trees: replaceInTrees(stateWithout.trees, ti, holeId, block),
         }),
       );
-  };
+      const insertTargets = allInsertionPointsInTrees(stateWithout.trees).map(
+        ({ treeIdx: ti, parentId, index }) =>
+          removeStageHoles({
+            ...stateWithout,
+            trees: insertInTrees(
+              stateWithout.trees,
+              ti,
+              parentId,
+              index,
+              block,
+            ),
+          }),
+      );
+      const stageTargets = emptyStageTarget(stateWithout, block);
+      const reorderTargets = paletteInsertionTargets(stateWithout, block);
+      const newVoidStack = [block, ...state.voidStack].slice(0, 10);
+      const eraseState: State = {
+        ...stateWithout,
+        voided: block,
+        voidStack: newVoidStack,
+      };
+      const cleanState: State = {
+        ...stateWithout,
+        voided: undefined,
+        voidStack: newVoidStack,
+      };
+      return d
+        .closest([
+          d
+            .closest([
+              placeTargets,
+              insertTargets,
+              stageTargets,
+              reorderTargets,
+            ])
+            .withFloating(),
+          d
+            .fixed(removeStageHoles(eraseState))
+            .withFloating()
+            .onDrop(removeStageHoles(cleanState)),
+        ])
+        .whenFar(
+          d
+            .fixed(stateWithout)
+            .withFloating()
+            .onDrop({
+              ...stateWithout,
+              voidStack: newVoidStack,
+            }),
+        );
+    });
 }
 
 function makeVoidDrag(
   state: State,
   d: DragSpecBuilder<State>,
-): DragologyPropValue<State> | undefined {
+): OnDragCallback<State> | undefined {
   if (state.voidStack.length === 0) return undefined;
   const tree = state.voidStack[0];
   const stateWithout: State = {
@@ -546,9 +579,9 @@ function makeVoidDrag(
     const stageTargets = emptyStageTarget(stateWithout, tree);
 
     return d
-      .closest(holeTargets, insertTargets, paletteTargets, stageTargets)
+      .closest([holeTargets, insertTargets, paletteTargets, stageTargets])
       .withFloating()
-      .whenFar(d.floating(stateWithout).onDrop(state));
+      .whenFar(d.fixed(stateWithout).withFloating().onDrop(state));
   };
 }
 
@@ -563,7 +596,7 @@ function renderTree(
       treeIdx: number;
     };
     pointerEventsNone?: boolean;
-    rootDragology?: DragologyPropValue<State>;
+    rootDragology?: OnDragCallback<State>;
     rootTransform?: string;
     depth?: number;
     opacity?: number;
@@ -660,8 +693,8 @@ function renderTree(
     <g
       id={tree.id}
       transform={opts?.rootTransform}
-      dragology={opts?.rootDragology || pickUpDrag}
-      data-z-index={zIndex}
+      dragologyOnDrag={opts?.rootDragology || pickUpDrag}
+      dragologyZIndex={zIndex}
       opacity={opts?.opacity}
     >
       <rect
@@ -1034,7 +1067,7 @@ export const draggable: Draggable<State> = ({
         <g
           id={id}
           transform={translate(layout.x.menu + LANE_PADDING, y)}
-          dragology={() => {
+          dragologyOnDrag={() => {
             const others = state.bucketOrder.filter((s) => s !== bucket);
             const targets = _.range(others.length + 1).map((pos) => ({
               ...state,
@@ -1044,9 +1077,9 @@ export const draggable: Draggable<State> = ({
                 ...others.slice(pos),
               ],
             }));
-            return d.between(...targets);
+            return d.between(targets);
           }}
-          data-z-index={-5}
+          dragologyZIndex={-5}
           onClick={() =>
             setState({ ...state, [stateKey]: !active }, { transition: 0 })
           }
@@ -1076,7 +1109,7 @@ export const draggable: Draggable<State> = ({
           strokeWidth={1}
           strokeLinecap="round"
           id={`sep-${idx}`}
-          data-z-index={-10}
+          dragologyZIndex={-10}
         />
       ))}
 
@@ -1088,7 +1121,7 @@ export const draggable: Draggable<State> = ({
         r={4}
         fill={state.paletteExpanded ? "#999" : "#ddd"}
         data-palette-toggle={true}
-        data-z-index={-5}
+        dragologyZIndex={-5}
         onClick={() =>
           setState(
             { ...state, paletteExpanded: !state.paletteExpanded },
@@ -1107,7 +1140,7 @@ export const draggable: Draggable<State> = ({
           y2={y}
           stroke="#ddd"
           strokeWidth={1}
-          data-z-index={-10}
+          dragologyZIndex={-10}
         />
       ))}
 

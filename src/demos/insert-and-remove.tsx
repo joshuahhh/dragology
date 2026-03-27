@@ -3,29 +3,25 @@ import _ from "lodash";
 import { amb, produceAmb } from "../amb";
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
-import { Draggable } from "../draggable";
+import { Draggable, OnDragCallback } from "../draggable";
 import { translate } from "../svgx/helpers";
+import { makeId } from "../utils";
 
-type Tile = { key: string; label: string };
+type Tile = { id: string; label: string };
 
 type State = {
   items: Tile[];
-  store: Tile[];
-  deleted?: Tile;
 };
 
 const initialState: State = {
-  store: [
-    { key: "D", label: "\u{1F34E}" },
-    { key: "E", label: "\u{1F34C}" },
-    { key: "F", label: "\u{1F347}" },
-  ],
   items: [
-    { key: "A", label: "\u{1F34E}" },
-    { key: "B", label: "\u{1F34E}" },
-    { key: "C", label: "\u{1F34C}" },
+    { id: "A", label: "\u{1F34E}" },
+    { id: "B", label: "\u{1F34E}" },
+    { id: "C", label: "\u{1F34C}" },
   ],
 };
+
+const STORE_ITEMS = ["\u{1F34E}", "\u{1F34C}", "\u{1F347}"];
 
 const draggable: Draggable<State> = ({ state, d }) => {
   const TILE_SIZE = 50;
@@ -33,15 +29,15 @@ const draggable: Draggable<State> = ({ state, d }) => {
   const drawTile = ({
     tile,
     transform,
-    dragology,
+    dragologyOnDrag,
   }: {
     tile: Tile;
     transform: string;
-    dragology?: () => ReturnType<typeof d.closest>;
+    dragologyOnDrag?: OnDragCallback<State>;
   }) => {
-    const id = `tile-${tile.key}`;
+    const id = `tile-${tile.id}`;
     return (
-      <g id={id} transform={transform} dragology={dragology}>
+      <g id={id} transform={transform} dragologyOnDrag={dragologyOnDrag}>
         <rect
           x={0}
           y={0}
@@ -65,8 +61,22 @@ const draggable: Draggable<State> = ({ state, d }) => {
     );
   };
 
-  const toolbarWidth = state.store.length * TILE_SIZE + 20;
+  const toolbarWidth = STORE_ITEMS.length * TILE_SIZE + 20;
   const toolbarHeight = TILE_SIZE + 10;
+
+  const dropIntoListAndTrash = (state: State, tile: Tile) => {
+    const rearrangeStates = produceAmb(state, (draft) => {
+      const insertIdx = amb(_.range(draft.items.length + 1));
+      draft.items.splice(insertIdx, 0, tile);
+    });
+
+    return d.closest([
+      d.closest(rearrangeStates).withFloating(),
+      // we leave "withFloating" off this part, so we see the tile
+      // disappear
+      d.dropTarget("delete-bin", state),
+    ]);
+  };
 
   return (
     <g>
@@ -81,27 +91,29 @@ const draggable: Draggable<State> = ({ state, d }) => {
         strokeWidth={1}
         rx={4}
         id="toolbar-bg"
-        data-z-index={-10}
+        dragologyZIndex={-10}
       />
 
       {/* Store items */}
-      {state.store.map((tile, idx) =>
+      {STORE_ITEMS.map((label, idx) =>
         drawTile({
-          tile,
+          tile: { id: `store-${idx}`, label },
           transform: translate(5 + idx * TILE_SIZE, 0),
-          dragology: () => {
-            const storeItem = tile;
-
-            const stateWithout = produce(state, (draft) => {
-              draft.store[idx].key += "-1";
-            });
-
-            const statesWith = produceAmb(stateWithout, (draft) => {
-              const insertIdx = amb(_.range(state.items.length + 1));
-              draft.items.splice(insertIdx, 0, storeItem);
-            });
-
-            return d.closest(statesWith).whenFar(stateWithout).withFloating();
+          dragologyOnDrag: () => {
+            const newId = makeId();
+            return d.switchToStateAndFollow(
+              {
+                items: [...state.items, { id: newId, label }],
+              },
+              `tile-${newId}`,
+              // This is slightly different from dragging a tile
+              // that's already on the list: if we drag it far away,
+              // we want it to disappear, not "return" to the end of
+              // the list.
+              dropIntoListAndTrash(state, { id: newId, label }).whenFar(
+                d.fixed(state).withFloating(),
+              ),
+            );
           },
         }),
       )}
@@ -111,68 +123,43 @@ const draggable: Draggable<State> = ({ state, d }) => {
         drawTile({
           tile,
           transform: translate(idx * TILE_SIZE, toolbarHeight + 10),
-          dragology: () => {
+          dragologyOnDrag: () => {
             const draggedItem = tile;
 
             const stateWithout = produce(state, (draft) => {
               draft.items.splice(idx, 1);
             });
 
-            const rearrangeStates = produceAmb(stateWithout, (draft) => {
-              const insertIdx = amb(_.range(draft.items.length + 1));
-              draft.items.splice(insertIdx, 0, draggedItem);
-            });
-
-            const deleteState = produce(stateWithout, (draft) => {
-              draft.items.splice(idx, 1);
-              draft.deleted = draggedItem;
-            });
-            const postDeleteState = produce(deleteState, (draft) => {
-              draft.deleted = undefined;
-            });
-
-            return d
-              .closest(
-                rearrangeStates,
-                // This state needs "d.fixed" so we can call "onDrop"
-                d.fixed(deleteState).onDrop(postDeleteState),
-              )
-              .whenFar(stateWithout)
-              .withFloating();
+            return dropIntoListAndTrash(stateWithout, draggedItem).whenFar(
+              d.fixed(state).withFloating(),
+            );
           },
         }),
       )}
 
       {/* Deleted bin */}
-      <g transform={translate(230, 0)}>
-        <g>
-          <rect
-            x={0}
-            y={0}
-            width={TILE_SIZE}
-            height={TILE_SIZE}
-            fill="#fee"
-            stroke="#999"
-            strokeWidth={2}
-            strokeDasharray="4,4"
-            rx={4}
-          />
-          <text
-            x={TILE_SIZE / 2}
-            y={TILE_SIZE / 2}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize={30}
-            pointerEvents="none"
-          >
-            {"\u{1F5D1}"}
-          </text>
-        </g>
-        {state.deleted &&
-          drawTile({
-            tile: state.deleted,
-            transform: translate(0, 0),
-          })}
+      <g id="delete-bin" transform={translate(230, 0)}>
+        <rect
+          x={0}
+          y={0}
+          width={TILE_SIZE}
+          height={TILE_SIZE}
+          fill="#fee"
+          stroke="#999"
+          strokeWidth={2}
+          strokeDasharray="4,4"
+          rx={4}
+        />
+        <text
+          x={TILE_SIZE / 2}
+          y={TILE_SIZE / 2}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={30}
+          pointerEvents="none"
+        >
+          {"\u{1F5D1}"}
+        </text>
       </g>
     </g>
   );
@@ -182,8 +169,8 @@ export default demo(
   () => (
     <div>
       <DemoNotes>
-        This shows kinda-hacky ways to insert and remove items from a draggable.
-        Much to consider.
+        Here, we use d.switchToStateAndFollow for pulling tiles off the toolbar
+        and d.dropTarget for dropping them into the trash.
       </DemoNotes>
       <DemoDraggable
         draggable={draggable}
@@ -195,10 +182,10 @@ export default demo(
   ),
   {
     tags: [
-      "spec.onDrop",
+      "d.switchToStateAndFollow",
       "d.closest",
-      "d.fixed",
       "spec.withFloating",
+      "d.dropTarget",
       "spec.whenFar",
     ],
   },

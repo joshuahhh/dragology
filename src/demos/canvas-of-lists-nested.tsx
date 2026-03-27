@@ -1,10 +1,10 @@
 import { produce } from "immer";
 import _ from "lodash";
-import { SVGProps } from "react";
 import { amb, produceAmb } from "../amb";
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 import { getAtPath, PathIn } from "../paths";
 import { translate } from "../svgx/helpers";
 
@@ -26,7 +26,7 @@ const colors = [
   "#e8d4f0", // soft lavender
 ];
 
-const initialState: State = {
+export const initialState: State = {
   rows: [
     {
       type: "row",
@@ -75,49 +75,22 @@ const initialState: State = {
   ],
 };
 
-const draggable: Draggable<State> = ({ state, d, draggedId }) => {
+export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   const TILE_SIZE = 50;
   const TILE_GAP = 8;
   const ROW_PADDING = 8;
   const GRIP_WIDTH = 16;
   const GRIP_PADDING = 2;
 
-  function getItemWidth(item: Tile | Row): number {
-    if (item.type === "tile") {
-      return TILE_SIZE;
-    } else {
-      return getRowWidth(item);
-    }
-  }
-
-  function getRowWidth(row: Row): number {
-    const itemsWidth = row.items.reduce(
-      (acc, item) => acc + getItemWidth(item) + TILE_GAP,
-      -TILE_GAP,
-    );
-    return GRIP_WIDTH + GRIP_PADDING + itemsWidth + ROW_PADDING * 2;
-  }
-
-  function getRowHeight(row: Row): number {
-    const maxItemHeight = Math.max(
-      TILE_SIZE,
-      ...row.items.map((item) =>
-        item.type === "tile" ? TILE_SIZE : getRowHeight(item),
-      ),
-    );
-    return maxItemHeight + ROW_PADDING * 2;
-  }
-
   function renderItem(
     item: Tile | Row,
     itemsPath: PathIn<State, (Tile | Row)[]>,
     idx: number,
     zIndexBase: number,
-    attrs?: SVGProps<SVGGElement>,
-  ) {
+  ): { element: React.JSX.Element; width: number; height: number } {
     const isDragged = draggedId === item.id;
 
-    const dragology = () => {
+    const draglogyOnDrag = () => {
       // Remove item from current location
       const stateWithout = produce(state, (draft) => {
         const items = getAtPath<State, (Tile | Row)[]>(draft, itemsPath);
@@ -125,7 +98,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       });
 
       // Generate states for all possible placements
-      const statesWith = produceAmb(stateWithout, (draft) => {
+      const statesSnapped = produceAmb(stateWithout, (draft) => {
         let row: Row = amb(draft.rows);
         while (true) {
           if (amb([true, false])) break;
@@ -136,7 +109,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       });
 
       // Create backdrop state for floating mode
-      const stateWithTopRow = produce(stateWithout, (draft) => {
+      const stateAsTopRow = produce(stateWithout, (draft) => {
         if (item.type === "tile") {
           const newRowId = "row-" + Math.random().toString(36).slice(2);
           const newRowColor = colors[stateWithout.rows.length % colors.length];
@@ -154,12 +127,12 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       });
 
       return d
-        .closest(statesWith)
+        .closest(statesSnapped)
         .withFloating()
         .whenFar(
-          d.vary(stateWithTopRow, [
-            ["rows", stateWithTopRow.rows.length - 1, "x"],
-            ["rows", stateWithTopRow.rows.length - 1, "y"],
+          d.vary(stateAsTopRow, [
+            param("rows", stateAsTopRow.rows.length - 1, "x"),
+            param("rows", stateAsTopRow.rows.length - 1, "y"),
           ]),
         );
     };
@@ -167,12 +140,11 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
     const effectiveZIndex = isDragged ? zIndexBase + 10 : zIndexBase;
 
     if (item.type === "tile") {
-      return (
+      const element = (
         <g
           id={item.id}
-          data-z-index={effectiveZIndex}
-          dragology={dragology}
-          {...attrs}
+          dragologyZIndex={effectiveZIndex}
+          dragologyOnDrag={draglogyOnDrag}
         >
           <rect
             x={0}
@@ -197,19 +169,34 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           </text>
         </g>
       );
+      return { width: TILE_SIZE, height: TILE_SIZE, element };
     } else {
-      const rowHeight = getRowHeight(item);
+      // Render children first to get their dimensions
+      const children = item.items.map((child, childIdx) =>
+        renderItem(
+          child,
+          [...itemsPath, idx, "items"] as PathIn<State, (Tile | Row)[]>,
+          childIdx,
+          effectiveZIndex + 1,
+        ),
+      );
+
+      const rowHeight =
+        Math.max(TILE_SIZE, ...children.map((c) => c.height)) + ROW_PADDING * 2;
+      const itemsWidth =
+        _.sum(children.map((c) => c.width)) + TILE_GAP * (children.length - 1);
+      const rowWidth = GRIP_WIDTH + GRIP_PADDING + itemsWidth + ROW_PADDING * 2;
+
       let xOffset = GRIP_WIDTH + GRIP_PADDING + ROW_PADDING;
 
-      return (
+      const element = (
         <g
           id={item.id}
-          data-z-index={effectiveZIndex}
-          dragology={dragology}
-          {...attrs}
+          dragologyZIndex={effectiveZIndex}
+          dragologyOnDrag={draglogyOnDrag}
         >
           <rect
-            width={getRowWidth(item)}
+            width={rowWidth}
             height={rowHeight}
             fill={item.color}
             stroke="#aaa"
@@ -229,27 +216,31 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
               )),
             )}
           </g>
-          {item.items.map((child, childIdx) => {
+          {children.map((child, childIdx) => {
             const childX = xOffset;
-            xOffset += getItemWidth(child) + TILE_GAP;
-            return renderItem(
-              child,
-              [...itemsPath, idx, "items"] as PathIn<State, (Tile | Row)[]>,
-              childIdx,
-              effectiveZIndex + 1,
-              { transform: translate(childX, ROW_PADDING) },
+            xOffset += child.width + TILE_GAP;
+            return (
+              <g
+                id={`${item.id}-slot-${childIdx}`}
+                transform={translate(childX, ROW_PADDING)}
+              >
+                {child.element}
+              </g>
             );
           })}
         </g>
       );
+      return { width: rowWidth, height: rowHeight, element };
     }
   }
 
   return (
     <g>
-      {state.rows.map((row, rowIdx) =>
-        renderItem(row, ["rows"], rowIdx, 0, { transform: translate(row) }),
-      )}
+      {state.rows.map((row, rowIdx) => (
+        <g id={`row-slot-${rowIdx}`} transform={translate(row)}>
+          {renderItem(row, ["rows"], rowIdx, 0).element}
+        </g>
+      ))}
     </g>
   );
 };

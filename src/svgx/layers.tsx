@@ -1,7 +1,8 @@
 import React, { cloneElement, Fragment } from "react";
 import { FindElementResult, Svgx, updateElement, updatePropsDownTree } from ".";
-import { DRAGOLOGY_PROP_NAME } from "../draggable";
-import { assert, objectEntries } from "../utils";
+import { ErrorWithJSX } from "../ErrorBoundary";
+import { assert } from "../utils/assert";
+import { objectKeys } from "../utils/js";
 import { findByPath } from "./path";
 import { combineTransforms } from "./transform";
 
@@ -62,10 +63,10 @@ function extractIdNodes(
 ): Svgx | null {
   const props = element.props as any;
 
-  // Validate: data-z-index can only be set on nodes with ids
-  if (props["data-z-index"] !== undefined && !props.id) {
+  // Validate: dragologyZIndex can only be set on nodes with ids
+  if (props["dragologyZIndex"] !== undefined && !props.id) {
     throw new Error(
-      `data-z-index can only be set on elements with an id attribute. Found data-z-index="${props["data-z-index"]}" on <${element.type}> without id.`,
+      `dragologyZIndex can only be set on elements with an id attribute. Found dragologyZIndex="${props["dragologyZIndex"]}" on <${element.type}> without id.`,
     );
   }
 
@@ -124,8 +125,10 @@ export function drawLayered(layered: LayeredSvgx): Svgx {
     <>
       {Array.from(layered.byId.entries())
         .sort(([_keyA, elemA], [_keyB, elemB]) => {
-          const zIndexA = parseInt((elemA.props as any)["data-z-index"]) || 0;
-          const zIndexB = parseInt((elemB.props as any)["data-z-index"]) || 0;
+          const zIndexA =
+            parseInt((elemA.props as any)["dragologyZIndex"]) || 0;
+          const zIndexB =
+            parseInt((elemB.props as any)["dragologyZIndex"]) || 0;
           return zIndexA - zIndexB;
         })
         .map(([key, element]) => (
@@ -136,15 +139,12 @@ export function drawLayered(layered: LayeredSvgx): Svgx {
                 "Please use <g> rather than <Fragment> / <> in draggables.",
               );
 
-              // Strip non-serializable data- props (e.g. dragology functions)
+              // Strip 'dragologyXYZ' props
               const newProps: React.SVGProps<SVGElement> = {};
-              for (const [propName, propValue] of objectEntries(el.props)) {
-                if (
-                  (propName.startsWith("data-") ||
-                    propName === DRAGOLOGY_PROP_NAME) &&
-                  typeof propValue !== "string" &&
-                  typeof propValue !== "number"
-                ) {
+              for (const propName of objectKeys(el.props)) {
+                if (propName.startsWith("dragology")) {
+                  // For debugging, uncomment this and get dragology props as data props
+                  // (newProps as any)[`data-${propName}`] = el.props[propName];
                   newProps[propName] = undefined;
                 }
               }
@@ -161,7 +161,14 @@ export function layeredExtract(
   id: string,
 ): { remaining: LayeredSvgx; extracted: LayeredSvgx } {
   assert(layered.descendents !== null, "layered.descendents is null");
-  assert(layered.byId.has(id), `Layered SVG does not contain id "${id}"`);
+  if (!layered.byId.has(id)) {
+    throw new ErrorWithJSX(
+      `Layered SVG does not contain id "${id}"`,
+      <p>
+        Available ids: <code>{[...layered.byId.keys()].join(", ")}</code>
+      </p>,
+    );
+  }
 
   // Collect the ID and all its descendants
   const extractedIds = new Set([id]);
@@ -266,10 +273,10 @@ export function layeredShiftZIndices(
   const shiftedById = new Map<string, Svgx>();
   for (const [key, element] of layered.byId.entries()) {
     const props = element.props as any;
-    const zIndex = parseInt(props["data-z-index"]) || 0;
+    const zIndex = parseInt(props["dragologyZIndex"]) || 0;
     const newZIndex = zIndex + shift;
     const shiftedElement = cloneElement(element, {
-      "data-z-index": newZIndex,
+      dragologyZIndex: newZIndex,
     });
     shiftedById.set(key, shiftedElement);
   }

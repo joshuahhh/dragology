@@ -3,6 +3,7 @@ import { amb, produceAmb, require } from "../amb";
 import { arrowhead } from "../arrows";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 
 import { demo } from "../demo";
 import { Vec2 } from "../math/vec2";
@@ -88,21 +89,21 @@ const draggable: Draggable<State> = ({ state, d }) => {
               headLength: arrowHeadLength,
               id: `head-${key}`,
               fill: "black",
-              dragology: () =>
+              dragologyOnDrag: () =>
                 d.between(
                   produceAmb(state, (draft) => {
                     draft.edges[key].to = amb(Object.keys(state.nodes));
                     require(stateIsValid(draft));
                   }),
                 ),
-              "data-z-index": 1,
+              dragologyZIndex: 1,
             })}
             <circle
               id={`tail-${key}`}
               transform={translate(tailPos)}
               r={5}
               fill="black"
-              dragology={() =>
+              dragologyOnDrag={() =>
                 d.between(
                   produceAmb(state, (draft) => {
                     draft.edges[key].from = amb(Object.keys(state.nodes));
@@ -110,7 +111,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
                   }),
                 )
               }
-              data-z-index={1}
+              dragologyZIndex={1}
             />
           </g>
         );
@@ -123,11 +124,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
           transform={translate(node.x, node.y)}
           r={NODE_R}
           fill="black"
-          dragology={() =>
-            d.vary(state, [
-              ["nodes", key, "x"],
-              ["nodes", key, "y"],
-            ])
+          dragologyOnDrag={() =>
+            d.vary(state, [param("nodes", key, "x"), param("nodes", key, "y")])
           }
         />
       ))}

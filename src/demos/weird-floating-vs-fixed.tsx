@@ -18,12 +18,12 @@ const draggable: Draggable<State> = ({ state, d }) => (
     y={0}
     width={100}
     height={100}
-    dragology={() =>
+    dragologyOnDrag={() =>
       d.closest([
         d.fixed({ value: 0 }),
-        d.floating({ value: 1 }, { ghost: { opacity: 0.5 } }),
+        d.fixed({ value: 1 }).withFloating({ ghost: { opacity: 0.5 } }),
         d.fixed({ value: 2 }),
-        d.floating({ value: 3 }, { ghost: { opacity: 0.5 } }),
+        d.fixed({ value: 3 }).withFloating({ ghost: { opacity: 0.5 } }),
       ])
     }
   />
@@ -38,5 +38,5 @@ export default demo(
       height={150}
     />
   ),
-  { tags: ["spec.withFloating [w/ghost]", "d.fixed", "d.closest"] },
+  { tags: ["spec.withFloating [ghost]", "d.fixed", "d.closest"] },
 );

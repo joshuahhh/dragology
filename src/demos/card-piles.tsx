@@ -2,6 +2,7 @@ import _ from "lodash";
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 // --- Types ---
@@ -148,12 +149,12 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
               rx={12}
               fill="#d1d5db"
               opacity={isDragged ? 0.7 : 0.4}
-              data-z-index={0}
-              dragology={() =>
+              dragologyZIndex={0}
+              dragologyOnDrag={() =>
                 d
                   .vary(state, [
-                    ["piles", pileId, "x"],
-                    ["piles", pileId, "y"],
+                    param("piles", pileId, "x"),
+                    param("piles", pileId, "y"),
                   ])
                   .during(recomputePiles)
               }
@@ -176,12 +177,12 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
               fill="white"
               stroke="#9ca3af"
               strokeWidth={1.5}
-              data-z-index={isDragged ? 2 : 1}
-              dragology={() =>
+              dragologyZIndex={isDragged ? 2 : 1}
+              dragologyOnDrag={() =>
                 d
                   .vary(state, [
-                    ["piles", pileId, "cards", cardId, "dx"],
-                    ["piles", pileId, "cards", cardId, "dy"],
+                    param("piles", pileId, "cards", cardId, "dx"),
+                    param("piles", pileId, "cards", cardId, "dy"),
                   ])
                   .during(recomputePiles)
               }

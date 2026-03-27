@@ -1,6 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 import { rotateDeg, scale, translate } from "../svgx/helpers";
 
 type State = {
@@ -21,7 +22,7 @@ const draggable: Draggable<State> = ({ state, d }) => (
     cy={0}
     r={50}
     fill="lightblue"
-    dragology={() => d.vary(state, [["angle"], ["scaleX"]])}
+    dragologyOnDrag={() => d.vary(state, [param("angle"), param("scaleX")])}
   />
 );
 

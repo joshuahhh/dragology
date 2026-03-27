@@ -1,8 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { lessThan, moreThan } from "../DragSpec";
-import { PathIn } from "../paths";
+import { VaryPath, lessThan, moreThan, param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 type State = {
@@ -19,7 +18,12 @@ const HEIGHT = 300;
 const HANDLE_HIT = 14;
 const CORNER_SIZE = 18;
 
-const PARAMS: PathIn<State, number>[] = [["x"], ["y"], ["w"], ["h"]];
+const PARAMS: VaryPath<State>[] = [
+  param("x"),
+  param("y"),
+  param("w"),
+  param("h"),
+];
 const L = (s: State) => s.x;
 const R = (s: State) => s.x + s.w;
 const T = (s: State) => s.y;
@@ -61,8 +65,9 @@ const draggable: Draggable<State> = ({ state, d }) => {
         stroke="#3b82f6"
         strokeWidth={2}
         rx={6}
-        style={{ cursor: "grab" }}
-        dragology={() => d.vary(state, [["x"], ["y"]], { constraint })}
+        dragologyOnDrag={() =>
+          d.vary(state, [param("x"), param("y")], { constraint })
+        }
       />
 
       {/* ---- Edges ---- */}
@@ -76,7 +81,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
           height={HANDLE_HIT}
           fill="transparent"
           style={{ cursor: "ns-resize" }}
-          dragology={() =>
+          dragologyOnDrag={() =>
             d.vary(state, PARAMS, { pin: [B, L, R], constraint })
           }
         />
@@ -101,7 +106,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
           height={HANDLE_HIT}
           fill="transparent"
           style={{ cursor: "ns-resize" }}
-          dragology={() =>
+          dragologyOnDrag={() =>
             d.vary(state, PARAMS, { pin: [T, L, R], constraint })
           }
         />
@@ -126,7 +131,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
           height={Math.max(0, h - 2 * CORNER_SIZE)}
           fill="transparent"
           style={{ cursor: "ew-resize" }}
-          dragology={() =>
+          dragologyOnDrag={() =>
             d.vary(state, PARAMS, { pin: [T, R, B], constraint })
           }
         />
@@ -151,7 +156,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
           height={Math.max(0, h - 2 * CORNER_SIZE)}
           fill="transparent"
           style={{ cursor: "ew-resize" }}
-          dragology={() =>
+          dragologyOnDrag={() =>
             d.vary(state, PARAMS, { pin: [T, L, B], constraint })
           }
         />
@@ -178,7 +183,9 @@ const draggable: Draggable<State> = ({ state, d }) => {
           height={CORNER_SIZE}
           fill="transparent"
           style={{ cursor: "nwse-resize" }}
-          dragology={() => d.vary(state, PARAMS, { pin: [R, B], constraint })}
+          dragologyOnDrag={() =>
+            d.vary(state, PARAMS, { pin: [R, B], constraint })
+          }
         />
         <circle
           className="rect-demo-vis"
@@ -197,7 +204,9 @@ const draggable: Draggable<State> = ({ state, d }) => {
           height={CORNER_SIZE}
           fill="transparent"
           style={{ cursor: "nesw-resize" }}
-          dragology={() => d.vary(state, PARAMS, { pin: [L, B], constraint })}
+          dragologyOnDrag={() =>
+            d.vary(state, PARAMS, { pin: [L, B], constraint })
+          }
         />
         <circle
           className="rect-demo-vis"
@@ -216,7 +225,9 @@ const draggable: Draggable<State> = ({ state, d }) => {
           height={CORNER_SIZE}
           fill="transparent"
           style={{ cursor: "nesw-resize" }}
-          dragology={() => d.vary(state, PARAMS, { pin: [T, R], constraint })}
+          dragologyOnDrag={() =>
+            d.vary(state, PARAMS, { pin: [T, R], constraint })
+          }
         />
         <circle
           className="rect-demo-vis"
@@ -238,7 +249,9 @@ const draggable: Draggable<State> = ({ state, d }) => {
           height={CORNER_SIZE}
           fill="transparent"
           style={{ cursor: "nwse-resize" }}
-          dragology={() => d.vary(state, PARAMS, { pin: [T, L], constraint })}
+          dragologyOnDrag={() =>
+            d.vary(state, PARAMS, { pin: [T, L], constraint })
+          }
         />
         <circle
           className="rect-demo-vis"
@@ -268,5 +281,5 @@ export default demo(
       />
     </>
   ),
-  { tags: ["d.vary [w/constraint] [w/pin]"] },
+  { tags: ["d.vary [constraint] [pin]"] },
 );

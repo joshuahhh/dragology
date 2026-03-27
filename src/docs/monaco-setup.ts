@@ -114,9 +114,9 @@ export function configureMonaco(monaco: Monaco) {
     }
     declare namespace React {
       interface SVGAttributes<T> {
-        "dragology"?: ((params: DragParams) => DragSpec<any>) | false | null | undefined | 0 | "";
-        "data-z-index"?: number;
-        "data-transition"?: boolean;
+        "dragologyOnDrag"?: (() => DragSpec<any>) | false | null | undefined | 0 | "";
+        "dragologyZIndex"?: number;
+        "dragologyTransition"?: boolean;
       }
     }
     declare const _: {

@@ -51,7 +51,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
           transform={translate(pt.x * TILE_SIZE, pt.y * TILE_SIZE)}
           r={10}
           fill="black"
-          dragology={() =>
+          dragologyOnDrag={() =>
             d.between(
               produceAmb(state, (draft) => {
                 draft.points[idx] = Vec2(

@@ -75,6 +75,7 @@ export class ErrorBoundary extends Component<
             margin: 16,
             userSelect: "text",
             alignSelf: "flex-start",
+            minWidth: 0,
           }}
         >
           <div

@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useTitle } from "../useTitle";
 import { demosById } from "./registry";
 import { DemoCard, DemoSettingsBar, DemoSettingsProvider } from "./ui";
 
 export function SingleDemoPage({ id }: { id: string }) {
+  useTitle(`${id} — Dragology`);
   const [searchParams] = useSearchParams();
   const minimal = searchParams.has("minimal");
   const navigate = useNavigate();
@@ -43,12 +45,18 @@ export function SingleDemoPage({ id }: { id: string }) {
           </Link>
         </div>
         <div className="flex flex-col gap-5 px-5 pb-5 max-w-3xl mx-auto flex-1 w-full">
-          <DemoCard
-            demo={demo}
-            onTagClick={(tag) =>
-              navigate(`/demos?tag=${encodeURIComponent(tag)}`)
+          <div
+            className={
+              demo.hideByDefault ? "ring-2 ring-red-300 rounded-lg" : ""
             }
-          />
+          >
+            <DemoCard
+              demo={demo}
+              onTagClick={(tag) =>
+                navigate(`/demos?tag=${encodeURIComponent(tag)}`)
+              }
+            />
+          </div>
         </div>
         <div className="pb-14" />
         <DemoSettingsBar />

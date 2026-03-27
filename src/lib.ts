@@ -12,15 +12,10 @@ export type {
 } from "./DraggableRenderer";
 
 // Draggable type & helpers
-export type {
-  DragParams,
-  Draggable,
-  DraggableProps,
-  SetState,
-} from "./draggable";
+export type { Draggable, DraggableProps, SetState } from "./draggable";
 
 // DragSpec & builder
-export { and, lessThan, moreThan } from "./DragSpec";
+export { and, inOrder, lessThan, moreThan, param } from "./DragSpec";
 export type {
   DragSpec,
   DragSpecBuilder,
@@ -47,4 +42,4 @@ export { amb, fail, produceAmb, require, runAmb } from "./amb";
 export type { PathIn } from "./paths";
 
 // Utility types
-export type { Many } from "./utils";
+export type { Many } from "./utils/flexible-types";

@@ -3,7 +3,7 @@ import { DragSpecData } from "./DragSpec";
 import { RenderedState, getTraceInfo } from "./DragSpecTraceInfo";
 import { LayeredSvgx, drawLayered } from "./svgx/layers";
 import { Transition } from "./transition";
-import { assert, assertNever } from "./utils";
+import { assert, assertNever } from "./utils/assert";
 
 type TreeViewContext = {
   activePath: string;
@@ -21,7 +21,7 @@ function useTreeViewContext() {
   return ctx;
 }
 
-export function DragSpecTreeView<T>({
+export function DragSpecTreeView<T extends object>({
   spec,
   activePath,
   colorMap,
@@ -57,7 +57,13 @@ const INACTIVE_BORDER = "rgb(203, 213, 225)";
  * `path` is the accumulated path of the current node, built top-down.
  * Each node checks whether `activePath` matches or extends its own `path`.
  */
-function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
+function SpecNode<T extends object>({
+  spec,
+  path,
+}: {
+  spec: DragSpecData<T>;
+  path: string;
+}) {
   const { activePath, colorMap } = useTreeViewContext();
 
   /** Compute active/color/childPath/traceInfo for a node from its narrowed spec. */
@@ -85,17 +91,14 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
     return (
       <Box label="withFloating" color={color}>
         {traceInfo && (
-          <OutputThumbnail outputRendered={traceInfo.outputRendered} />
+          <OutputThumbnail outputPreview={traceInfo.outputPreview} />
         )}
         <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
   } else if (spec.type === "vary") {
     const { active, color, traceInfo } = info(spec);
-    const paramNames = spec.paramPaths.map((p) => {
-      const last = p[p.length - 1];
-      return typeof last === "string" ? last : String(last);
-    });
+    const paramNames = spec.paramPaths.map((p) => p.join("."));
     const constraintSrc = spec.options.constraint
       ? truncate(spec.options.constraint.toString(), 60)
       : null;
@@ -159,7 +162,7 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
     );
   } else if (spec.type === "when-far") {
     return (
-      <Box label={`whenFar (d=${spec.distance})`}>
+      <Box label={`whenFar (d=${spec.gap})`}>
         <div style={{ display: "flex", flexDirection: "row", gap: 4 }}>
           <Slot label="fg">
             <SpecNode spec={spec.foreground} path={path + "fg/"} />
@@ -182,15 +185,22 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
     return (
       <Box label="during">
         {traceInfo && (
-          <OutputThumbnail outputRendered={traceInfo.outputRendered} />
+          <OutputThumbnail outputPreview={traceInfo.outputPreview} />
         )}
         <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
-  } else if (spec.type === "change-distance") {
+  } else if (spec.type === "change-result") {
     const { childPath } = info(spec);
     return (
-      <Box label="changeDistance">
+      <Box label="changeResult">
+        <SpecNode spec={spec.inner} path={childPath} />
+      </Box>
+    );
+  } else if (spec.type === "change-gap") {
+    const { childPath } = info(spec);
+    return (
+      <Box label="changeGap">
         <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
@@ -211,30 +221,39 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
     return (
       <Box label={label}>
         {traceInfo && (
-          <OutputThumbnail outputRendered={traceInfo.outputRendered} />
+          <OutputThumbnail outputPreview={traceInfo.outputPreview} />
         )}
         <SpecNode spec={spec.inner} path={childPath + snapSegment} />
       </Box>
     );
   } else if (spec.type === "between") {
     const { active, color, traceInfo } = info(spec);
+    const allFixed = spec.specs.every((s) => s.type === "fixed");
     return (
       <Box
-        label={`between [${spec.states.length}]`}
+        label={`between [${spec.specs.length}]${spec.interpolation ? ` (${spec.interpolation})` : ""}`}
         active={active}
         color={color}
       >
         {traceInfo && (
-          <>
-            <OutputThumbnail outputRendered={traceInfo.outputRendered} />
-            <Slot label="states">
-              <StateThumbnails
-                renderedStates={traceInfo.renderedStates}
-                closestIndex={traceInfo.closestIndex}
-              />
-            </Slot>
-          </>
+          <OutputThumbnail outputPreview={traceInfo.outputPreview} />
         )}
+        {allFixed
+          ? traceInfo && (
+              <Slot label="states">
+                <StateThumbnails
+                  renderedStates={traceInfo.renderedStates}
+                  closestIndex={traceInfo.closestIndex}
+                />
+              </Slot>
+            )
+          : spec.specs.map((childSpec, i) => (
+              <SpecNode
+                key={i}
+                spec={childSpec}
+                path={path + `between/${i}/`}
+              />
+            ))}
       </Box>
     );
   } else if (spec.type === "with-drop-transition") {
@@ -247,7 +266,7 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
       </Box>
     );
   } else if (spec.type === "switch-to-state-and-follow") {
-    const { active, color, traceInfo } = info(spec);
+    const { active, color, traceInfo, childPath } = info(spec);
     return (
       <Box
         label={`switchToStateAndFollow → ${spec.draggedId}`}
@@ -255,7 +274,7 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
         color={color}
       >
         {traceInfo && (
-          <StateThumbnails renderedStates={traceInfo.renderedStates} />
+          <SpecNode spec={traceInfo.tracedInner} path={childPath} />
         )}
       </Box>
     );
@@ -293,6 +312,39 @@ function SpecNode<T>({ spec, path }: { spec: DragSpecData<T>; path: string }) {
     return (
       <Box label={`substate [${spec.path.join(", ")}]`}>
         <SpecNode spec={spec.innerSpec} path={childPath} />
+      </Box>
+    );
+  } else if (spec.type === "react-to") {
+    const { traceInfo, childPath } = info(spec);
+    return (
+      <Box label="reactTo">
+        {traceInfo && (
+          <>
+            <div
+              style={{
+                fontSize: 9,
+                color: "rgb(120, 113, 108)",
+                background: "rgba(0,0,0,0.04)",
+                borderRadius: 3,
+                padding: "2px 4px",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+              }}
+            >
+              value: {truncate(String(traceInfo.currentValue), 40)}
+              {" · "}
+              changes: {traceInfo.changeCount}
+            </div>
+            <SpecNode spec={traceInfo.tracedInner} path={childPath} />
+          </>
+        )}
+      </Box>
+    );
+  } else if (spec.type === "with-init-context") {
+    const { childPath } = info(spec);
+    return (
+      <Box label="withInitContext">
+        <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
   } else {
@@ -347,7 +399,7 @@ function StateThumbnails({
   );
 }
 
-function OutputThumbnail({ outputRendered }: { outputRendered: LayeredSvgx }) {
+function OutputThumbnail({ outputPreview }: { outputPreview: LayeredSvgx }) {
   const { svgWidth, svgHeight, thumbArea } = useTreeViewContext();
   if (svgWidth === 0 || svgHeight === 0) return null;
   const aspect = svgWidth / svgHeight;
@@ -366,7 +418,7 @@ function OutputThumbnail({ outputRendered }: { outputRendered: LayeredSvgx }) {
           transition: "width 150ms ease, height 150ms ease",
         }}
       >
-        {drawLayered(outputRendered)}
+        {drawLayered(outputPreview)}
       </svg>
     </div>
   );

@@ -1,7 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable, DemoLink, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { equal } from "../DragSpec";
+import { equal, param } from "../DragSpec";
 import { Vec2 } from "../math/vec2";
 import { translate } from "../svgx/helpers";
 
@@ -58,8 +58,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
         transform={translate(state)}
         r={14}
         fill="black"
-        dragology={() =>
-          d.vary(state, [["x"], ["y"]], {
+        dragologyOnDrag={() =>
+          d.vary(state, [param("x"), param("y")], {
             constraint: (s) => {
               const p = Vec2(s);
               return equal(p.dist(f1) * p.dist(f2), aPx ** 2);
@@ -96,5 +96,5 @@ export default demo(
       />
     </>
   ),
-  { tags: ["d.vary [w/constraint]"] },
+  { tags: ["math", "d.vary [constraint]"] },
 );

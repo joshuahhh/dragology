@@ -102,10 +102,10 @@ function draggableFactory(config: Config): Draggable<State> {
             10 - (isDragged && !config.useFloating ? 5 : 0),
             80 + idx * TILE_SIZE,
           ),
-          "data-z-index": isDragged ? 1 : 0,
+          dragologyZIndex: isDragged ? 1 : 0,
           opacity: 1,
           setState,
-          dragology: () => {
+          dragologyOnDrag: () => {
             const stateWithout = produce(state, (s) => {
               s.todos.splice(idx, 1);
             });

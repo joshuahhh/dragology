@@ -1,7 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { lessThan } from "../DragSpec";
+import { inOrder, param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 type State = { value: number };
@@ -28,9 +28,9 @@ const draggable: Draggable<State> = ({ state, d }) => (
       stroke="#d1d5db"
       strokeWidth={1.5}
       filter="url(#shadow)"
-      dragology={() =>
-        d.vary(state, [["value"]], {
-          constraint: (s) => [lessThan(0, s.value), lessThan(s.value, W)],
+      dragologyOnDrag={() =>
+        d.vary(state, param("value"), {
+          constraint: (s) => inOrder(0, s.value, W),
         })
       }
     />
@@ -65,5 +65,5 @@ export default demo(
       height={130}
     />
   ),
-  { tags: ["d.vary [w/constraint]"] },
+  { tags: ["d.vary [constraint]"] },
 );

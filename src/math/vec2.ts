@@ -1,6 +1,7 @@
 // mini Vec2 library by Elliot & Josh
 
-import { assertNever, clamp } from "../utils";
+import { clamp } from "../utils";
+import { assertNever } from "../utils/assert";
 
 export type Vec2 = Vec2Class;
 

@@ -1,4 +1,4 @@
-import { ReactElement, SetStateAction } from "react";
+import { SetStateAction } from "react";
 import { DragSpec, DragSpecBuilder } from "./DragSpec";
 import { getAtPath, PathIn, setAtPath, ValueAtPath } from "./paths";
 import { Svgx, updatePropsDownTree } from "./svgx";
@@ -60,21 +60,15 @@ export type SetState<T> = (
 
 // # drag
 
-export type DragParams = {
-  altKey: boolean;
-  ctrlKey: boolean;
-  metaKey: boolean;
-  shiftKey: boolean;
-};
+export type OnDragCallback<T extends object> = () => DragSpec<T>;
 
-export type DragologyPropValue<T> = (params: DragParams) => DragSpec<T>;
+export const DRAGOLOGY_PROP_NAME = "dragologyOnDrag";
 
-export const DRAGOLOGY_PROP_NAME = "dragology";
-
-export function getDragSpecCallbackOnElement<T>(
-  element: ReactElement,
-): ((params: DragParams) => DragSpec<T>) | undefined {
-  return (element.props as any)[DRAGOLOGY_PROP_NAME] || undefined;
+export function getOnDragCallbackOnElement<T extends object>(
+  element: Svgx,
+): OnDragCallback<T> | undefined {
+  const callback = element.props[DRAGOLOGY_PROP_NAME];
+  return callback ? (callback as unknown as OnDragCallback<T>) : undefined;
 }
 
 // # embed
@@ -104,11 +98,11 @@ function embedImpl<T extends object, const P extends PathIn<T, any>>(
   });
   const rendered = draggable(subProps);
   return updatePropsDownTree(rendered, (el) => {
-    const dragSpecCallback = getDragSpecCallbackOnElement<any>(el);
-    if (!dragSpecCallback) return;
+    const onDragCallback = getOnDragCallbackOnElement<any>(el);
+    if (!onDragCallback) return;
     return {
-      [DRAGOLOGY_PROP_NAME]: (params: DragParams) => {
-        const subSpec = dragSpecCallback(params);
+      [DRAGOLOGY_PROP_NAME]: () => {
+        const subSpec = onDragCallback();
         return props.d.substate(props.state, path as any, () => subSpec as any);
       },
     };

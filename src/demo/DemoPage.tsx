@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useTitle } from "../useTitle";
 import { Demo, listedDemos, unlistedDemos } from "./registry";
 import { tagMatches } from "./tags";
 import { DemoCard, DemoSettingsBar, DemoSettingsProvider, DemoTag } from "./ui";
@@ -9,6 +10,7 @@ function hasTag(demo: Demo, filter: string) {
 }
 
 export function DemoPage() {
+  useTitle("Demos — Dragology");
   const [searchParams, setSearchParams] = useSearchParams();
   const tagFilter = searchParams.get("tag");
   const [showHidden, setShowHidden] = useState(false);

@@ -1,6 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
+import { param } from "../DragSpec";
 import { scale, translate } from "../svgx/helpers";
 
 type State = {
@@ -18,7 +19,7 @@ const draggable: Draggable<State> = ({ state, d }) => (
       cy={0}
       r={50}
       fill="lightblue"
-      dragology={() => d.vary(state, [["scaleX"], ["scaleY"]])}
+      dragologyOnDrag={() => d.vary(state, [param("scaleX"), param("scaleY")])}
     />
     <ellipse
       cx={100}

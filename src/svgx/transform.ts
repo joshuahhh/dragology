@@ -1,5 +1,7 @@
+import { createElement } from "react";
+import { ErrorWithJSX } from "../ErrorBoundary";
 import { Vec2, Vec2able, lerp } from "../math/vec2";
-import { assert } from "../utils";
+import { assert } from "../utils/assert";
 
 /**
  * Parses and interpolates SVG transform strings.
@@ -145,20 +147,18 @@ export function lerpTransforms(
   b: Transform[],
   t: number,
 ): Transform[] {
-  // Special case: if both are just chains of translations, collapse and lerp
-  const aAllTranslate = a.every((t) => t.type === "translate");
-  const bAllTranslate = b.every((t) => t.type === "translate");
+  a = collapseTranslations(a);
+  b = collapseTranslations(b);
 
-  if (aAllTranslate && bAllTranslate) {
-    const aSum = Vec2(0).add(...a);
-    const bSum = Vec2(0).add(...b);
-    return [{ type: "translate", ...aSum.lerp(bSum, t).xy() }];
-  }
-
-  // Otherwise, lengths and types must match exactly
   if (a.length !== b.length) {
-    throw new Error(
+    throw new ErrorWithJSX(
       `Cannot lerp transforms with different lengths: ${a.length} vs ${b.length}`,
+      [
+        a.map((t) => [serializeTransform([t]), createElement("br")]),
+        "vs",
+        createElement("br"),
+        b.map((t) => [serializeTransform([t]), createElement("br")]),
+      ],
     );
   }
 
@@ -170,8 +170,13 @@ export function lerpTransforms(
 
     // Types must match
     if (ta.type !== tb.type) {
-      throw new Error(
+      throw new ErrorWithJSX(
         `Cannot lerp transforms with different types at index ${i}: ${ta.type} vs ${tb.type}`,
+        [
+          `a: ${serializeTransform(a)}`,
+          createElement("br"),
+          `b: ${serializeTransform(b)}`,
+        ],
       );
     }
 
@@ -213,18 +218,22 @@ function lerpDegrees(a: number, b: number, t: number): number {
   return a + delta * t;
 }
 
-/** Collapse multiple translations into a single one, preserving other transforms. */
+/** Collapse successive translations into single ones, preserving order. */
 function collapseTranslations(transforms: Transform[]): Transform[] {
-  const translations = transforms.filter(
-    (t) => t.type === "translate",
-  ) as Array<{ type: "translate"; x: number; y: number }>;
-  const others = transforms.filter((t) => t.type !== "translate");
-  if (translations.length === 0) return others;
-  const sum = translations.reduce(
-    (acc, t) => ({ x: acc.x + t.x, y: acc.y + t.y }),
-    { x: 0, y: 0 },
-  );
-  return [{ type: "translate" as const, ...sum }, ...others];
+  const result: Transform[] = [];
+  for (const t of transforms) {
+    const prev = result[result.length - 1];
+    if (t.type === "translate" && prev?.type === "translate") {
+      result[result.length - 1] = {
+        type: "translate",
+        x: prev.x + t.x,
+        y: prev.y + t.y,
+      };
+    } else {
+      result.push(t);
+    }
+  }
+  return result;
 }
 
 /**

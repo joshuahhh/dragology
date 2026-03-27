@@ -14,6 +14,7 @@ export default [
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
+      "object-shorthand": ["error", "always"],
     },
   },
   // Ban className (i.e. Tailwind) in library code — only demo/docs may use it.
@@ -23,6 +24,7 @@ export default [
       "src/demo/**",
       "src/demos/**",
       "src/docs/**",
+      "src/studio/**",
       "src/study/**",
       "src/IndexPage.tsx",
       "src/main.tsx",

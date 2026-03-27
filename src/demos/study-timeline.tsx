@@ -3,7 +3,7 @@ import _ from "lodash";
 import { demo } from "../demo";
 import { DemoDraggable } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { lessThan } from "../DragSpec";
+import { inOrder, param } from "../DragSpec";
 import { translate } from "../svgx/helpers";
 
 type Block = { id: string; pos: number; track: number; color: string };
@@ -45,21 +45,21 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => (
         <g
           id={block.id}
           transform={translate(block.pos, block.track * (TRACK_H + GAP))}
-          data-z-index={isDragged ? 1 : 0}
-          dragology={() =>
+          dragologyZIndex={isDragged ? 1 : 0}
+          dragologyOnDrag={() =>
             d
               .closest(
                 _.range(NUM_TRACKS).map((t) =>
                   d.vary(
-                    produce(state, (draft) => {
+                    // TODO: produce needs <State> here so that type
+                    // of param works; very strange
+                    produce<State>(state, (draft) => {
                       draft.blocks[i].track = t;
                     }),
-                    [["blocks", i, "pos"]],
+                    param("blocks", i, "pos"),
                     {
-                      constraint: (s) => [
-                        lessThan(0, s.blocks[i].pos),
-                        lessThan(s.blocks[i].pos, TRACK_W - BLOCK_W),
-                      ],
+                      constraint: (s) =>
+                        inOrder(0, s.blocks[i].pos, TRACK_W - BLOCK_W),
                     },
                   ),
                 ),
@@ -108,6 +108,6 @@ export default demo(
     />
   ),
   {
-    tags: ["d.vary [w/constraint]", "d.closest", "spec.withBranchTransition"],
+    tags: ["d.vary [constraint]", "d.closest", "spec.withBranchTransition"],
   },
 );

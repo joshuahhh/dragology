@@ -52,7 +52,7 @@ const draggable: Draggable<State> = ({ state, d }) => {
         <g
           id={`tile-${key}`}
           transform={translate(tile.x * TILE_SIZE, tile.y * TILE_SIZE)}
-          dragology={() =>
+          dragologyOnDrag={() =>
             d
               .closest(
                 (
@@ -127,7 +127,7 @@ export default demo(
   ),
   {
     tags: [
-      "spec.withSnapRadius [w/chain]",
+      "spec.withSnapRadius [chain]",
       "d.between",
       "spec.withBranchTransition",
     ],
