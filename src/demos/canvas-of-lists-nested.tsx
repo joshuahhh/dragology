@@ -98,7 +98,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       });
 
       // Generate states for all possible placements
-      const statesWith = produceAmb(stateWithout, (draft) => {
+      const statesSnapped = produceAmb(stateWithout, (draft) => {
         let row: Row = amb(draft.rows);
         while (true) {
           if (amb([true, false])) break;
@@ -109,7 +109,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       });
 
       // Create backdrop state for floating mode
-      const stateWithTopRow = produce(stateWithout, (draft) => {
+      const stateAsTopRow = produce(stateWithout, (draft) => {
         if (item.type === "tile") {
           const newRowId = "row-" + Math.random().toString(36).slice(2);
           const newRowColor = colors[stateWithout.rows.length % colors.length];
@@ -127,12 +127,12 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       });
 
       return d
-        .closest(statesWith)
+        .closest(statesSnapped)
         .withFloating()
         .whenFar(
-          d.vary(stateWithTopRow, [
-            param("rows", stateWithTopRow.rows.length - 1, "x"),
-            param("rows", stateWithTopRow.rows.length - 1, "y"),
+          d.vary(stateAsTopRow, [
+            param("rows", stateAsTopRow.rows.length - 1, "x"),
+            param("rows", stateAsTopRow.rows.length - 1, "y"),
           ]),
         );
     };
