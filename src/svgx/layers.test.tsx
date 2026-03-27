@@ -580,6 +580,66 @@ describe("layerSvg", () => {
     );
   });
 
+  it("accumulates opacity from parent nodes", () => {
+    const tree = (
+      <g opacity={0.5}>
+        <rect id="r1" />
+      </g>
+    );
+
+    const layered = layerSvg(tree);
+    expect(layered.byId.get("r1")!.element.props.opacity).toBe(0.5);
+  });
+
+  it("multiplies nested opacities", () => {
+    const tree = (
+      <g opacity={0.5}>
+        <g opacity={0.4}>
+          <rect id="r1" />
+        </g>
+      </g>
+    );
+
+    const layered = layerSvg(tree);
+    expect(layered.byId.get("r1")!.element.props.opacity).toBeCloseTo(0.2);
+  });
+
+  it("combines element's own opacity with accumulated opacity", () => {
+    const tree = (
+      <g opacity={0.5}>
+        <rect id="r1" opacity={0.6} />
+      </g>
+    );
+
+    const layered = layerSvg(tree);
+    expect(layered.byId.get("r1")!.element.props.opacity).toBeCloseTo(0.3);
+  });
+
+  it("does not set opacity when fully opaque", () => {
+    const tree = (
+      <g>
+        <rect id="r1" />
+      </g>
+    );
+
+    const layered = layerSvg(tree);
+    expect(layered.byId.get("r1")!.element.props.opacity).toBeUndefined();
+  });
+
+  it("accumulates opacity through nested IDs", () => {
+    const tree = (
+      <g opacity={0.5}>
+        <g id="outer" opacity={0.8}>
+          <rect id="inner" />
+        </g>
+      </g>
+    );
+
+    const layered = layerSvg(tree);
+    expect(layered.byId.get("outer")!.element.props.opacity).toBeCloseTo(0.4);
+    expect(layered.byId.get("inner")!.element.props.opacity).toBeCloseTo(0.4);
+  });
+
   it("allows dragologyZIndex on elements with id", () => {
     const tree = (
       <g>

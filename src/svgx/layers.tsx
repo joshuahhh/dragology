@@ -44,6 +44,7 @@ export function layerSvg(element: Svgx): LayeredSvgx {
     descendents,
     null,
     "",
+    1,
     [],
   );
   if (rootWithExtractedRemoved) {
@@ -77,6 +78,7 @@ function extractIdNodes(
   descendents: Map<string, Set<string>>,
   ancestorId: string | null,
   accumulatedTransform: string,
+  accumulatedOpacity: number,
   stackingPath: number[],
 ): Svgx | null {
   const props = element.props as any;
@@ -95,6 +97,9 @@ function extractIdNodes(
     accumulatedTransform,
     elementTransform,
   );
+  const elementOpacity =
+    props.opacity !== undefined ? Number(props.opacity) : 1;
+  const newAccumulatedOpacity = accumulatedOpacity * elementOpacity;
 
   // Compute the stacking path for this node (if it has an ID).
   // Every ID'd node appends a step: the provided z-index, or 0 by default.
@@ -115,6 +120,7 @@ function extractIdNodes(
       descendents,
       newAncestorId,
       newAccumulatedTransform,
+      newAccumulatedOpacity,
       newStackingPath,
     ),
   );
@@ -142,6 +148,7 @@ function extractIdNodes(
 
     const layerElement = cloneElement(newElement, {
       transform: newAccumulatedTransform || undefined,
+      opacity: newAccumulatedOpacity !== 1 ? newAccumulatedOpacity : undefined,
     });
 
     byId.set(currentId, {
