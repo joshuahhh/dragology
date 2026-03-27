@@ -83,33 +83,55 @@ Position elements with `transform={translate(x, y)}`, **not** with `x`/`y` attri
 <circle cx={state.x} cy={state.y} r={10} />
 ```
 
-## The Two Core Drag Specs
+## Drag Spec Primitives
 
-Most interactions are built from two primitives: `d.between()` for discrete choices and `d.vary()` for continuous values.
+### `d.between()` — Interpolated Preview
 
-### `d.between()` — Discrete States
+`d.between` gives you a set of discrete target states, and the library **interpolates the full SVG rendering** between them as the user drags. Mid-drag, you see a blend — the knob is partway between "on" and "off", the element is partway between position A and position B.
 
-Drag between a set of possible states. The library interpolates the full SVG rendering between them.
+This is great when you want a smooth, connected feel between a small number of states:
 
 ```tsx
-// Toggle: two states
+// Toggle: knob slides smoothly between two positions
 dragologyOnDrag={() => d.between([{ status: "off" }, { status: "on" }])}
 
-// Three-way selector: three states
+// Three-way selector: interpolates between three target positions
 dragologyOnDrag={() => d.between([{ name: "r" }, { name: "g" }, { name: "b" }])}
+```
 
-// Reordering a list: one state per possible position
+### `d.closest()` — Snap to Nearest
+
+`d.closest` also takes discrete states, but instead of interpolating, it **snaps the preview to whichever state is nearest** to the pointer. The other elements rearrange to show what would happen if you dropped there.
+
+```tsx
+// Reorder a list: preview snaps to show the list in each possible order
 dragologyOnDrag={() => {
   const allOrders = state.items.map((_, j) => ({
     items: moveItem(state.items, i, j),
   }));
-  return d.between(allOrders);
+  return d.closest(allOrders);
 }}
 ```
 
+### `d.closest(...).withFloating()` — Float Freely, Snap on Drop
+
+Adding `.withFloating()` to a `closest` spec changes the drag experience: the **dragged element floats freely** following your cursor, while the **remaining elements** rearrange to preview the closest drop position. On drop, the element snaps into place.
+
+This is usually what you want for reordering, kanban boards, and similar interactions where the dragged item should feel "picked up":
+
+```tsx
+// Reorder with floating: item follows cursor, others shuffle to show where it'll land
+dragologyOnDrag={() => d.closest(allOrders).withFloating()}
+```
+
+Compare the three approaches for a reorderable list:
+- `d.between(allOrders)` — the dragged item interpolates between positions (smooth but can feel mushy)
+- `d.closest(allOrders)` — the dragged item snaps between positions (crisp but jerky)
+- `d.closest(allOrders).withFloating()` — the dragged item floats freely, others rearrange (usually the best feel)
+
 ### `d.vary()` — Continuous Values
 
-Vary numeric parameters freely. The library uses numerical optimization to find the parameter values that place the dragged element under the pointer.
+`d.vary` lets you continuously vary numeric parameters. The library uses numerical optimization to find parameter values that place the dragged element under the pointer.
 
 ```tsx
 import { param, inOrder } from "dragology";
@@ -136,9 +158,9 @@ The `param(...)` helper specifies a path into the state object. `param("nodes", 
 
 ## Composing Specs
 
-### `d.closest()` — Pick the Nearest Behavior
+### `d.closest()` with Mixed Inner Specs
 
-When an element can do different things depending on where you drag it, use `d.closest()`. It switches between specs based on proximity.
+`d.closest` doesn't just take plain states — each branch can be a full spec. This lets you combine discrete switching with continuous movement:
 
 ```tsx
 // Timeline block: slide along a track (vary), but also switch tracks (closest)
@@ -155,16 +177,52 @@ dragologyOnDrag={() =>
 }
 ```
 
+### `.whenFar()` — Background Behavior
+
+`.whenFar(background, { gap })` switches to a different spec when the pointer is far (default 50px) from any foreground drop position. This creates a "discrete islands in a continuous sea" effect.
+
+Use it when elements should snap to specific targets when close, but move freely (or do something else) when far away:
+
+```tsx
+// Reorder tiles: when close to a position, preview that order.
+// When far away, stay in the current order (the dragged tile just floats).
+dragologyOnDrag={() =>
+  d.closest(allPermutations).whenFar(state).withFloating()
+}
+```
+
+A more advanced example — snapping to islands but freely dragging in between:
+
+```tsx
+type State =
+  | { type: "on-island"; island: "A" | "B" }
+  | { type: "floating"; x: number; y: number };
+
+dragologyOnDrag={() =>
+  d.closest([
+      { type: "on-island", island: "A" },
+      { type: "on-island", island: "B" },
+    ])
+    .withFloating()
+    .whenFar(
+      d.vary({ type: "floating", x: 0, y: 0 }, [param("x"), param("y")])
+    )
+}
+```
+
+Here, when the pointer is near an island, it previews snapping there. When far from any island, it switches to a `d.vary` spec that lets the element float freely with continuously varying x/y. This lets you have discrete targets and free-roaming coexist in the same drag.
+
 ### Chaining Methods
 
 Drag specs have chainable methods that modify behavior:
 
 | Method | What it does |
 |---|---|
-| `.withFloating()` | Float the element freely, snapping to a position on drop |
+| `.withFloating()` | Dragged element floats freely following cursor; other elements preview the closest drop state |
+| `.whenFar(bg, {gap?})` | Switch to a background spec when pointer is far (default 50px) from any foreground drop position |
 | `.withSnapRadius(px)` | Only snap when within `px` pixels of a drop target |
 | `.withDropTransition("elastic-out")` | Custom drop animation (also accepts `"cubic-out"`, a duration in ms, or a custom easing) |
-| `.withBranchTransition(ms)` | Animate when switching between `closest()` branches |
+| `.withBranchTransition(ms)` | Animate when switching between `closest()` branches or `whenFar` foreground/background |
 | `.onDrop(state)` | Override the final state on drop; accepts a value or `(previewState) => newState` |
 | `.during(fn)` | Transform the preview state each frame (for live recomputation) |
 
