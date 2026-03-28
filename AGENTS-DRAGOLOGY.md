@@ -187,7 +187,7 @@ Use it when elements should snap to specific targets when close, but move freely
 // Reorder tiles: when close to a position, preview that order.
 // When far away, stay in the current order (the dragged tile just floats).
 dragologyOnDrag={() =>
-  d.closest(allPermutations).whenFar(state).withFloating()
+  d.closest(allOrders).whenFar(state).withFloating()
 }
 ```
 
@@ -234,6 +234,15 @@ dragologyOnDrag={() =>
    .withDropTransition("elastic-out")
 }
 ```
+
+## Tips for Computing State Updates
+
+With Dragology, you often define a set of states a starting state might transition into, like the computation of `allOrders` above to go into a `d.closest`. This requires transforming nested state immutably, which is tedious in JavaScript. Consider using one of the following approaches:
+
+- **`structuredClone` + mutate.** [TODO: example]
+- **Immer's `produce`.** [TODO: example]
+
+Often, the state will contain entities with IDs. If a state transition involves creating a new entity, you will need to generate a new ID. As always, use opaque, random IDs, not IDs derived from existing data.
 
 ## Element Identity and Layering
 
@@ -384,4 +393,4 @@ const point = center.add(offset);
 
 8. **Use `<g>` rather than `<>` (Fragment) for grouping.** Fragments are not supported. Always use `<g>` to wrap multiple elements.
 
-9. **Variable-length lists need `id` attributes.** If the number of rendered children can change between states (e.g. mapping over a list that grows or shrinks), every element must have a stable `id`. Without ids, the interpolation engine can't reconcile which elements correspond across states and will fail. Remember, no React-style `key` attributes!
+9. **Variable-length lists need `id` attributes.** In any .map() where the array length can change between states, the outermost element returned from the callback must have a stable id — even if it's just a wrapper <g>. Without this, the interpolation engine can't reconcile which elements correspond across states and will fail. Use the mapped item's identity for the id, not the array index. Remember, no React-style `key` attributes!
