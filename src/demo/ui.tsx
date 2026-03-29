@@ -381,7 +381,7 @@ export function DemoDraggable<T extends object>({
 
   return (
     <ErrorBoundary>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 min-w-0 max-w-full">
         <div className="flex gap-4 items-start">
           <div className="relative">
             <DraggableRenderer
@@ -425,12 +425,12 @@ export function DemoDraggable<T extends object>({
             )}
           </div>
           {(showTreeView || showStateViewer || showTimingMeter) && (
-            <div className="min-w-72 flex-1 flex flex-col gap-2">
+            <div className="flex-1 flex flex-col gap-2 min-w-0">
               {showTimingMeter && <TimingMeter />}
               {showTreeView && (
                 <>
                   {draggingStatus ? (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2 min-w-0">
                       <div className="text-xs text-slate-500 font-mono whitespace-nowrap">
                         activePath: {draggingStatus.result.activePath}
                       </div>
@@ -681,7 +681,7 @@ export function DemoWithConfig({ children }: { children: React.ReactNode }) {
   const debugOpen = showTreeView || showStateViewer || showTimingMeter;
   return (
     <div
-      className={`flex flex-col ${debugOpen ? "" : "md:flex-row"} gap-4 items-start`}
+      className={`flex flex-col ${debugOpen ? "" : "md:flex-row"} gap-4 items-start max-w-full`}
     >
       {children}
     </div>
