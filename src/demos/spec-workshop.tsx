@@ -764,7 +764,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
     const nhws: number[] = [];
     for (let i = 0; i < slots; i++)
       nhws.push(
-        i < children.length && children[i] ? children[i]!.w / 2 : EMPTY_NHW,
+        i < children.length ? children[i]!.w / 2 : i > 0 ? 16 : EMPTY_NHW,
       );
 
     let w = PAD * 2 + GAP * Math.max(0, slots - 1);
