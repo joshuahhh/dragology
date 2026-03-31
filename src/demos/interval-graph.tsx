@@ -95,6 +95,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           <g id={`meeting-${i}`} dragologyZIndex={isDraggedBar ? 1 : 0}>
             {/* Bar — drag to change track */}
             <rect
+              id={`bar-${i}`}
               transform={translate(iv.start, y - BAR_H / 2)}
               width={iv.end - iv.start}
               height={BAR_H}
