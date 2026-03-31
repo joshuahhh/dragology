@@ -19,7 +19,7 @@ const figureLabels: Record<string, string> = {
   "interval-graph": "B — Alex's Scheduler",
   "canvas-of-lists-nested": "C — Lists in Lists",
   "tessellation": "D — Tactile Tessellations",
-  "nool-tree": "E — Animate Algebra (Nool)",
+  "nool-tree": "E — Animate Algebra",
   "order-preserving": "F — Twisted Trees",
   "node-wires": "G — Noodles and Nodes",
   "spec-workshop": "H — Drag-Spec Workshop",
