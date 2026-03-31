@@ -16,13 +16,14 @@ const initialState: State = {
   seq: [],
 };
 
-const draggable: Draggable<State> = ({ state, d }) => {
+const draggable: Draggable<State> = ({ state, d, setState }) => {
   const TILE_SIZE = 50;
 
   let perm = _.range(state.n);
 
   return (
     <g>
+      <style>{`.braid-flip-target:hover { opacity: 0.15 !important; }`}</style>
       <g>
         {_.range(state.n).map((i) => (
           <line
@@ -68,6 +69,24 @@ const draggable: Draggable<State> = ({ state, d }) => {
               stroke="black"
               strokeWidth={2}
               dragologyZIndex={1}
+            />
+            <circle
+              id={`flip-${idx}`}
+              cx={((i + j) * TILE_SIZE) / 2}
+              cy={TILE_SIZE / 2}
+              r={TILE_SIZE / 3}
+              fill="dodgerblue"
+              dragologyZIndex={2}
+              onClick={() =>
+                setState(
+                  produce(state, (s) => {
+                    s.seq[idx] = [j, i];
+                  }),
+                )
+              }
+              cursor="pointer"
+              opacity={0}
+              className="braid-flip-target"
             />
             {/* the rest */}
             {_.range(state.n).map((k) =>
