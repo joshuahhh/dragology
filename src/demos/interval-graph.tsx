@@ -65,9 +65,8 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           y1={trackY(t)}
           x2={END_TIME}
           y2={trackY(t)}
-          stroke="#94a3b8"
+          stroke="#d1d5db"
           strokeWidth={1.5}
-          strokeDasharray="4 4"
         />
       ))}
 
