@@ -6,6 +6,45 @@ import { CopyStateButton } from "./CopyStateButton";
 import { StudioHackContext } from "./StudioHackContext";
 import { Lens, Section } from "./StudioPage";
 
+const myInitialState: typeof initialState = {
+  nodes: {
+    A: {
+      x: 10.500981561971743,
+      y: 33.83446809476264,
+    },
+    B: {
+      x: 151.99930287926662,
+      y: 10.75175662330605,
+    },
+  },
+  wires: {
+    w1: {
+      from: {
+        type: "free",
+        x: 121.8347764659846,
+        y: 79.00131171797534,
+      },
+      to: {
+        type: "on-port",
+        nodeId: "B",
+        port: "in",
+      },
+    },
+    w0: {
+      from: {
+        type: "on-port",
+        nodeId: "B",
+        port: "out",
+      },
+      to: {
+        type: "free",
+        x: 279.50170972242296,
+        y: 95.00219589964001,
+      },
+    },
+  },
+};
+
 export function NodeWiresSection() {
   const [showDebugOverlay, setShowDebugOverlay] = useState(false);
   const stateRef = useRef(null);
@@ -29,7 +68,7 @@ export function NodeWiresSection() {
           </label>
           <CopyStateButton stateRef={stateRef} />
         </div>
-        <Lens zoom={2}>
+        <Lens zoom={4}>
           <StudioHackContext.Provider
             value={{
               overlayFullOpacity: true,
@@ -38,9 +77,9 @@ export function NodeWiresSection() {
           >
             <DemoDraggable
               draggable={draggable}
-              initialState={initialState}
-              width={500}
-              height={200}
+              initialState={myInitialState}
+              width={300}
+              height={120}
               stateRef={stateRef}
             />
           </StudioHackContext.Provider>
