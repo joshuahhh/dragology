@@ -6,6 +6,7 @@ import { DemoPage } from "./demo/DemoPage";
 import { SingleDemoPage } from "./demo/SingleDemoPage";
 import "./index.css";
 import { IndexPage } from "./IndexPage";
+import { FiguresPage } from "./figures/FiguresPage";
 import { NaturalNeighborTestPage } from "./NaturalNeighborTestPage";
 import { StudioPage } from "./studio/StudioPage";
 import { SingleStudyPage } from "./study/SingleStudyPage";
@@ -18,6 +19,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         {autoRoute("/", IndexPage)}
         {autoRoute("/study", StudyPage)}
         {autoRoute("/study/:id", SingleStudyPage)}
+        {autoRoute("/figures", FiguresPage)}
         {autoRoute("/demos", DemoPage)}
         {autoRoute("/demos/:id", SingleDemoPage)}
         {autoRoute("/natural-neighbor", NaturalNeighborTestPage)}
