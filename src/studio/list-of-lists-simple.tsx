@@ -21,24 +21,24 @@ const tileColors: Record<
 > = {
   // HSL fills: L=90 S=40, strokes: L=55 S=50, text: L=35 S=50
   A: {
-    fill: "hsl(220, 40%, 90%)",
-    stroke: "hsl(220, 50%, 55%)",
-    text: "hsl(220, 50%, 35%)",
+    fill: "hsl(203, 100%, 90%)",
+    stroke: "hsl(201, 99%, 63%)",
+    text: "hsl(201, 99%, 63%)",
   },
   B: {
-    fill: "hsl(35, 40%, 90%)",
-    stroke: "hsl(35, 50%, 55%)",
-    text: "hsl(35, 50%, 35%)",
+    fill: "hsl(40, 100%, 85%)",
+    stroke: "hsl(42, 82%, 51%)",
+    text: "hsl(42, 82%, 51%)",
   },
   C: {
-    fill: "hsl(150, 40%, 90%)",
-    stroke: "hsl(150, 50%, 55%)",
-    text: "hsl(150, 50%, 35%)",
+    fill: "hsl(161, 72%, 85%)",
+    stroke: "hsl(152, 74%, 46%)",
+    text: "hsl(152, 74%, 46%)",
   },
   D: {
-    fill: "hsl(330, 40%, 90%)",
-    stroke: "hsl(330, 50%, 55%)",
-    text: "hsl(330, 50%, 35%)",
+    fill: "hsl(357, 100%, 87%)",
+    stroke: "hsl(355, 74%, 65%)",
+    text: "hsl(355, 74%, 65%)",
   },
 };
 
