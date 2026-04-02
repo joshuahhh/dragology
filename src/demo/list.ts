@@ -86,4 +86,5 @@ export const demoList = [
   "stickiness",
   "controlled",
   "simple-triangle-custom",
+  "with-pointer-delay",
 ];
