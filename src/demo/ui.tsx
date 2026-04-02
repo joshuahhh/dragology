@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -330,14 +331,20 @@ export function DemoDraggable<T extends object>({
   width,
   height,
   stateRef,
+  stateOverride,
 }: {
   draggable: Draggable<T>;
   initialState: T;
   width: number;
   height: number;
   stateRef?: React.RefObject<T | null>;
+  stateOverride?: Partial<T>;
 }) {
-  const [state, setState] = useState(initialState);
+  const [ownState, setOwnState] = useState(initialState);
+  const state = useMemo(
+    () => (stateOverride ? { ...ownState, ...stateOverride } : ownState),
+    [ownState, stateOverride],
+  );
   const {
     showTreeView,
     showDropZones,
@@ -390,7 +397,7 @@ export function DemoDraggable<T extends object>({
               height={height}
               onDragStatus={setStatus}
               showDebugOverlay={showDebugOverlay}
-              onDropState={setState}
+              onDropState={setOwnState}
             />
             {showDropZones && overlayData && (
               <DropZonesSvg data={overlayData} width={width} height={height} />

@@ -1,5 +1,12 @@
+import { useMemo, useState } from "react";
 import { demo } from "../demo";
-import { DemoDraggable, DemoNotes } from "../demo/ui";
+import {
+  ConfigPanel,
+  ConfigSlider,
+  DemoDraggable,
+  DemoNotes,
+  DemoWithConfig,
+} from "../demo/ui";
 import { dragSpecToBehavior } from "../DragBehavior";
 import { Draggable } from "../draggable";
 import { DragSpec, DragSpecBuilder, param } from "../DragSpec";
@@ -31,10 +38,13 @@ function withPointerDelay<T extends object>(
 type State = {
   x: number;
   y: number;
+  config: {
+    delayMs: number;
+  };
 };
 
 const RADIUS = 15;
-const initialState: State = { x: 200, y: 200 };
+const initialState: State = { x: 200, y: 200, config: undefined as any };
 
 const draggable: Draggable<State> = ({ state, d }) => {
   return (
@@ -42,29 +52,51 @@ const draggable: Draggable<State> = ({ state, d }) => {
       transform={translate(state)}
       r={RADIUS}
       dragologyOnDrag={() =>
-        withPointerDelay(d, d.vary(state, [param("x"), param("y")]), 250)
+        withPointerDelay(
+          d,
+          d.vary(state, [param("x"), param("y")]),
+          state.config.delayMs,
+        )
       }
     />
   );
 };
 
 export default demo(
-  () => (
-    <div>
-      <DemoNotes>
-        <p>
-          Demonstration of making a new operator (using <code>d.custom</code>):{" "}
-          <code>withPointerDelay</code> lags the pointer before feeding it to a
-          nested behavior. (Currently locked to 250ms delay.)
-        </p>
-      </DemoNotes>
-      <DemoDraggable
-        draggable={draggable}
-        initialState={initialState}
-        width={400}
-        height={400}
-      />
-    </div>
-  ),
+  () => {
+    const [delayMs, setDelayMs] = useState(250);
+    const stateOverride = useMemo(() => ({ config: { delayMs } }), [delayMs]);
+    return (
+      <div>
+        <DemoNotes>
+          <p>
+            Demonstration of making a new operator (using <code>d.custom</code>
+            ): <code>withPointerDelay</code> lags the pointer before feeding it
+            to a nested behavior.
+          </p>
+        </DemoNotes>
+        <DemoWithConfig>
+          <DemoDraggable
+            draggable={draggable}
+            initialState={initialState}
+            width={400}
+            height={400}
+            stateOverride={stateOverride}
+          />
+          <ConfigPanel>
+            <ConfigSlider
+              label="Delay"
+              value={delayMs}
+              onChange={setDelayMs}
+              min={0}
+              max={1000}
+              step={10}
+              formatValue={(v) => `${v}ms`}
+            />
+          </ConfigPanel>
+        </DemoWithConfig>
+      </div>
+    );
+  },
   { tags: ["d.custom", "d.vary"] },
 );
