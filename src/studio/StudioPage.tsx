@@ -29,61 +29,57 @@ export function Section({
   );
 }
 
-const QR_SIZE = 23 * 3;
+const QR_DISPLAY_CELL_SIZE = 3;
+const QR_MARGIN = 1;
 
 export function Lens({
   zoom,
   children,
   cursorScale,
+  filenamePrefix,
 }: {
   zoom: number;
   children: ReactNode;
   cursorScale?: number;
+  filenamePrefix?: string;
 }) {
-  const qrSrc = useMemo(() => {
+  const { qrSrc, moduleCount } = useMemo(() => {
     const qr = qrcode(0, "L");
-    qr.addData(JSON.stringify({ cursorScale }));
+    qr.addData(JSON.stringify({ cursorScale, filenamePrefix }));
     qr.make();
-    return qr.createDataURL(1, 1);
-  }, [cursorScale]);
-  // const qrSrc = qrA;
-  const qrSize = QR_SIZE / zoom;
+    return {
+      qrSrc: qr.createDataURL(1, QR_MARGIN),
+      moduleCount: qr.getModuleCount(),
+    };
+  }, [cursorScale, filenamePrefix]);
+  const qrPixels = (moduleCount + QR_MARGIN * 2) * QR_DISPLAY_CELL_SIZE;
+  const qrImg = (style: React.CSSProperties) => (
+    <img
+      src={qrSrc}
+      style={{
+        position: "absolute",
+        width: qrPixels,
+        height: qrPixels,
+        pointerEvents: "none",
+        imageRendering: "pixelated",
+        ...style,
+      }}
+    />
+  );
+
   return (
     <div
       style={{
-        zoom,
-        paddingLeft: qrSize,
-        paddingRight: qrSize,
+        position: "relative",
+        display: "inline-block",
         width: "fit-content",
+        paddingLeft: qrPixels,
+        paddingRight: qrPixels,
       }}
     >
-      <div style={{ position: "relative", outline: "1px solid #ccc" }}>
-        {children}
-        <img
-          src={qrSrc}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: -qrSize,
-            width: qrSize,
-            height: qrSize,
-            pointerEvents: "none",
-            imageRendering: "pixelated",
-          }}
-        />
-        <img
-          src={qrSrc}
-          style={{
-            position: "absolute",
-            bottom: 0,
-            right: -qrSize,
-            width: qrSize,
-            height: qrSize,
-            pointerEvents: "none",
-            imageRendering: "pixelated",
-          }}
-        />
-      </div>
+      {qrImg({ top: 0, left: 0 })}
+      <div style={{ zoom, outline: "1px solid #ccc" }}>{children}</div>
+      {qrImg({ bottom: 0, right: 0 })}
     </div>
   );
 }

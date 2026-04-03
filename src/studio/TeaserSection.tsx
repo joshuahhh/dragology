@@ -37,7 +37,7 @@ export function TeaserSection() {
             <li>Drag a bit left, then down.</li>
           </ol>
         </div>
-        <Lens zoom={3} cursorScale={3}>
+        <Lens zoom={3} cursorScale={3} filenamePrefix="teaser">
           <StudioHackContext.Provider
             value={{
               overlayFullOpacity: true,
