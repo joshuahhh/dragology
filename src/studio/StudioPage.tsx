@@ -1,11 +1,11 @@
-import { ReactNode } from "react";
+import qrcode from "qrcode-generator";
+import { ReactNode, useMemo } from "react";
 import { useTitle } from "../useTitle";
 import { CanvasOfListsNestedSection } from "./CanvasOfListsNestedSection";
 import { IntervalGraphSection } from "./IntervalGraphSection";
 import { NodeWiresSection } from "./NodeWiresSection";
 import { NoolTreeSection } from "./NoolTreeSection";
 import { OrderPreservingSection } from "./OrderPreservingSection";
-import qrA from "./qr_A.png";
 import { RingOfBeadsSection } from "./RingOfBeadsSection";
 import { SpecWorkshopSection } from "./SpecWorkshopSection";
 import { StudySection } from "./StudySection";
@@ -29,15 +29,24 @@ export function Section({
   );
 }
 
-const QR_SIZE = 23 * 2;
+const QR_SIZE = 23 * 3;
 
 export function Lens({
   zoom,
   children,
+  cursorScale,
 }: {
   zoom: number;
   children: ReactNode;
+  cursorScale?: number;
 }) {
+  const qrSrc = useMemo(() => {
+    const qr = qrcode(0, "L");
+    qr.addData(JSON.stringify({ cursorScale }));
+    qr.make();
+    return qr.createDataURL(1, 1);
+  }, [cursorScale]);
+  // const qrSrc = qrA;
   const qrSize = QR_SIZE / zoom;
   return (
     <div
@@ -51,7 +60,7 @@ export function Lens({
       <div style={{ position: "relative", outline: "1px solid #ccc" }}>
         {children}
         <img
-          src={qrA}
+          src={qrSrc}
           style={{
             position: "absolute",
             top: 0,
@@ -63,7 +72,7 @@ export function Lens({
           }}
         />
         <img
-          src={qrA}
+          src={qrSrc}
           style={{
             position: "absolute",
             bottom: 0,
