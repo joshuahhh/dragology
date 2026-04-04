@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import { Draggable } from "../draggable";
 import { renderDraggableInert } from "../renderDraggable";
@@ -19,7 +19,12 @@ function sortedLayers(byId: Map<string, Layer>): SortedLayer[] {
     }));
 }
 
-type LayersListState = { layers: SortedLayer[] };
+type LayersListState = {
+  layers: SortedLayer[];
+  onHover: (id: string | null) => void;
+  hoveredId: string | null;
+  svgWidth: number;
+};
 
 const ROW_HEIGHT = 16;
 const THUMB_SIZE = 14;
@@ -37,6 +42,16 @@ const layersListDraggable: Draggable<LayersListState> = ({ state }) => {
         <g key={id} id={`layer-${id || "__root__"}`} transform={`translate(0, ${i * ROW_HEIGHT})`}>
           <rect
             x={0}
+            y={0}
+            width={state.svgWidth}
+            height={ROW_HEIGHT}
+            rx={3}
+            fill={state.hoveredId === id ? "rgba(255, 0, 255, 0.08)" : "transparent"}
+            onPointerEnter={() => state.onHover(id)}
+            onPointerLeave={() => state.onHover(null)}
+          />
+          <rect
+            x={0}
             y={1}
             width={THUMB_SIZE}
             height={THUMB_SIZE}
@@ -44,6 +59,7 @@ const layersListDraggable: Draggable<LayersListState> = ({ state }) => {
             fill="#f8fafc"
             stroke="#e2e8f0"
             strokeWidth={0.5}
+            pointerEvents="none"
           />
           {!bounds.empty && (() => {
             const bw = bounds.maxX - bounds.minX;
@@ -54,7 +70,7 @@ const layersListDraggable: Draggable<LayersListState> = ({ state }) => {
             const cx = THUMB_PAD + (inner - bw * scale) / 2;
             const cy = 1 + THUMB_PAD + (inner - bh * scale) / 2;
             return (
-              <g transform={`translate(${cx}, ${cy}) scale(${scale}) translate(${-bounds.minX}, ${-bounds.minY})`}>
+              <g transform={`translate(${cx}, ${cy}) scale(${scale}) translate(${-bounds.minX}, ${-bounds.minY})`} pointerEvents="none">
                 {element}
               </g>
             );
@@ -65,6 +81,7 @@ const layersListDraggable: Draggable<LayersListState> = ({ state }) => {
             fontSize={11}
             fontFamily="ui-monospace, monospace"
             fill="#334155"
+            pointerEvents="none"
           >
             {id === "" ? "(root)" : id}
           </text>
@@ -74,6 +91,7 @@ const layersListDraggable: Draggable<LayersListState> = ({ state }) => {
             fontSize={11}
             fontFamily="ui-monospace, monospace"
             fill="#94a3b8"
+            pointerEvents="none"
           >
             [{stackingPath.join(", ")}]
           </text>
@@ -93,20 +111,69 @@ function getLayeredFromStatus<T extends object>(
   return renderDraggableInert(outerDraggable, status.state, null, false);
 }
 
+export function LayerHighlight({
+  bounds,
+  width,
+  height,
+}: {
+  bounds: Bounds;
+  width: number;
+  height: number;
+}) {
+  if (bounds.empty) return null;
+  const pad = 2;
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      className="absolute top-0 left-0 pointer-events-none"
+    >
+      <rect
+        x={bounds.minX - pad}
+        y={bounds.minY - pad}
+        width={bounds.maxX - bounds.minX + pad * 2}
+        height={bounds.maxY - bounds.minY + pad * 2}
+        rx={3}
+        fill="rgba(255, 0, 255, 0.08)"
+        stroke="magenta"
+        strokeWidth={1.5}
+      />
+    </svg>
+  );
+}
+
 export function LayersList<T extends object>({
   draggable,
   status,
+  onHoverBounds,
 }: {
   draggable: Draggable<T>;
   status: DragStatus<T>;
+  onHoverBounds?: (bounds: Bounds | null) => void;
 }) {
   const layers = useMemo(
     () => sortedLayers(getLayeredFromStatus(draggable, status).byId),
     [draggable, status],
   );
 
-  const layersState = useMemo<LayersListState>(() => ({ layers }), [layers]);
-  const svgHeight = Math.max(layers.length * ROW_HEIGHT, ROW_HEIGHT);
+  const onHoverBoundsRef = useRef(onHoverBounds);
+  onHoverBoundsRef.current = onHoverBounds;
+
+  const boundsById = useMemo(() => {
+    const map = new Map<string, Bounds>();
+    for (const layer of layers) {
+      map.set(layer.id, layer.bounds);
+    }
+    return map;
+  }, [layers]);
+
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const onHover = useCallback((id: string | null) => {
+    setHoveredId(id);
+    onHoverBoundsRef.current?.(id != null ? (boundsById.get(id) ?? null) : null);
+  }, [boundsById]);
 
   const textX = THUMB_SIZE + 6;
   const svgWidth = useMemo(() => {
@@ -115,15 +182,23 @@ export function LayersList<T extends object>({
     return Math.max(MIN_LAYERS_WIDTH, textX + (maxIdLen + 1 + maxPathLen) * CHAR_WIDTH);
   }, [layers, textX]);
 
+  const layersState = useMemo<LayersListState>(
+    () => ({ layers, onHover, hoveredId, svgWidth }),
+    [layers, onHover, hoveredId, svgWidth],
+  );
+  const svgHeight = Math.max(layers.length * ROW_HEIGHT, ROW_HEIGHT);
+
   return (
     <div>
       <div className="text-xs text-slate-500 mb-1">layers</div>
-      <DraggableRenderer
-        draggable={layersListDraggable}
-        state={layersState}
-        width={svgWidth}
-        height={svgHeight}
-      />
+      <div onPointerLeave={() => onHover(null)}>
+        <DraggableRenderer
+          draggable={layersListDraggable}
+          state={layersState}
+          width={svgWidth}
+          height={svgHeight}
+        />
+      </div>
     </div>
   );
 }

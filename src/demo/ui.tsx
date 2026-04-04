@@ -19,7 +19,8 @@ import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { Draggable } from "../draggable";
 import { assert } from "../utils/assert";
-import { LayersList } from "./LayersList";
+import { type Bounds } from "../svgx/bounds";
+import { LayerHighlight, LayersList } from "./LayersList";
 import { OpenInEditor } from "./OpenInEditor";
 import type { Demo } from "./registry";
 import { parseTag, type TagNode, tagStringFromPath } from "./tags";
@@ -437,6 +438,7 @@ export function DemoDraggable<T extends object>({
     thumbArea,
   } = useDemoSettings();
   const [status, setStatus] = useState<DragStatus<T> | null>(null);
+  const [hoveredLayerBounds, setHoveredLayerBounds] = useState<Bounds | null>(null);
 
   useEffect(() => {
     if (stateRef) {
@@ -482,6 +484,9 @@ export function DemoDraggable<T extends object>({
               showDebugOverlay={showDebugOverlay}
               onDropState={setOwnState}
             />
+            {hoveredLayerBounds && (
+              <LayerHighlight bounds={hoveredLayerBounds} width={width} height={height} />
+            )}
             {showDropZones && overlayData && (
               <DropZonesSvg data={overlayData} width={width} height={height} />
             )}
@@ -589,6 +594,7 @@ export function DemoDraggable<T extends object>({
                 <LayersList
                   draggable={draggable}
                   status={status}
+                  onHoverBounds={setHoveredLayerBounds}
                 />
               )}
             </div>
