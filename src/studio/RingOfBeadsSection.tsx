@@ -1,9 +1,7 @@
-import { produce } from "immer";
-import { useMemo, useRef, useState } from "react";
-import { defaultDemoContext, DemoContext, DemoDraggable } from "../demo/ui";
+import { useMemo, useState } from "react";
 import { initialState, makeDraggable } from "../demos/ring-of-beads";
-import { CopyStateButton } from "./CopyStateButton";
-import { Lens, Section } from "./StudioPage";
+import { StudioDraggable } from "./StudioDraggable";
+import { Section } from "./StudioPage";
 
 const versions = [
   { label: "Version 1", stage: "d.closest()" },
@@ -13,52 +11,44 @@ const versions = [
 export function RingOfBeadsSection() {
   const [showDebugOverlay, setShowDebugOverlay] = useState(false);
   const [versionIdx, setVersionIdx] = useState(0);
-  const stateRef = useRef(null);
   const draggable = useMemo(
     () => makeDraggable(versions[versionIdx].stage),
     [versionIdx],
   );
   return (
     <Section title="Section 2">
-      <DemoContext.Provider
-        value={produce(defaultDemoContext, (draft) => {
-          draft.settings.showDebugOverlay = showDebugOverlay;
-        })}
-      >
-        <div className="mb-6 text-sm text-gray-500 space-y-2">
-          <p>Record with cursor off.</p>
-          <label className="inline-flex items-center gap-1 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showDebugOverlay}
-              onChange={(e) => setShowDebugOverlay(e.target.checked)}
-              className="accent-fuchsia-500"
-            />
-            <span className="text-fuchsia-600 font-medium">debug overlay</span>
-          </label>
-          <select
-            value={versionIdx}
-            onChange={(e) => setVersionIdx(Number(e.target.value))}
-            className="text-sm border border-gray-300 rounded px-2 py-1"
-          >
-            {versions.map((v, i) => (
-              <option key={i} value={i}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-          <CopyStateButton stateRef={stateRef} />
-        </div>
-        <Lens zoom={3} filenamePrefix="ring-of-beads">
-          <DemoDraggable
-            draggable={draggable}
-            initialState={initialState}
-            width={300}
-            height={300}
-            stateRef={stateRef}
+      <div className="mb-6 text-sm text-gray-500 space-y-2">
+        <p>Record with cursor off.</p>
+        <label className="inline-flex items-center gap-1 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showDebugOverlay}
+            onChange={(e) => setShowDebugOverlay(e.target.checked)}
+            className="accent-fuchsia-500"
           />
-        </Lens>
-      </DemoContext.Provider>
+          <span className="text-fuchsia-600 font-medium">debug overlay</span>
+        </label>
+        <select
+          value={versionIdx}
+          onChange={(e) => setVersionIdx(Number(e.target.value))}
+          className="text-sm border border-gray-300 rounded px-2 py-1"
+        >
+          {versions.map((v, i) => (
+            <option key={i} value={i}>
+              {v.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <StudioDraggable
+        draggable={draggable}
+        initialState={initialState}
+        width={300}
+        height={300}
+        zoom={3}
+        filenamePrefix="ring-of-beads"
+        demoSettings={{ showDebugOverlay }}
+      />
     </Section>
   );
 }

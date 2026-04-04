@@ -1,14 +1,12 @@
-import { produce } from "immer";
-import { useRef, useState } from "react";
-import { defaultDemoContext, DemoContext, DemoDraggable } from "../demo/ui";
+import { useState } from "react";
 import {
   CANVAS_H,
   CANVAS_W,
   draggable,
   initialState,
 } from "../demos/spec-workshop";
-import { CopyStateButton } from "./CopyStateButton";
-import { Lens, Section } from "./StudioPage";
+import { StudioDraggable } from "./StudioDraggable";
+import { Section } from "./StudioPage";
 
 const myInitialState: typeof initialState = {
   nodes: {
@@ -82,39 +80,30 @@ const myInitialState: typeof initialState = {
 
 export function SpecWorkshopSection() {
   const [showDebugOverlay, setShowDebugOverlay] = useState(false);
-  const stateRef = useRef(null);
   return (
     <Section title="Spec Workshop">
-      <DemoContext.Provider
-        value={produce(defaultDemoContext, (draft) => {
-          draft.settings.showDebugOverlay = showDebugOverlay;
-        })}
-      >
-        <div className="mb-6 text-sm text-gray-500 space-y-2">
-          <p>Record with cursor off.</p>
-          <label className="inline-flex items-center gap-1 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showDebugOverlay}
-              onChange={(e) => setShowDebugOverlay(e.target.checked)}
-              className="accent-fuchsia-500"
-            />
-            <span className="text-fuchsia-600 font-medium">debug overlay</span>
-          </label>
-          <CopyStateButton stateRef={stateRef} />
-        </div>
-        <Lens zoom={2} filenamePrefix="spec-workshop">
-          <div style={{ padding: 15 }}>
-            <DemoDraggable
-              draggable={draggable}
-              initialState={myInitialState}
-              width={CANVAS_W}
-              height={CANVAS_H}
-              stateRef={stateRef}
-            />
-          </div>
-        </Lens>
-      </DemoContext.Provider>
+      <div className="mb-6 text-sm text-gray-500 space-y-2">
+        <p>Record with cursor off.</p>
+        <label className="inline-flex items-center gap-1 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showDebugOverlay}
+            onChange={(e) => setShowDebugOverlay(e.target.checked)}
+            className="accent-fuchsia-500"
+          />
+          <span className="text-fuchsia-600 font-medium">debug overlay</span>
+        </label>
+      </div>
+      <StudioDraggable
+        draggable={draggable}
+        initialState={myInitialState}
+        width={CANVAS_W}
+        height={CANVAS_H}
+        zoom={2}
+        filenamePrefix="spec-workshop"
+        padding={15}
+        demoSettings={{ showDebugOverlay }}
+      />
     </Section>
   );
 }
