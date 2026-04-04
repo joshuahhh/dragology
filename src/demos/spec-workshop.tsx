@@ -552,7 +552,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       <g
         id={`n-${childId}`}
         key={childId}
-        transform={translate(pos.x, pos.y)}
+        transform={translate(pos)}
         dragologyZIndex={draggedId === `n-${childId}` ? 10 : 1}
         dragologyOnDrag={() => {
           const base = detach(state, childId);
@@ -818,7 +818,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       <g
         id={`n-${nodeId}`}
         key={nodeId}
-        transform={translate(node.x, node.y)}
+        transform={translate(node)}
         dragologyZIndex={isDragged ? 10 : 0}
         dragologyOnDrag={() => {
           const base = detach(state, nodeId);
@@ -974,7 +974,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           PREVIEW
         </text>
         {(["A", "B", "C"] as const).map((l) => (
-          <g key={l} transform={translate(PV_DOTS[l].x, PV_DOTS[l].y)}>
+          <g key={l} transform={translate(PV_DOTS[l])}>
             <circle r={PV_DOT_R} fill={STATE_FILL[l]} opacity={0.25} />
             <text
               textAnchor="middle"
@@ -990,10 +990,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
         ))}
         <circle
           id="preview-dot"
-          transform={translate(
-            PV_DOTS[state.previewDot].x,
-            PV_DOTS[state.previewDot].y,
-          )}
+          transform={translate(PV_DOTS[state.previewDot])}
           r={PV_DOT_R}
           fill={STATE_FILL[state.previewDot]}
           stroke="white"
