@@ -18,6 +18,8 @@ import { DragSpecTreeView } from "../DragSpecTreeView";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { Draggable } from "../draggable";
+import { renderDraggableInert } from "../renderDraggable";
+import { compareStackingPaths } from "../svgx/layers";
 import { assert } from "../utils/assert";
 import { OpenInEditor } from "./OpenInEditor";
 import type { Demo } from "./registry";
@@ -43,6 +45,7 @@ export type DemoToggleSettings = {
   showDebugOverlay: boolean;
   showStateViewer: boolean;
   showTimingMeter: boolean;
+  showLayers: boolean;
 };
 
 export type DemoSettings = DemoToggleSettings & {
@@ -57,6 +60,7 @@ const defaultToggles: DemoToggleSettings = {
   showDebugOverlay: false,
   showStateViewer: false,
   showTimingMeter: false,
+  showLayers: false,
 };
 
 export const defaultDemoContext = {
@@ -127,6 +131,7 @@ const settingsEntries = [
   { key: "showTreeView", label: "Spec tree", mobileHidden: true },
   { key: "showDropZones", label: "Drop zones", mobileHidden: false },
   { key: "showTimingMeter", label: "Timing", mobileHidden: false },
+  { key: "showLayers", label: "Layers", mobileHidden: true },
 ] as const;
 
 const settingsIcons: Record<keyof DemoToggleSettings, ReactNode> = {
@@ -220,6 +225,13 @@ const settingsIcons: Record<keyof DemoToggleSettings, ReactNode> = {
       />
     </svg>
   ),
+  showLayers: (
+    <svg width={18} height={18} viewBox="0 0 14 14" className="shrink-0">
+      <rect x={2} y={2} width={10} height={3} rx={1} fill="#64748b" />
+      <rect x={2} y={6.5} width={10} height={3} rx={1} fill="#64748b" opacity={0.5} />
+      <rect x={2} y={11} width={10} height={3} rx={1} fill="#64748b" opacity={0.25} />
+    </svg>
+  ),
 };
 
 const settingsActiveColors: Record<
@@ -231,6 +243,7 @@ const settingsActiveColors: Record<
   showTreeView: { bg: "#fffbeb", border: "#f59e0b" },
   showDropZones: { bg: "#eff6ff", border: "#3b82f6" },
   showTimingMeter: { bg: "#f1f5f9", border: "#64748b" },
+  showLayers: { bg: "#f1f5f9", border: "#64748b" },
 };
 
 const TIMING_BAR_COUNT = 90;
@@ -396,6 +409,43 @@ export function DemoSettingsBar({
   );
 }
 
+function sortedLayers(byId: Map<string, { stackingPath: number[] }>): { id: string; stackingPath: number[] }[] {
+  return Array.from(byId.entries())
+    .sort(([, a], [, b]) => compareStackingPaths(a.stackingPath, b.stackingPath))
+    .map(([key, layer]) => ({ id: key, stackingPath: layer.stackingPath }));
+}
+
+function LayersList<T extends object>({
+  draggable,
+  status,
+}: {
+  draggable: Draggable<T>;
+  status: DragStatus<T>;
+}) {
+  const layers = useMemo(() => {
+    if (status.type === "dragging") {
+      return sortedLayers(status.result.preview.byId);
+    }
+    const layered = renderDraggableInert(draggable, status.state, null, false);
+    return sortedLayers(layered.byId);
+  }, [draggable, status]);
+
+  return (
+    <div>
+      <div className="text-xs text-slate-500 mb-1">layers</div>
+      <div className="text-xs font-mono text-slate-700 whitespace-nowrap">
+        {layers.map(({ id, stackingPath }, i) => (
+          <div key={i}>
+            {id === "" ? <span className="text-slate-400">(root)</span> : id}
+            {" "}
+            <span className="text-slate-400">[{stackingPath.join(", ")}]</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function DemoDraggable<T extends object>({
   draggable,
   initialState,
@@ -421,6 +471,7 @@ export function DemoDraggable<T extends object>({
     showDropZones,
     showDebugOverlay,
     showStateViewer,
+    showLayers,
     thumbArea,
   } = useDemoSettings();
   const [status, setStatus] = useState<DragStatus<T> | null>(null);
@@ -500,7 +551,7 @@ export function DemoDraggable<T extends object>({
               </svg>
             )}
           </div>
-          {(showTreeView || showStateViewer) && (
+          {(showTreeView || showStateViewer || showLayers) && (
             <div className="flex-1 flex flex-col gap-2 min-w-0">
               {showTreeView && (
                 <>
@@ -571,6 +622,12 @@ export function DemoDraggable<T extends object>({
                     </div>
                   )} */}
                 </ErrorBoundary>
+              )}
+              {showLayers && status && (
+                <LayersList
+                  draggable={draggable}
+                  status={status}
+                />
               )}
             </div>
           )}
@@ -752,8 +809,8 @@ function TagNodeView({
 }
 
 export function DemoWithConfig({ children }: { children: React.ReactNode }) {
-  const { showTreeView, showStateViewer } = useDemoSettings();
-  const debugOpen = showTreeView || showStateViewer;
+  const { showTreeView, showStateViewer, showLayers } = useDemoSettings();
+  const debugOpen = showTreeView || showStateViewer || showLayers;
   return (
     <div
       className={`flex flex-col ${debugOpen ? "" : "md:flex-row"} gap-4 items-start max-w-full`}
