@@ -122,9 +122,9 @@ export const rewriteSets: RewriteSet[] = [
     subtitle: <>Pull up operand</>,
     rewrites: [
       rewr("(+2 (+1 #A B) C)", "(+1 A (+2 B C))"),
-      rewr("(+1 A (+2 #B C))", "(+2 (+1 A B) C)"),
+      rewr("(+1 A (+2 B #C))", "(+2 (+1 A B) C)"),
       rewr("(×2 (×1 #A B) C)", "(×1 A (×2 B C))"),
-      rewr("(×1 A (×2 #B C))", "(×2 (×1 A B) C)"),
+      rewr("(×1 A (×2 B #C))", "(×2 (×1 A B) C)"),
     ],
   },
   {
