@@ -16,6 +16,9 @@ export class DistanceMinimizer {
   private readonly numConstraints: number;
   private scales: number[] | undefined;
 
+  /** All parameter sets explored during the last call to `minimize()`. */
+  exploredValues: number[][] = [];
+
   constructor(initialParams: number[], numConstraints: number) {
     this.curParams = initialParams.slice();
     this.numConstraints = numConstraints;
@@ -85,11 +88,15 @@ export class DistanceMinimizer {
 
     const constraints = options?.constraints;
 
+    this.exploredValues = [];
+
     FindMinimum(
       (_n, _m, sxArr, con) => {
         const scaledParams: number[] = [];
         for (let i = 0; i < n; i++) scaledParams[i] = sxArr[i];
         const params = fromScaled(scaledParams);
+
+        this.exploredValues.push(params.slice());
 
         const obj = paramsToPoint(params).dist2(target);
 

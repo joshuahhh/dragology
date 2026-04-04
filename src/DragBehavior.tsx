@@ -475,9 +475,15 @@ function varyBehavior<T extends object>(
     : undefined;
 
   return (frame) => {
-    const resultParams = minimizer.minimize(frame.pointer, getElementPos, {
+    minimizer.minimize(frame.pointer, getElementPos, {
       constraints: constraintsFn,
     });
+
+    const resultParams = spec.options.debugVisualizer
+      ? minimizer.exploredValues[
+          Math.floor(Math.random() * minimizer.exploredValues.length)
+        ] ?? minimizer.params
+      : minimizer.params;
 
     const newState = stateFromParams(resultParams);
     const preview = renderStateReadOnly(ctx, newState);
