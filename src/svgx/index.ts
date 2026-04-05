@@ -13,7 +13,11 @@ export type Svgx = React.ReactElement<SvgxProps>;
  * processed or layered.
  */
 export function shouldRecurseIntoChildren(element: Svgx): boolean {
-  return element.type !== "foreignObject" && element.type !== "defs";
+  return (
+    element.type !== "foreignObject" &&
+    element.type !== "defs" &&
+    !element.props.dragologyOpaque
+  );
 }
 
 /**

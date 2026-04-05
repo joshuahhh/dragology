@@ -36,6 +36,7 @@ import {
   layeredShiftZIndices,
   LayeredSvgx,
   layeredTransform,
+  layerSvg,
 } from "./svgx/layers";
 import { lerpLayeredWeighted } from "./svgx/lerp";
 import { findByPath } from "./svgx/path";
@@ -477,7 +478,7 @@ function varyBehavior<T extends object>(
         manyReaderToArray(constraintWithPin, stateFromParams(params))
     : undefined;
 
-  const VARY_VIS_DURATION = 0.1; // seconds per explored value
+  const VARY_VIS_DURATION = 0.05; // seconds per explored value
   const VARY_VIS_FRACTION = 0.3; // how early in optimizer exploration to take samples from
   let varyVisCounter = 0;
   let varyVisLastSwitch = performance.now() / 1000;
@@ -502,13 +503,32 @@ function varyBehavior<T extends object>(
       }
       resultParams =
         varyVisSampledParams ?? minimizer.exploredValues[0] ?? minimizer.params;
-      activePathSuffix = `/${varyVisCounter}`;
+      // activePathSuffix = `/${varyVisCounter}`;
     }
 
     const newState = stateFromParams(resultParams);
-    const preview = renderStateReadOnly(ctx, newState);
+    let preview = renderStateReadOnly(ctx, newState);
     const achievedPos = getElementPosition(ctx, preview);
     const gap = achievedPos.dist(frame.pointer);
+
+    if (ctx.debug.varyVisualizer) {
+      const ghosted = minimizer.exploredValues.map((params) =>
+        renderStateReadOnly(ctx, stateFromParams(params)),
+      );
+      preview = layeredMerge(
+        preview,
+        layerSvg(
+          <g id="vary-cloud" dragologyZIndex="/-100" dragologyOpaque={true}>
+            {ghosted.map((g, i) => (
+              <g key={`explored-${i}`} opacity={0.15}>
+                {drawLayered(g)}
+              </g>
+            ))}
+          </g>,
+        ),
+      );
+    }
+
     return {
       preview,
       dropState: newState,
@@ -517,6 +537,9 @@ function varyBehavior<T extends object>(
       tracedSpec: setTraceInfo(spec, {
         renderedStates: [{ layered: preview, position: achievedPos }],
         currentParams: resultParams.slice(),
+        exploredPositions: ctx.debug.varyVisualizer
+          ? minimizer.exploredPositions.slice()
+          : undefined,
       }),
     };
   };

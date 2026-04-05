@@ -19,5 +19,6 @@ declare module "react" {
     dragologyTransition?: boolean;
     dragologyEmergeFrom?: string;
     dragologyEmergeMode?: "clone" | "scale";
+    dragologyOpaque?: boolean;
   }
 }

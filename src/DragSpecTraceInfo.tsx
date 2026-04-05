@@ -16,7 +16,11 @@ export type DragSpecTraceInfoByType = {
   "when-far": { inForeground: boolean };
   "on-drop": Record<string, never>;
   during: { outputPreview: LayeredSvgx };
-  vary: { renderedStates: RenderedState[]; currentParams: number[] };
+  vary: {
+    renderedStates: RenderedState[];
+    currentParams: number[];
+    exploredPositions?: Vec2[];
+  };
   "change-result": Record<string, never>;
   "change-gap": Record<string, never>;
   "with-snap-radius": {

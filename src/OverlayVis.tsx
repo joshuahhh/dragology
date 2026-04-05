@@ -181,6 +181,25 @@ export function OverlayVis<T extends object>({
       const distance = pointer.dist(pos);
       return (
         <g opacity={opacity}>
+          {info.exploredPositions?.map((ep, i) => (
+            <line
+              key={i}
+              {...ep.xy1()}
+              {...pointer.xy2()}
+              stroke="magenta"
+              strokeWidth={0.5}
+              opacity={0.5}
+            />
+          ))}
+          {info.exploredPositions?.map((ep, i) => (
+            <circle
+              key={`c${i}`}
+              {...ep.cxy()}
+              r={2}
+              fill="magenta"
+              opacity={0.5}
+            />
+          ))}
           <circle {...pos.cxy()} r={5} fill="magenta" />
           <DistanceLine from={pos} to={pointer} distance={distance} />
         </g>
