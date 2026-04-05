@@ -52,7 +52,6 @@ const layersListDraggable: Draggable<LayersListState> = ({ state }) => {
     <g>
       {state.layers.map(({ id, stackingPath, element, bounds }, i) => (
         <g
-          key={id}
           id={`layer-${id || "__root__"}`}
           transform={`translate(0, ${i * ROW_HEIGHT})`}
         >
@@ -90,6 +89,7 @@ const layersListDraggable: Draggable<LayersListState> = ({ state }) => {
               const cy = 1 + THUMB_PAD + (inner - bh * scale) / 2;
               return (
                 <g
+                  id={`layer-${id || "__root__"}-element`}
                   transform={`translate(${cx}, ${cy}) scale(${scale}) translate(${-bounds.minX}, ${-bounds.minY})`}
                   pointerEvents="none"
                 >
