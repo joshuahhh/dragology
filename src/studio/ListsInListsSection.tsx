@@ -45,7 +45,7 @@ const myInitialState: State = {
 };
 
 function ListsInListsWithTree() {
-  const [showTree, setShowTree] = useState(false);
+  const [showTree, setShowTree] = useState(true);
   const [dragStatus, setDragStatus] = useState<DragStatus<State> | null>(null);
 
   const draggingStatus = dragStatus?.type === "dragging" ? dragStatus : null;
@@ -83,6 +83,12 @@ function ListsInListsWithTree() {
                 svgWidth={WIDTH}
                 svgHeight={HEIGHT}
                 thumbArea={2000}
+                nodeProps={{
+                  "when-far/bg/": {
+                    width: 80,
+                    // height: 90,
+                  },
+                }}
               />
             )}
           </div>
