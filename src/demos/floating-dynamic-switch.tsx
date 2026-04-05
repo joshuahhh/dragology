@@ -48,5 +48,5 @@ export default demo(
       height={200}
     />
   ),
-  { tags: ["d.between", "spec.withFloating"] },
+  { tags: ["d.between", "spec.withFloating [tether]"] },
 );
