@@ -67,12 +67,13 @@ export function StudioDraggable<T extends object>({
 
   return (
     <DemoContext.Provider value={demoContextValue}>
-      <div className="inline-flex flex-col items-start gap-2">
-        <Lens zoom={zoom} filenamePrefix={filenamePrefix}>
-          {content}
-        </Lens>
-        <CopyStateButton stateRef={stateRef} />
-      </div>
+      <Lens
+        zoom={zoom}
+        filenamePrefix={filenamePrefix}
+        belowLeftQr={<CopyStateButton stateRef={stateRef} />}
+      >
+        {content}
+      </Lens>
     </DemoContext.Provider>
   );
 }

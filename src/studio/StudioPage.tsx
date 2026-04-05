@@ -37,11 +37,13 @@ export function Lens({
   children,
   cursorScale,
   filenamePrefix,
+  belowLeftQr,
 }: {
   zoom: number;
   children: ReactNode;
   cursorScale?: number;
   filenamePrefix?: string;
+  belowLeftQr?: ReactNode;
 }) {
   const effectiveCursorScale = cursorScale ?? zoom;
   const { qrSrc, moduleCount } = useMemo(() => {
@@ -81,6 +83,20 @@ export function Lens({
       }}
     >
       {qrImg({ top: 0, left: 0 })}
+      {belowLeftQr && (
+        <div
+          style={{
+            position: "absolute",
+            top: qrPixels,
+            left: 0,
+            width: qrPixels,
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
+          {belowLeftQr}
+        </div>
+      )}
       <div style={{ zoom, outline: "1px solid #ccc" }}>{children}</div>
       {qrImg({ bottom: 0, right: 0 })}
     </div>
