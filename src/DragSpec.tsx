@@ -1,6 +1,6 @@
 import type { DragBehavior, DragInitContext, DragResult } from "./DragBehavior";
-import type { SvgxProps } from "./svgx";
 import { PathIn, ValueAtPath, getAtPath } from "./paths";
+import type { SvgxProps } from "./svgx";
 import {
   Transition,
   TransitionLike,

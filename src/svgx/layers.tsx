@@ -1,5 +1,11 @@
 import { cloneElement, Fragment } from "react";
-import { FindElementResult, Svgx, SvgxProps, updateElement, updatePropsDownTree } from ".";
+import {
+  FindElementResult,
+  Svgx,
+  SvgxProps,
+  updateElement,
+  updatePropsDownTree,
+} from ".";
 import { ErrorWithJSX } from "../ErrorBoundary";
 import { assert } from "../utils/assert";
 import { objectKeys } from "../utils/js";

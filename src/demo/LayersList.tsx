@@ -6,16 +6,26 @@ import { Svgx } from "../svgx";
 import { Bounds, getGlobalBounds } from "../svgx/bounds";
 import { Layer, LayeredSvgx, compareStackingPaths } from "../svgx/layers";
 
-type SortedLayer = { id: string; stackingPath: number[]; element: Svgx; bounds: Bounds };
+type SortedLayer = {
+  id: string;
+  stackingPath: number[];
+  element: Svgx;
+  bounds: Bounds;
+};
 
 function sortedLayers(byId: Map<string, Layer>): SortedLayer[] {
   return Array.from(byId.entries())
-    .sort(([, a], [, b]) => compareStackingPaths(a.stackingPath, b.stackingPath))
+    .sort(([, a], [, b]) =>
+      compareStackingPaths(a.stackingPath, b.stackingPath),
+    )
     .map(([key, layer]) => ({
       id: key,
       stackingPath: layer.stackingPath,
       element: layer.element,
-      bounds: getGlobalBounds(layer.element, layer.element.props.transform ?? ""),
+      bounds: getGlobalBounds(
+        layer.element,
+        layer.element.props.transform ?? "",
+      ),
     }));
 }
 
@@ -34,19 +44,27 @@ const MIN_LAYERS_WIDTH = 140;
 
 const layersListDraggable: Draggable<LayersListState> = ({ state }) => {
   const textX = THUMB_SIZE + 6;
-  const maxIdLen = Math.max(...state.layers.map(({ id }) => (id === "" ? 6 : id.length)));
+  const maxIdLen = Math.max(
+    ...state.layers.map(({ id }) => (id === "" ? 6 : id.length)),
+  );
   const pathX = textX + (maxIdLen + 1) * CHAR_WIDTH;
   return (
     <g>
       {state.layers.map(({ id, stackingPath, element, bounds }, i) => (
-        <g key={id} id={`layer-${id || "__root__"}`} transform={`translate(0, ${i * ROW_HEIGHT})`}>
+        <g
+          key={id}
+          id={`layer-${id || "__root__"}`}
+          transform={`translate(0, ${i * ROW_HEIGHT})`}
+        >
           <rect
             x={0}
             y={0}
             width={state.svgWidth}
             height={ROW_HEIGHT}
             rx={3}
-            fill={state.hoveredId === id ? "rgba(255, 0, 255, 0.08)" : "transparent"}
+            fill={
+              state.hoveredId === id ? "rgba(255, 0, 255, 0.08)" : "transparent"
+            }
             onPointerEnter={() => state.onHover(id)}
             onPointerLeave={() => state.onHover(null)}
           />
@@ -61,20 +79,24 @@ const layersListDraggable: Draggable<LayersListState> = ({ state }) => {
             strokeWidth={0.5}
             pointerEvents="none"
           />
-          {!bounds.empty && (() => {
-            const bw = bounds.maxX - bounds.minX;
-            const bh = bounds.maxY - bounds.minY;
-            if (bw === 0 && bh === 0) return null;
-            const inner = THUMB_SIZE - THUMB_PAD * 2;
-            const scale = Math.min(inner / (bw || 1), inner / (bh || 1));
-            const cx = THUMB_PAD + (inner - bw * scale) / 2;
-            const cy = 1 + THUMB_PAD + (inner - bh * scale) / 2;
-            return (
-              <g transform={`translate(${cx}, ${cy}) scale(${scale}) translate(${-bounds.minX}, ${-bounds.minY})`} pointerEvents="none">
-                {element}
-              </g>
-            );
-          })()}
+          {!bounds.empty &&
+            (() => {
+              const bw = bounds.maxX - bounds.minX;
+              const bh = bounds.maxY - bounds.minY;
+              if (bw === 0 && bh === 0) return null;
+              const inner = THUMB_SIZE - THUMB_PAD * 2;
+              const scale = Math.min(inner / (bw || 1), inner / (bh || 1));
+              const cx = THUMB_PAD + (inner - bw * scale) / 2;
+              const cy = 1 + THUMB_PAD + (inner - bh * scale) / 2;
+              return (
+                <g
+                  transform={`translate(${cx}, ${cy}) scale(${scale}) translate(${-bounds.minX}, ${-bounds.minY})`}
+                  pointerEvents="none"
+                >
+                  {element}
+                </g>
+              );
+            })()}
           <text
             x={textX}
             y={12}
@@ -170,16 +192,32 @@ export function LayersList<T extends object>({
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const onHover = useCallback((id: string | null) => {
-    setHoveredId(id);
-    onHoverBoundsRef.current?.(id != null ? (boundsById.get(id) ?? null) : null);
-  }, [boundsById]);
+  const onHover = useCallback(
+    (id: string | null) => {
+      setHoveredId(id);
+      onHoverBoundsRef.current?.(
+        id != null ? (boundsById.get(id) ?? null) : null,
+      );
+    },
+    [boundsById],
+  );
 
   const textX = THUMB_SIZE + 6;
   const svgWidth = useMemo(() => {
-    const maxIdLen = Math.max(0, ...layers.map(({ id }) => (id === "" ? 6 : id.length)));
-    const maxPathLen = Math.max(0, ...layers.map(({ stackingPath }) => `[${stackingPath.join(", ")}]`.length));
-    return Math.max(MIN_LAYERS_WIDTH, textX + (maxIdLen + 1 + maxPathLen) * CHAR_WIDTH);
+    const maxIdLen = Math.max(
+      0,
+      ...layers.map(({ id }) => (id === "" ? 6 : id.length)),
+    );
+    const maxPathLen = Math.max(
+      0,
+      ...layers.map(
+        ({ stackingPath }) => `[${stackingPath.join(", ")}]`.length,
+      ),
+    );
+    return Math.max(
+      MIN_LAYERS_WIDTH,
+      textX + (maxIdLen + 1 + maxPathLen) * CHAR_WIDTH,
+    );
   }, [layers, textX]);
 
   const layersState = useMemo<LayersListState>(
