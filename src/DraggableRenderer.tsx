@@ -139,6 +139,7 @@ export interface DraggableRendererBaseProps<T extends object> {
   onDragState?: (state: T) => void;
   onDragStatus?: (dragStatus: DragStatus<T>) => void;
   showDebugOverlay?: boolean;
+  showVaryVisualizer?: boolean;
   /**
    * Minimum pointer movement (in px) before a pointerdown becomes a drag.
    * Below this threshold the gesture is treated as a click — the state
@@ -203,6 +204,7 @@ function DraggableRendererControlled<T extends object>({
   onDragState,
   onDragStatus,
   showDebugOverlay,
+  showVaryVisualizer,
   dragThreshold = 2,
 }: DraggableRendererBaseProps<T> & { state: T }) {
   const catchToRenderError = useCatchToRenderError();
@@ -372,6 +374,7 @@ function DraggableRendererControlled<T extends object>({
       setStatus,
       onDropState,
       dragThreshold,
+      showVaryVisualizer: showVaryVisualizer ?? false,
     }),
     [
       catchToRenderError,
@@ -380,6 +383,7 @@ function DraggableRendererControlled<T extends object>({
       onDropState,
       setStatus,
       setPointerFromEvent,
+      showVaryVisualizer,
     ],
   );
 
@@ -592,6 +596,7 @@ type RenderContext<T extends object> = {
   setStatus: (ds: DragStatus<T>) => void;
   onDropState?: (state: T) => void;
   dragThreshold: number;
+  showVaryVisualizer: boolean;
 };
 
 /**
@@ -666,6 +671,9 @@ function postProcessForInteraction<T extends object>(
               anchorPos,
               pointerStart: pointer,
               startState: state,
+              debug: {
+                varyVisualizer: ctx.showVaryVisualizer,
+              },
             };
 
             const frame: DragFrame = { pointer };

@@ -18,8 +18,8 @@ import { DragSpecTreeView } from "../DragSpecTreeView";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { Draggable } from "../draggable";
-import { assert } from "../utils/assert";
 import { type Bounds } from "../svgx/bounds";
+import { assert } from "../utils/assert";
 import { LayerHighlight, LayersList } from "./LayersList";
 import { OpenInEditor } from "./OpenInEditor";
 import type { Demo } from "./registry";
@@ -46,6 +46,7 @@ export type DemoToggleSettings = {
   showStateViewer: boolean;
   showTimingMeter: boolean;
   showLayers: boolean;
+  showVaryVisualizer: boolean;
 };
 
 export type DemoSettings = DemoToggleSettings & {
@@ -61,6 +62,7 @@ const defaultToggles: DemoToggleSettings = {
   showStateViewer: false,
   showTimingMeter: false,
   showLayers: false,
+  showVaryVisualizer: false,
 };
 
 export const defaultDemoContext = {
@@ -132,6 +134,7 @@ const settingsEntries = [
   { key: "showDropZones", label: "Drop zones", mobileHidden: false },
   { key: "showTimingMeter", label: "Timing", mobileHidden: false },
   { key: "showLayers", label: "Layers", mobileHidden: true },
+  { key: "showVaryVisualizer", label: "Vary vis", mobileHidden: false },
 ] as const;
 
 const settingsIcons: Record<keyof DemoToggleSettings, ReactNode> = {
@@ -228,8 +231,31 @@ const settingsIcons: Record<keyof DemoToggleSettings, ReactNode> = {
   showLayers: (
     <svg width={18} height={18} viewBox="0 0 14 14" className="shrink-0">
       <rect x={2} y={2} width={10} height={3} rx={1} fill="#64748b" />
-      <rect x={2} y={6.5} width={10} height={3} rx={1} fill="#64748b" opacity={0.5} />
-      <rect x={2} y={11} width={10} height={3} rx={1} fill="#64748b" opacity={0.25} />
+      <rect
+        x={2}
+        y={6.5}
+        width={10}
+        height={3}
+        rx={1}
+        fill="#64748b"
+        opacity={0.5}
+      />
+      <rect
+        x={2}
+        y={11}
+        width={10}
+        height={3}
+        rx={1}
+        fill="#64748b"
+        opacity={0.25}
+      />
+    </svg>
+  ),
+  showVaryVisualizer: (
+    <svg width={18} height={18} viewBox="0 0 14 14" className="shrink-0">
+      <circle cx={5} cy={7} r={2} fill="#f97316" opacity={0.4} />
+      <circle cx={9} cy={5} r={2} fill="#f97316" opacity={0.4} />
+      <circle cx={7} cy={10} r={2} fill="#f97316" opacity={0.4} />
     </svg>
   ),
 };
@@ -244,6 +270,7 @@ const settingsActiveColors: Record<
   showDropZones: { bg: "#eff6ff", border: "#3b82f6" },
   showTimingMeter: { bg: "#f1f5f9", border: "#64748b" },
   showLayers: { bg: "#f1f5f9", border: "#64748b" },
+  showVaryVisualizer: { bg: "#fff7ed", border: "#f97316" },
 };
 
 const TIMING_BAR_COUNT = 90;
@@ -435,10 +462,13 @@ export function DemoDraggable<T extends object>({
     showDebugOverlay,
     showStateViewer,
     showLayers,
+    showVaryVisualizer,
     thumbArea,
   } = useDemoSettings();
   const [status, setStatus] = useState<DragStatus<T> | null>(null);
-  const [hoveredLayerBounds, setHoveredLayerBounds] = useState<Bounds | null>(null);
+  const [hoveredLayerBounds, setHoveredLayerBounds] = useState<Bounds | null>(
+    null,
+  );
 
   useEffect(() => {
     if (stateRef) {
@@ -482,10 +512,15 @@ export function DemoDraggable<T extends object>({
               height={height}
               onDragStatus={setStatus}
               showDebugOverlay={showDebugOverlay}
+              showVaryVisualizer={showVaryVisualizer}
               onDropState={setOwnState}
             />
             {hoveredLayerBounds && (
-              <LayerHighlight bounds={hoveredLayerBounds} width={width} height={height} />
+              <LayerHighlight
+                bounds={hoveredLayerBounds}
+                width={width}
+                height={height}
+              />
             )}
             {showDropZones && overlayData && (
               <DropZonesSvg data={overlayData} width={width} height={height} />

@@ -96,6 +96,9 @@ export type DragInitContext<T extends object> = {
   anchorPos: Vec2;
   pointerStart: Vec2;
   startState: T;
+  debug: {
+    varyVisualizer: boolean;
+  };
 };
 
 /**
@@ -479,10 +482,10 @@ function varyBehavior<T extends object>(
       constraints: constraintsFn,
     });
 
-    const resultParams = spec.options.debugVisualizer
-      ? minimizer.exploredValues[
+    const resultParams = ctx.debug.varyVisualizer
+      ? (minimizer.exploredValues[
           Math.floor(Math.random() * minimizer.exploredValues.length)
-        ] ?? minimizer.params
+        ] ?? minimizer.params)
       : minimizer.params;
 
     const newState = stateFromParams(resultParams);

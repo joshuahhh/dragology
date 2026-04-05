@@ -40,6 +40,7 @@ const myInitialState: typeof initialState = {
 
 export function IntervalGraphSection() {
   const [showDebugOverlay, setShowDebugOverlay] = useState(false);
+  const [showVaryVisualizer, setShowVaryVisualizer] = useState(false);
   return (
     <Section title="Interval Graph">
       <div className="mb-6 text-sm text-gray-500 space-y-2">
@@ -53,6 +54,15 @@ export function IntervalGraphSection() {
           />
           <span className="text-fuchsia-600 font-medium">debug overlay</span>
         </label>
+        <label className="inline-flex items-center gap-1 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showVaryVisualizer}
+            onChange={(e) => setShowVaryVisualizer(e.target.checked)}
+            className="accent-orange-500"
+          />
+          <span className="text-orange-600 font-medium">vary visualizer</span>
+        </label>
       </div>
       <StudioDraggable
         draggable={draggable}
@@ -62,7 +72,7 @@ export function IntervalGraphSection() {
         zoom={2}
         filenamePrefix="interval-graph"
         padding={15}
-        demoSettings={{ showDebugOverlay }}
+        demoSettings={{ showDebugOverlay, showVaryVisualizer }}
       />
     </Section>
   );

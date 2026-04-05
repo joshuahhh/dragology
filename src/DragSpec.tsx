@@ -539,11 +539,6 @@ export type VaryOptions<T> = {
    * convenience built on top of `constraint`.)
    */
   pin?: ManyReader<number, [T]>;
-  /**
-   * When enabled, the minimizer saves all explored parameter sets and
-   * picks one at random instead of the actual optimum.
-   */
-  debugVisualizer?: boolean;
 };
 
 export { and, equal, inOrder, lessThan, moreThan } from "./math/optimization";
