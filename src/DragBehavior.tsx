@@ -477,16 +477,33 @@ function varyBehavior<T extends object>(
         manyReaderToArray(constraintWithPin, stateFromParams(params))
     : undefined;
 
+  const VARY_VIS_DURATION = 0.1; // seconds per explored value
+  const VARY_VIS_FRACTION = 0.3; // how early in optimizer exploration to take samples from
+  let varyVisCounter = 0;
+  let varyVisLastSwitch = performance.now() / 1000;
+  let varyVisSampledParams: number[] | null = null;
+
   return (frame) => {
     minimizer.minimize(frame.pointer, getElementPos, {
       constraints: constraintsFn,
     });
 
-    const resultParams = ctx.debug.varyVisualizer
-      ? (minimizer.exploredValues[
-          Math.floor(Math.random() * minimizer.exploredValues.length)
-        ] ?? minimizer.params)
-      : minimizer.params;
+    let resultParams = minimizer.params;
+    let activePathSuffix = "";
+    if (ctx.debug.varyVisualizer && minimizer.exploredValues.length > 0) {
+      const now = performance.now() / 1000;
+      if (now - varyVisLastSwitch >= VARY_VIS_DURATION) {
+        varyVisCounter++;
+        varyVisLastSwitch = now;
+        const sampleIdx = Math.floor(
+          Math.random() * minimizer.exploredValues.length * VARY_VIS_FRACTION,
+        );
+        varyVisSampledParams = minimizer.exploredValues[sampleIdx];
+      }
+      resultParams =
+        varyVisSampledParams ?? minimizer.exploredValues[0] ?? minimizer.params;
+      activePathSuffix = `/${varyVisCounter}`;
+    }
 
     const newState = stateFromParams(resultParams);
     const preview = renderStateReadOnly(ctx, newState);
@@ -496,7 +513,7 @@ function varyBehavior<T extends object>(
       preview,
       dropState: newState,
       gap,
-      activePath: "vary",
+      activePath: `vary${activePathSuffix}`,
       tracedSpec: setTraceInfo(spec, {
         renderedStates: [{ layered: preview, position: achievedPos }],
         currentParams: resultParams.slice(),
