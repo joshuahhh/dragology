@@ -1,5 +1,4 @@
-import { produce } from "immer";
-import { ReactNode, useRef } from "react";
+import { useRef } from "react";
 import {
   defaultDemoContext,
   DemoContext,
@@ -37,43 +36,32 @@ export function StudioDraggable<T extends object>({
   const stateRef = useRef<T | null>(null);
 
   const demoContextValue = demoSettings
-    ? produce(defaultDemoContext, (draft) => {
-        Object.assign(draft.settings, demoSettings);
-      })
+    ? {
+        ...defaultDemoContext,
+        settings: { ...defaultDemoContext.settings, ...demoSettings },
+      }
     : defaultDemoContext;
-
-  let content: ReactNode = (
-    <DemoDraggable
-      draggable={draggable}
-      initialState={initialState}
-      width={width}
-      height={height}
-      stateRef={stateRef}
-      stateOverride={stateOverride}
-    />
-  );
-
-  if (padding != null) {
-    content = <div style={{ padding }}>{content}</div>;
-  }
-
-  if (hackSettings) {
-    content = (
-      <StudioHackContext.Provider value={hackSettings}>
-        {content}
-      </StudioHackContext.Provider>
-    );
-  }
 
   return (
     <DemoContext.Provider value={demoContextValue}>
-      <Lens
-        zoom={zoom}
-        filenamePrefix={filenamePrefix}
-        belowLeftQr={<CopyStateButton stateRef={stateRef} />}
-      >
-        {content}
-      </Lens>
+      <StudioHackContext.Provider value={hackSettings ?? {}}>
+        <Lens
+          zoom={zoom}
+          filenamePrefix={filenamePrefix}
+          belowLeftQr={<CopyStateButton stateRef={stateRef} />}
+        >
+          <div style={{ padding: padding ?? 0 }}>
+            <DemoDraggable
+              draggable={draggable}
+              initialState={initialState}
+              width={width}
+              height={height}
+              stateRef={stateRef}
+              stateOverride={stateOverride}
+            />
+          </div>
+        </Lens>
+      </StudioHackContext.Provider>
     </DemoContext.Provider>
   );
 }
