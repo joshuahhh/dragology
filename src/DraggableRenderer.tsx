@@ -23,7 +23,7 @@ import {
   getOnDragCallbackOnElement,
   makeDraggableProps,
 } from "./draggable";
-import { Vec2 } from "./math/vec2";
+import { Vec2, type Vec2able } from "./math/vec2";
 import {
   renderDraggableInert,
   renderDraggableInertUnlayered,
@@ -150,9 +150,10 @@ export interface DraggableRendererBaseProps<T extends object> {
   dragThreshold?: number;
   /**
    * Simulate a drag on the element with this ID. The pointer is faked
-   * at the element's center. The draggable won't be interactive.
+   * at the element's center (plus optional offset). The draggable
+   * won't be interactive.
    */
-  simulateDrag?: string;
+  simulateDrag?: { id: string; offset?: Vec2able };
 }
 
 export type DraggableRendererProps<T extends object> =
@@ -303,18 +304,24 @@ function DraggableRendererControlled<T extends object>({
   // constant). THIS IS IMPLEMENTED AS A HACK FOR DEVELOPMENT --
   // maybe there should be a beefier version of it someday.
   if (simulateDrag && status.type === "idle" && !status.pendingDrag) {
+    const simId = simulateDrag.id;
+    const simOffset = simulateDrag.offset
+      ? Vec2(simulateDrag.offset)
+      : Vec2(0, 0);
     const content = renderDraggableInertUnlayered(
       draggable,
       state,
-      simulateDrag,
+      simId,
       true,
     );
-    const found = findElement(content, (el) => el.props.id === simulateDrag);
+    const found = findElement(content, (el) => el.props.id === simId);
     if (found) {
       const localBounds = getLocalBounds(found.element);
       if (!localBounds.empty) {
         const center = boundsCenter(localBounds);
-        const pointer = localToGlobal(found.accumulatedTransform, center);
+        const pointer = localToGlobal(found.accumulatedTransform, center).add(
+          simOffset,
+        );
         pointerOverrideRef.current = pointer;
 
         const dragSpec = getOnDragCallbackOnElement<T>(found.element)?.();
@@ -323,7 +330,7 @@ function DraggableRendererControlled<T extends object>({
           const behaviorCtx: DragInitContext<T> = {
             draggable,
             draggedPath,
-            draggedId: simulateDrag,
+            draggedId: simId,
             anchorPos: center,
             startState: state,
             debug: { varyVisualizer: false },
@@ -455,6 +462,17 @@ function DraggableRendererControlled<T extends object>({
         />
       ) : (
         assertNever(status)
+      )}
+      {simulateDrag && pointerOverrideRef.current && (
+        <circle
+          cx={pointerOverrideRef.current.x}
+          cy={pointerOverrideRef.current.y}
+          r={4}
+          fill="red"
+          stroke="white"
+          strokeWidth={1.5}
+          opacity={0.8}
+        />
       )}
     </svg>
   );

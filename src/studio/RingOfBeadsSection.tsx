@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { initialState, makeDraggable } from "../demos/ring-of-beads";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import { DragSpecTreeView } from "../DragSpecTreeView";
+import { Vec2 } from "../lib";
 import { StudioDraggable } from "./StudioDraggable";
 import { Lens, Section } from "./StudioPage";
 
@@ -29,6 +30,12 @@ function RingOfBeadsWithTree({ versionIdx }: { versionIdx: number }) {
   const WIDTH = 300;
   const HEIGHT = 300;
 
+  const basicTreeProps = draggingStatus && {
+    spec: draggingStatus.result.tracedSpec,
+    activePath: draggingStatus.result.activePath,
+    colorMap: null as Map<string, string> | null,
+  };
+
   return (
     <>
       <label className="inline-flex items-center gap-1 cursor-pointer select-none">
@@ -43,34 +50,80 @@ function RingOfBeadsWithTree({ versionIdx }: { versionIdx: number }) {
         <div
           style={{
             display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
             gap: 16,
             padding: 10,
             width: 960,
-            height: 400,
+            height: 540,
           }}
         >
-          <DraggableRenderer
-            draggable={draggable}
-            initialState={initialState}
-            width={WIDTH}
-            height={HEIGHT}
-            onDragStatus={setDragStatus}
-            simulateDrag="A"
-          />
-          <div
-            style={{ width: 370, height: 500, zoom: 0.7, overflow: "hidden" }}
-          >
-            {showTree && draggingStatus && (
-              <DragSpecTreeView
-                spec={draggingStatus.result.tracedSpec}
-                activePath={draggingStatus.result.activePath}
-                colorMap={null}
-                svgWidth={WIDTH}
-                svgHeight={HEIGHT}
-                thumbArea={2000}
-              />
-            )}
+          <div style={{ alignSelf: "flex-end", zoom: 1.2 }}>
+            <DraggableRenderer
+              draggable={draggable}
+              initialState={initialState}
+              width={WIDTH}
+              height={HEIGHT}
+              onDragStatus={setDragStatus}
+              simulateDrag={{ id: "A", offset: Vec2(0, -80) }}
+              key={versionIdx}
+            />
           </div>
+          {showTree &&
+            draggingStatus &&
+            {
+              "0": (
+                <div
+                  style={{
+                    width: 500,
+                    height: 500,
+                    zoom: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  <DragSpecTreeView
+                    {...basicTreeProps!}
+                    svgWidth={WIDTH}
+                    svgHeight={HEIGHT}
+                    thumbArea={13000}
+                  />
+                </div>
+              ),
+              "1": (
+                <div
+                  style={{
+                    width: 500,
+                    height: 500,
+                    zoom: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  <DragSpecTreeView
+                    {...basicTreeProps!}
+                    svgWidth={WIDTH}
+                    svgHeight={HEIGHT}
+                    thumbArea={12000}
+                  />
+                </div>
+              ),
+              "2": (
+                <div
+                  style={{
+                    width: 500,
+                    height: 500,
+                    zoom: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  <DragSpecTreeView
+                    {...basicTreeProps!}
+                    svgWidth={WIDTH}
+                    svgHeight={HEIGHT}
+                    thumbArea={12000}
+                  />
+                </div>
+              ),
+            }[versionIdx]}
         </div>
       </Lens>
     </>
@@ -98,7 +151,14 @@ export function RingOfBeadsSection() {
   );
   return (
     <Section title="Section 2">
-      <div className="mb-6 text-sm text-gray-500 space-y-2">
+      <div
+        className="text-sm text-gray-500 space-y-2"
+        style={{
+          position: "sticky",
+          top: 16,
+          zIndex: 50,
+        }}
+      >
         <p>Record with cursor off.</p>
         <label className="inline-flex items-center gap-1 cursor-pointer select-none">
           <input
@@ -144,7 +204,9 @@ export function RingOfBeadsSection() {
         }}
       />
       <div style={{ height: 200 }} />
-      <RingOfBeadsWithTree versionIdx={versionIdx} />
+      <RingOfBeadsWithTree versionIdx={0} />
+      <RingOfBeadsWithTree versionIdx={1} />
+      <RingOfBeadsWithTree versionIdx={2} />
     </Section>
   );
 }
