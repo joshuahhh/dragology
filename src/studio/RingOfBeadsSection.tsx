@@ -3,10 +3,14 @@ import { initialState, makeDraggable } from "../demos/ring-of-beads";
 import { StudioDraggable } from "./StudioDraggable";
 import { Section } from "./StudioPage";
 
-const versions = [
+const versions: {
+  label: string;
+  stage: Parameters<typeof makeDraggable>[0];
+}[] = [
   { label: "Version 1", stage: "d.closest()" },
   { label: "Version 2", stage: "d.closest().withFloating()" },
-] as const;
+  { label: "Video version", stage: "d.closest().whenFar().withFloating()" },
+];
 
 export function RingOfBeadsSection() {
   const [showDebugOverlay, setShowDebugOverlay] = useState(false);
