@@ -27,6 +27,7 @@ function RingOfBeadsWithTree({
   dragOffset,
   simulateDrag = true,
   nodeProps,
+  filenamePrefix,
 }: {
   versionIdx: number;
   thumbArea: number;
@@ -34,6 +35,7 @@ function RingOfBeadsWithTree({
   dragOffset?: Vec2able;
   simulateDrag?: boolean;
   nodeProps?: Record<string, DragSpecTreeViewNodeProps>;
+  filenamePrefix?: string;
 }) {
   const draggable = useMemo(
     () => makeDraggable(versions[versionIdx].stage),
@@ -46,7 +48,7 @@ function RingOfBeadsWithTree({
   const HEIGHT = 300;
 
   return (
-    <Lens zoom={1} filenamePrefix="ring-of-beads">
+    <Lens zoom={1} filenamePrefix={filenamePrefix} cursorScale={2}>
       <div
         style={{
           display: "flex",
@@ -183,24 +185,32 @@ export function RingOfBeadsSection() {
         versionIdx={0}
         thumbArea={21000}
         simulateDrag={simulateDrag}
+        filenamePrefix="ring-of-beads-v0"
       />
+      <div style={{ height: 200 }} />
       <RingOfBeadsWithTree
         versionIdx={1}
         thumbArea={13000}
         simulateDrag={simulateDrag}
+        filenamePrefix="ring-of-beads-v1"
       />
+      <div style={{ height: 200 }} />
       {[Vec2(0), Vec2(0, -80)].map((dragOffset) => (
-        <RingOfBeadsWithTree
-          versionIdx={2}
-          thumbArea={7000}
-          dragOffset={dragOffset}
-          nodeProps={{
-            "with-floating/when-far/bg/": {
-              width: 150,
-            },
-          }}
-          simulateDrag={simulateDrag}
-        />
+        <>
+          <RingOfBeadsWithTree
+            versionIdx={2}
+            thumbArea={7000}
+            dragOffset={dragOffset}
+            nodeProps={{
+              "with-floating/when-far/bg/": {
+                width: 150,
+              },
+            }}
+            simulateDrag={simulateDrag}
+            filenamePrefix="ring-of-beads-v2"
+          />
+          <div style={{ height: 200 }} />
+        </>
       ))}
     </Section>
   );
