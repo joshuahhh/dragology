@@ -7,6 +7,7 @@ import { ListsInListsSection } from "./ListsInListsSection";
 import { NodesAndNoodlesSection } from "./NodesAndNoodlesSection";
 import { RingOfBeadsSection } from "./RingOfBeadsSection";
 import { SchedulerSection } from "./SchedulerSection";
+import { StickyNotesSection } from "./StickyNotesSection";
 import { StudySection } from "./StudySection";
 import { TactileTessellationsSection } from "./TactileTessellationsSection";
 import { TeaserSection } from "./TeaserSection";
@@ -130,6 +131,8 @@ export const StudioPage = () => {
       <TwistedTreesSection />
       <Divider />
       <StudySection />
+      <Divider />
+      <StickyNotesSection />
     </div>
   );
 };
