@@ -394,7 +394,7 @@ function duringBehavior<T extends object>(
     const result = subBehavior(frame);
     const transformedState = spec.duringFn(result.dropState);
     const preview = renderStateReadOnly(ctx, transformedState);
-    const elementPos = getElementPositionOrThrow(ctx, preview);
+    const elementPos = getElementPosition(ctx, preview) ?? Infinity;
     return {
       ...result,
       preview,
