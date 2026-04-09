@@ -1,3 +1,4 @@
+import { produce } from "immer";
 import { Draggable } from "../draggable";
 import { param } from "../DragSpec";
 import { Vec2 } from "../math/vec2";
@@ -18,6 +19,8 @@ type StickyNote = {
   id: string;
   x: number;
   y: number;
+  destX: number;
+  destY: number;
   content: string;
   color: keyof typeof COLORS;
 };
@@ -32,55 +35,69 @@ export const initialState: State = {
   notes: [
     {
       id: "note-1",
-      x: 24.50033207750538,
-      y: 155.0012219869991,
+      x: 0 * 140,
+      y: 600,
+      destX: 24.50033207750538,
+      destY: 155.0012219869991,
       content: "<div><strong>DnD is hard and often avoided</strong></div>",
       color: "yellow",
     },
     {
       id: "note-2",
-      x: 267.500300153848,
-      y: 43.75230243763769,
+      x: 1 * 140,
+      y: 600,
+      destX: 267.500300153848,
+      destY: 43.75230243763769,
       content:
         "<div><strong>Ease of Use:</strong><br/>Concise code, less math</div>",
       color: "green",
     },
     {
       id: "note-3",
-      x: 172.0005107664613,
-      y: 343.7492288320923,
+      x: 2 * 140,
+      y: 600,
+      destX: 172.0005107664613,
+      destY: 343.7492288320923,
       content:
         "<div><strong>Quality:</strong><br/>Polished out of the box</div>",
       color: "green",
     },
     {
       id: "note-4",
-      x: 519.9999849792182,
-      y: 112.74936668633617,
+      x: 3 * 140,
+      y: 600,
+      destX: 519.9999849792182,
+      destY: 112.74936668633617,
       content:
         "<div><strong>Exploration:</strong><br/>Play and discovery</div>",
       color: "green",
     },
     {
       id: "note-5",
-      x: 379.75091011268046,
-      y: 244.0010067065286,
+      x: 4 * 140,
+      y: 600,
+      destX: 379.75091011268046,
+      destY: 274.0010067065286,
       content:
         "<div><strong>Learnability:</strong><br/>State space stresses</div>",
       color: "orange",
     },
     {
       id: "note-6",
-      x: 747.249760788392,
-      y: 129.99879331075806,
+      x: 5 * 140,
+      y: 600,
+      destX: 747.249760788392,
+      destY: 129.99879331075806,
       content:
         "<div><strong>A niche:</strong><br/>Animating abstractions</div>",
       color: "blue",
     },
     {
       id: "note-7",
-      x: 654.9988199609638,
-      y: 332.5000642190833,
+      x: 6 * 140,
+      y: 600,
+      destX: 654.9988199609638,
+      destY: 332.5000642190833,
       content: "<div><strong>Dragology as language or paradigm</strong></div>",
       color: "blue",
     },
@@ -180,6 +197,77 @@ export const draggable: Draggable<State> = ({
         })}
       </g>
     )}
+    {state.notes.map((note) =>
+      draggedId === note.id ? (
+        <g id={`${note.id}-ticks`} dragologyZIndex={-1}>
+          <line
+            x1={note.destX + NOTE_W / 2}
+            y1={-16}
+            x2={note.destX + NOTE_W / 2}
+            y2={0}
+            stroke={COLORS[note.color]}
+            strokeWidth={3}
+          />
+          <line
+            x1={note.destX + NOTE_W / 2}
+            y1={540}
+            x2={note.destX + NOTE_W / 2}
+            y2={540 + 16}
+            stroke={COLORS[note.color]}
+            strokeWidth={3}
+          />
+          <line
+            x1={-16}
+            y1={note.destY + NOTE_H / 2}
+            x2={0}
+            y2={note.destY + NOTE_H / 2}
+            stroke={COLORS[note.color]}
+            strokeWidth={3}
+          />
+          <line
+            x1={960}
+            y1={note.destY + NOTE_H / 2}
+            x2={960 + 16}
+            y2={note.destY + NOTE_H / 2}
+            stroke={COLORS[note.color]}
+            strokeWidth={3}
+          />
+          {/* current position ticks */}
+          <line
+            x1={note.x + NOTE_W / 2}
+            y1={-16}
+            x2={note.x + NOTE_W / 2}
+            y2={0}
+            stroke="#94a3b8"
+            strokeWidth={2}
+          />
+          <line
+            x1={note.x + NOTE_W / 2}
+            y1={540}
+            x2={note.x + NOTE_W / 2}
+            y2={540 + 16}
+            stroke="#94a3b8"
+            strokeWidth={2}
+          />
+          <line
+            x1={-16}
+            y1={note.y + NOTE_H / 2}
+            x2={0}
+            y2={note.y + NOTE_H / 2}
+            stroke="#94a3b8"
+            strokeWidth={2}
+          />
+          <line
+            x1={960}
+            y1={note.y + NOTE_H / 2}
+            x2={960 + 16}
+            y2={note.y + NOTE_H / 2}
+            stroke="#94a3b8"
+            strokeWidth={2}
+          />
+        </g>
+      ) : null,
+    )}
     {state.notes.map((note, i) => (
       <g
         id={note.id}
@@ -204,7 +292,21 @@ export const draggable: Draggable<State> = ({
                   : {},
               );
           }
-          return spec.withDropTransition(100);
+          const snappedState = produce(state, (draft) => {
+            draft.notes[i] = {
+              ...draft.notes[i],
+              x: note.destX,
+              y: note.destY,
+            };
+          });
+
+          // return spec.withDropTransition(100);
+
+          return d
+            .fixed(snappedState)
+            .whenFar(spec, { gap: 25 })
+            .withBranchTransition(400)
+            .withDropTransition(100);
         }}
       >
         <rect

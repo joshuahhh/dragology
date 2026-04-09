@@ -16,6 +16,10 @@ export function TwistedTreesSection() {
     () => draggableFactory(tree7, tree7, allMorphs7, defaultConfig, 500),
     [],
   );
+  const videoDraggable = useMemo(
+    () => draggableFactory(tree7, tree7, allMorphs7, defaultConfig, 500, 350),
+    [],
+  );
   return (
     <>
       <Section title="Twisted Trees">
@@ -56,9 +60,9 @@ export function TwistedTreesSection() {
           </label>
         </div>
         <StudioDraggable
-          draggable={draggable}
+          draggable={videoDraggable}
           initialState={{ morph: allMorphs7[3681] }}
-          width={460}
+          width={700}
           height={500}
           zoom={1.5}
           filenamePrefix="twisted-trees"

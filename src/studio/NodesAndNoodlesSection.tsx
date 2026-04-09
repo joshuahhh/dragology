@@ -54,6 +54,7 @@ export function NodesAndNoodlesSection() {
         width={300}
         height={120}
         zoom={4}
+        cursorScale={2}
         filenamePrefix="nodes-and-noodles"
         demoSettings={{ showDebugOverlay }}
       />

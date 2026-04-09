@@ -25,6 +25,7 @@ export function StickyNotesSection() {
         width={960}
         height={540}
         zoom={1}
+        cursorScale={2}
         filenamePrefix="sticky-notes"
         demoSettings={{ showDebugOverlay }}
       />

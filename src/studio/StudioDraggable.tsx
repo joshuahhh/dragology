@@ -21,6 +21,7 @@ export function StudioDraggable<T extends object>({
   padding,
   hackSettings,
   demoSettings,
+  cursorScale,
 }: {
   draggable: Draggable<T>;
   initialState: T;
@@ -32,6 +33,7 @@ export function StudioDraggable<T extends object>({
   padding?: number;
   hackSettings?: StudioHackSettings;
   demoSettings?: Partial<DemoSettings>;
+  cursorScale?: number;
 }) {
   const stateRef = useRef<T | null>(null);
 
@@ -47,6 +49,7 @@ export function StudioDraggable<T extends object>({
       <StudioHackContext.Provider value={hackSettings ?? {}}>
         <Lens
           zoom={zoom}
+          cursorScale={cursorScale}
           filenamePrefix={filenamePrefix}
           belowLeftQr={<CopyStateButton stateRef={stateRef} />}
         >

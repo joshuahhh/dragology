@@ -88,6 +88,7 @@ export function draggableFactory(
   allMorphs: TreeMorph[],
   config: Config,
   yForTradRep: number,
+  bgRootCenterX?: number,
 ): Draggable<State> {
   return ({ state, d }) => {
     const finalizers = new Finalizers();
@@ -104,7 +105,11 @@ export function draggableFactory(
 
     const elements: Svgx[] = [];
     const r = drawBgTree(codomainTree, domainTree, ctx);
-    elements.push(r.element);
+
+    const rootOffsetX =
+      bgRootCenterX !== undefined ? bgRootCenterX - r.bgRootCenterX : 0;
+
+    elements.push(<g transform={translate(rootOffsetX, 0)}>{r.element}</g>);
 
     if (config.showTradRep) {
       elements.push(...drawTradRep(ctx));
@@ -186,12 +191,13 @@ function drawBgTree(
   bgNode: TreeNode,
   fgNode: TreeNode,
   ctx: Ctx,
-): { element: Svgx; w: number; h: number } {
+): { element: Svgx; w: number; h: number; bgRootCenterX: number } {
   const result = drawBgSubtree(bgNode, [fgNode], ctx);
   return {
     element: result.element,
     w: result.w,
     h: result.h,
+    bgRootCenterX: result.bgRootCenterX,
   };
 }
 
@@ -204,6 +210,7 @@ function drawBgSubtree(
   w: number;
   h: number;
   rootCenter: PointRef;
+  bgRootCenterX: number;
 } {
   const elements: Svgx[] = [];
 
@@ -222,6 +229,7 @@ function drawBgSubtree(
       w: bgNodeR.w,
       h: bgNodeR.h,
       rootCenter: bgNodeR.rootCenter,
+      bgRootCenterX: bgNodeR.bgRootCenterX,
     };
   }
 
@@ -291,6 +299,7 @@ function drawBgSubtree(
     w: width,
     h: maxY,
     rootCenter: bgNodeR.rootCenter,
+    bgRootCenterX: aOffset + bgNodeR.bgRootCenterX,
   };
 }
 
@@ -304,6 +313,7 @@ function drawBgNodeWithFgNodesInside(
   h: number;
   fgNodesBelow: TreeNode[];
   rootCenter: PointRef;
+  bgRootCenterX: number;
 } {
   const elementsInRect: Svgx[] = [];
 
@@ -356,6 +366,7 @@ function drawBgNodeWithFgNodesInside(
     h: 2 * circleRadius,
     fgNodesBelow,
     rootCenter: pointRef(circleId, nodeCenterInCircle),
+    bgRootCenterX: nodeCenterInCircle.x,
   };
 }
 
@@ -639,14 +650,21 @@ function drawSubtree(
 export default demo(
   () => {
     const [config, setConfig] = useState(defaultConfig);
+    const [fixedRootX, setFixedRootX] = useState(false);
 
+    const width3 = 300;
+    const width7 = config.showTradRep ? 600 : 400;
+    const bgRootCenterX3 = fixedRootX ? width3 / 2 : undefined;
+    const bgRootCenterX7 = fixedRootX ? width7 / 2 : undefined;
     const draggable3 = useMemo(
-      () => draggableFactory(tree3, tree3, allMorphs3, config, 300),
-      [config],
+      () =>
+        draggableFactory(tree3, tree3, allMorphs3, config, 300, bgRootCenterX3),
+      [config, bgRootCenterX3],
     );
     const draggable7 = useMemo(
-      () => draggableFactory(tree7, tree7, allMorphs7, config, 500),
-      [config],
+      () =>
+        draggableFactory(tree7, tree7, allMorphs7, config, 500, bgRootCenterX7),
+      [config, bgRootCenterX7],
     );
 
     return (
@@ -684,6 +702,9 @@ export default demo(
               onChange={(v) => setConfig((c) => ({ ...c, showTradRep: v }))}
             >
               Show traditional representation
+            </ConfigCheckbox>
+            <ConfigCheckbox value={fixedRootX} onChange={setFixedRootX}>
+              Fix root node X position
             </ConfigCheckbox>
             <ConfigSelect
               label="Interpolation"
