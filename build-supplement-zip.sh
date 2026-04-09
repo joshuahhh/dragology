@@ -43,15 +43,6 @@ rsync -a \
   --exclude='.DS_Store' \
   "$COMPARISON_DIR/" "$OUT_DIR/dragology-comparison/"
 
-# Scrub @joshuahhh/pretty-print from dragology trial package-lock.json files
-# (These are the only identifying references in the comparison repo)
-for lockfile in "$OUT_DIR"/dragology-comparison/trials/dragology-*/package-lock.json; do
-  if [ -f "$lockfile" ]; then
-    sed -i '' 's/@joshuahhh\/pretty-print/@anon\/pretty-print/g' "$lockfile"
-    sed -i '' 's/joshuahhh/anon/g' "$lockfile"
-  fi
-done
-
 # --- 3. Write README ---
 echo "Writing README..."
 cat > "$OUT_DIR/README.md" << 'EOF'
