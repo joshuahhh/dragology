@@ -580,6 +580,10 @@ export function DemoTag({
   );
 }
 
+function isOperatorTag(text: string): boolean {
+  return text.startsWith("d.") || text.startsWith("spec.") || text === "setState";
+}
+
 function TagNodeView({
   node,
   ancestorPath,
@@ -603,11 +607,16 @@ function TagNodeView({
     : undefined;
 
   const clickable = onTagClick ? "cursor-pointer" : "";
+  const isOp = isRoot && isOperatorTag(node.text);
+
+  const rootStyle = isOp
+    ? `text-[#008f88] bg-[#ecf6f2] font-semibold italic ${onTagClick ? "hover:bg-[#ddf0ea]" : ""}`
+    : `text-slate-600 bg-slate-100 ${onTagClick ? "hover:bg-slate-200" : ""}`;
 
   if (isRoot && !hasChildren) {
     return (
       <span
-        className={`inline-flex items-center text-xs border rounded px-1.5 py-0.5 text-slate-500 bg-slate-50 border-slate-200 ${clickable} ${onTagClick ? "hover:bg-slate-100" : ""}`}
+        className={`inline-flex items-center text-xs rounded px-1.5 py-0.5 ${rootStyle} ${clickable}`}
         onClick={handleClick}
       >
         {node.text}
@@ -618,7 +627,7 @@ function TagNodeView({
   if (isRoot) {
     return (
       <span
-        className={`inline-flex items-center gap-1 text-xs border rounded pl-1.5 pr-0.5 py-0.5 text-slate-500 bg-slate-50 border-slate-200 ${clickable} ${onTagClick ? "hover:bg-slate-100" : ""}`}
+        className={`inline-flex items-center gap-1 text-xs rounded pl-1.5 pr-0.5 py-0.5 ${rootStyle} ${clickable}`}
         onClick={handleClick}
       >
         {node.text}
@@ -635,10 +644,12 @@ function TagNodeView({
     );
   }
 
-  // Sub-tag
+  // Sub-tag: use a complementary inner color for operator parents
+  const subStyle = `text-slate-500 bg-white ${onTagClick ? "hover:bg-slate-100" : ""}`;
+
   return (
     <span
-      className={`inline-flex items-center gap-0.5 text-[11px] border rounded px-1 py-0 text-slate-500 bg-white border-slate-300 ${clickable} ${onTagClick ? "hover:bg-slate-100" : ""}`}
+      className={`inline-flex items-center gap-0.5 text-[11px] rounded px-1 py-0 ${subStyle} ${clickable}`}
       onClick={handleClick}
     >
       {node.text}
@@ -769,7 +780,7 @@ export function DemoCard({
   linkTitle?: boolean;
   onTagClick?: (label: string) => void;
 }) {
-  const sourceUrl = `src/demos/${demo.sourcePath}`;
+  const sourceUrl = `https://github.com/declarative-dragging/declarative-dragging.github.io/blob/main/src/demos/${demo.sourcePath}`;
   return (
     <div
       className={`bg-white rounded-lg p-5 shadow-sm ${demo.cardClassName ?? ""}`}
