@@ -128,7 +128,7 @@ export function DemoSettingsProvider({
 }
 
 const settingsEntries = [
-  { key: "showStateViewer", label: "State viewer", mobileHidden: true },
+  { key: "showStateViewer", label: "State", mobileHidden: true },
   { key: "showDebugOverlay", label: "Overlay", mobileHidden: false },
   { key: "showTreeView", label: "Spec tree", mobileHidden: true },
   { key: "showDropZones", label: "Drop zones", mobileHidden: false },
@@ -582,7 +582,36 @@ export function DemoDraggable<T extends object>({
                 <ErrorBoundary>
                   <div className="flex gap-4">
                     <div className="min-w-[50%]">
-                      <div className="text-xs text-slate-500">drop state</div>
+                      <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                        drop state
+                        <button
+                          className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          title="Copy state as JSON"
+                          onClick={() => {
+                            const state =
+                              status.type === "dragging"
+                                ? status.startState
+                                : status.state;
+                            navigator.clipboard.writeText(
+                              JSON.stringify(state, null, 2),
+                            );
+                          }}
+                        >
+                          <svg
+                            width={12}
+                            height={12}
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={1.5}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <rect x={5} y={5} width={9} height={9} rx={1.5} />
+                            <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" />
+                          </svg>
+                        </button>
+                      </div>
                       <PrettyPrint
                         value={
                           status.type === "dragging"
