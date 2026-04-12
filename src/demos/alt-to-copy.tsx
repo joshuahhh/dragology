@@ -93,6 +93,7 @@ export default demo(
       "keyboard",
       "copying",
       "setState",
+      "d.reactTo",
     ],
   },
 );

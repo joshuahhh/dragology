@@ -1284,6 +1284,7 @@ export default demo(
       "d.closest",
       "spec.withFloating [while missing]",
       "spec.whenFar",
+      "d.reactTo",
     ],
   },
 );
