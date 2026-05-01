@@ -57,6 +57,7 @@
     "d3-shape": "^3.2.0",
     "dagre": "^0.8.5",
     "deep-freeze-es6": "^5.0.0",
+    "dts-bundle-generator": "^9.5.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "html-react-parser": "^5.2.10",
