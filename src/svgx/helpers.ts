@@ -1,15 +1,13 @@
-import { Vec2, Vec2able } from "../math/vec2";
+import { Vec2, Vec2able, Vec2Args } from "../math/vec2";
 
-export function translate(v: Vec2able): string;
-export function translate(x: number, y: number): string;
-export function translate(a: Vec2able | number, b?: number): string {
-  const [x, y] = b !== undefined ? [a, b] : Vec2(a).arr();
+export function translate(...args: Vec2Args): string {
+  const { x, y } = Vec2(...args);
   return `translate(${x},${y}) `; // end in space
 }
 
 export function rotateDeg(degrees: number, c: Vec2able = Vec2(0)): string {
-  const [cx, cy] = Vec2(c).arr();
-  return `rotate(${degrees},${cx},${cy}) `; // end in space
+  const { x, y } = Vec2(c);
+  return `rotate(${degrees},${x},${y}) `; // end in space
 }
 
 export function rotateRad(radians: number, c: Vec2able = Vec2(0)): string {

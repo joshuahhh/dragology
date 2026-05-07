@@ -11,9 +11,10 @@ export type Vec2able =
   | ArrayWithTwoNumbers
   | number;
 
-export function Vec2(xy: Vec2able): Vec2;
-export function Vec2(x: number, y: number): Vec2;
-export function Vec2(xOrXY: number | Vec2able, y?: number): Vec2 {
+export type Vec2Args = [x: number, y: number] | [xy: Vec2able];
+
+export function Vec2(...args: Vec2Args): Vec2 {
+  const [xOrXY, y] = args;
   if (typeof xOrXY === "number") {
     if (y === undefined) {
       return new Vec2Class(xOrXY, xOrXY);
@@ -64,6 +65,11 @@ class Vec2Class {
   ) {}
 
   // # extraction
+
+  *[Symbol.iterator](): Iterator<number> {
+    yield this.x;
+    yield this.y;
+  }
 
   /**
    * Return as a pair [x, y], for splicing into argument lists.
