@@ -73,6 +73,7 @@ export const demoList = [
   "floating-dynamic-switch",
   "card-piles",
   "tactile-tessellations",
+  "gears",
   "switch-with-sharpness",
   "study-switch",
   "study-switch-clickable",
