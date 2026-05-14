@@ -1,6 +1,7 @@
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
-import { Draggable, param } from "../lib";
+import { equal, param } from "../DragSpec";
+import { Draggable } from "../lib";
 import { Vec2 } from "../math/vec2";
 import { path, rotateDeg, translate } from "../svgx/helpers";
 
@@ -108,24 +109,18 @@ function propagateAngleDelta(
   return ns;
 }
 
-function snapToCircleAround(
-  state: State,
-  myId: string,
-  aroundId: string,
-): State {
-  const ns = structuredClone(state);
-  const me = ns.gears[myId];
-  const o = ns.gears[aroundId];
-  const dockDist = gearRadius(me.teeth) + gearRadius(o.teeth);
-  const delta = Vec2(me).sub(o);
-  if (delta.len() < 0.001) return ns;
-  const snapped = Vec2(o).add(delta.withLen(dockDist));
-  me.x = snapped.x;
-  me.y = snapped.y;
-  const alpha = Vec2(o).angleToDeg(snapped);
-  me.angle =
-    alpha + 180 - 180 / me.teeth - (o.angle - alpha) * (o.teeth / me.teeth);
-  return ns;
+function dockConstraint(state: State, idA: string, idB: string) {
+  const a = state.gears[idA];
+  const b = state.gears[idB];
+  const dockDist = gearRadius(a.teeth) + gearRadius(b.teeth);
+  const alpha = Vec2(a).angleToDeg(b);
+  return [
+    equal(Vec2(a).dist(b), dockDist),
+    equal(
+      (a.angle - alpha) * a.teeth + (b.angle - (alpha + 180)) * b.teeth,
+      -180,
+    ),
+  ];
 }
 
 function gearShape(gear: GearData) {
@@ -191,12 +186,15 @@ const draggable: Draggable<State> = ({ state, d, draggedId, isTracking }) => {
               dragologyOnDrag={() => {
                 const otherIds = ids.filter((oid) => oid !== id);
                 const dockBranches = otherIds.map((oid) =>
-                  d
-                    .vary(state, [
+                  d.vary(
+                    state,
+                    [
                       param("gears", id, "x"),
                       param("gears", id, "y"),
-                    ])
-                    .during((s) => snapToCircleAround(s, id, oid)),
+                      param("gears", id, "angle"),
+                    ],
+                    { constraint: (s) => dockConstraint(s, id, oid) },
+                  ),
                 );
                 return d
                   .closest(dockBranches)
