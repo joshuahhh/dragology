@@ -21,6 +21,7 @@ import { Vec2 } from "../../math/vec2";
 import { Svgx } from "../../svgx";
 import { Finalizers, pointRef, PointRef } from "../../svgx/finalizers";
 import { path, translate } from "../../svgx/helpers";
+import { assertNever } from "../../utils/assert";
 import { overlapIntervals } from "./layout";
 import {
   getAllMorphs,
@@ -59,20 +60,25 @@ const nodeDist = (a: TreeNode, b: TreeNode) =>
     (n) => n === b,
   )!.length;
 
+type DragQuality = "good" | "bad" | "worse";
+
 type Config = {
   oneNodeAtATime: boolean;
   showTradRep: boolean;
   interpolation: BetweenInterpolation;
+  dragQuality: DragQuality;
 };
 
 const defaultConfig: Config = {
   oneNodeAtATime: false,
   showTradRep: false,
   interpolation: "natural-neighbor",
+  dragQuality: "good",
 };
 
 type State = {
   morph: TreeMorph;
+  highlightedBgNode?: string;
 };
 
 // Pre-compute allMorphs at module level
@@ -90,11 +96,13 @@ export function draggableFactory(
   yForTradRep: number,
   bgRootCenterX?: number,
 ): Draggable<State> {
-  return ({ state, d }) => {
+  return ({ state, d, draggedId }) => {
     const finalizers = new Finalizers();
     const ctx: Ctx = {
       finalizers,
       morph: state.morph,
+      highlightedBgNode: state.highlightedBgNode,
+      draggedId,
       d,
       allMorphs,
       codomainTree,
@@ -123,6 +131,8 @@ export function draggableFactory(
 type Ctx = {
   finalizers: Finalizers;
   morph: TreeMorph;
+  highlightedBgNode: string | undefined;
+  draggedId: string | null;
   d: DragSpecBuilder<State>;
   allMorphs: TreeMorph[];
   codomainTree: TreeNode;
@@ -168,14 +178,45 @@ function dragSpec(draggedNodeId: string, ctx: Ctx) {
     );
   }
 
-  return ctx.d
-    .between(
-      newMorphs.map((morph) => ({ morph })),
-      {
-        interpolation: ctx.config.interpolation,
-      },
-    )
-    .withSnapRadius(20, { transition: true });
+  if (ctx.config.dragQuality === "good") {
+    return ctx.d
+      .between(
+        newMorphs.map((morph) => ({ morph })),
+        {
+          interpolation: ctx.config.interpolation,
+        },
+      )
+      .withSnapRadius(20, { transition: true });
+  } else if (
+    ctx.config.dragQuality === "bad" ||
+    ctx.config.dragQuality === "worse"
+  ) {
+    const morphByTarget = Object.fromEntries(
+      newMorphs.map((m) => [m[draggedNodeId], m]),
+    );
+
+    const spec = ctx.d
+      .closest(
+        Object.keys(morphByTarget).map((bgNodeId) =>
+          ctx.d.dropTarget(`bg-circle-${bgNodeId}`, {
+            morph: ctx.morph,
+            highlightedBgNode: bgNodeId,
+          }),
+        ),
+      )
+      .whenFar({ morph: ctx.morph })
+      .onDrop((previewState) => ({
+        morph: previewState.highlightedBgNode
+          ? morphByTarget[previewState.highlightedBgNode]
+          : ctx.morph,
+      }));
+
+    return spec.withDropTransition(
+      ctx.config.dragQuality === "bad" ? 300 : false,
+    );
+  } else {
+    assertNever(ctx.config.dragQuality);
+  }
 }
 
 // # Drawing constants
@@ -356,7 +397,7 @@ function drawBgNodeWithFgNodesInside(
           cx={nodeCenterInCircle.x}
           cy={nodeCenterInCircle.y}
           r={circleRadius}
-          fill="lightgray"
+          fill={ctx.highlightedBgNode === bgNode.id ? "#93c5fd" : "lightgray"}
           dragologyZIndex="/-1"
         />
         <g transform={translate(offset)}>{elementsInRect}</g>
@@ -484,7 +525,11 @@ function drawFgSubtreeInBgNode(
           cx={0}
           cy={0}
           r={FG_NODE_SIZE / 2}
-          fill="black"
+          fill={
+            ctx.config.dragQuality !== "good" && ctx.draggedId === fgNode.id
+              ? "#3b82f6"
+              : "black"
+          }
           dragologyOnDrag={() => dragSpec(fgNode.id, ctx)}
         />
         {childrenContainer}
@@ -706,6 +751,12 @@ export default demo(
             <ConfigCheckbox value={fixedRootX} onChange={setFixedRootX}>
               Fix root node X position
             </ConfigCheckbox>
+            <ConfigSelect
+              label="Drag quality"
+              value={config.dragQuality}
+              onChange={(v) => setConfig((c) => ({ ...c, dragQuality: v }))}
+              options={["good", "bad", "worse"] as const}
+            />
             <ConfigSelect
               label="Interpolation"
               value={config.interpolation}
