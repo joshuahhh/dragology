@@ -115,7 +115,7 @@ export type DragSpecData<T extends object> = {
     }
   | {
       type: "react-to";
-      iterator: Iterator<unknown>;
+      getter: () => unknown;
       callback: (value: any) => DragSpec<T>;
     }
   | {
@@ -557,15 +557,15 @@ export class DragSpecBuilder<T extends object> {
   }
 
   /**
-   * This drag behavior calls an iterator on every frame. When the
-   * iterator's value changes, a child behavior is re-initialized
-   * with the new value.
+   * This drag behavior calls an getter on every frame. When the
+   * getter's value changes, a child behavior is re-initialized with
+   * the new value.
    */
   reactTo<V>(
-    iterator: Iterator<V>,
+    getter: () => V,
     callback: (value: V) => DragSpec<T>,
   ): DragSpec<T> {
-    return attachMethods({ type: "react-to", iterator, callback });
+    return attachMethods({ type: "react-to", getter, callback });
   }
 }
 

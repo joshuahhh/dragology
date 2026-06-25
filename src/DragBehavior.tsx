@@ -1093,7 +1093,7 @@ function reactToBehavior<T extends object>(
   spec: DragSpecData<T> & { type: "react-to" },
   ctx: DragInitContext<T>,
 ): DragBehavior<T> {
-  const { iterator, callback } = spec;
+  const { getter, callback } = spec;
 
   // initialize with fresh object so it will be invalidated
   let lastValue: unknown = {};
@@ -1101,7 +1101,7 @@ function reactToBehavior<T extends object>(
   let changeCount = 0;
 
   return (frame) => {
-    const value = iterator.next().value;
+    const value = getter();
     if (value !== lastValue) {
       lastValue = value;
       changeCount++;

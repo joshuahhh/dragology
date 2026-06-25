@@ -1,6 +1,4 @@
-function monitorKey(
-  predicate: (e: KeyboardEvent) => boolean,
-): Iterator<boolean> {
+function monitorKey(predicate: (e: KeyboardEvent) => boolean): () => boolean {
   let value = false;
 
   // see https://tldraw.dev/blog/adding-delays-to-modifier-keys
@@ -23,9 +21,7 @@ function monitorKey(
   window.addEventListener("keydown", onDown);
   window.addEventListener("keyup", onUp);
 
-  return {
-    next: () => ({ value, done: false as const }),
-  };
+  return () => value;
 }
 
 export const altKey = monitorKey((e) => e.key === "Alt");
