@@ -32,6 +32,44 @@ export function IndexPage() {
             GitHub
           </a>
         </div>
+
+        <div className="flex gap-8 justify-center mt-10">
+          <a
+            href="https://www.youtube.com/watch?v=l7v-UwpsEbk"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-col items-center gap-2 no-underline group"
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}video-thumb.jpg`}
+              alt="Video thumbnail"
+              className="w-48 rounded shadow group-hover:shadow-md transition-shadow"
+            />
+            <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+              Video
+            </span>
+          </a>
+
+          <a
+            href={`${import.meta.env.BASE_URL}dragology.pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-col items-center gap-2 no-underline group"
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}paper-thumb.png`}
+              alt="Paper thumbnail"
+              className="w-48 rounded shadow group-hover:shadow-md transition-shadow"
+            />
+            <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+              Paper
+            </span>
+          </a>
+        </div>
+
+        <p className="text-sm text-red-600 italic mt-4">
+          In submission — please do not distribute
+        </p>
       </div>
       <div className="absolute bottom-4 text-xs text-gray-400 font-mono">
         {__COMMIT_HASH__}
