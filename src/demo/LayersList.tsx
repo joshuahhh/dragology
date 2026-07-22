@@ -128,7 +128,7 @@ function getLayeredFromStatus<T extends object>(
   status: DragStatus<T>,
 ): LayeredSvgx {
   if (status.type === "dragging") {
-    return status.result.preview;
+    return status.result.preview();
   }
   return renderDraggableInert(outerDraggable, status.state, null, false);
 }

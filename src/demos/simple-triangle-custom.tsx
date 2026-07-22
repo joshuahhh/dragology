@@ -52,14 +52,14 @@ const draggable: Draggable<State> = ({ state, d }) => (
             ([, pos]) => draggedPos.dist(pos),
           )!;
           const bestState = STATES[bestIndex];
-          const preview = renderDraggableInert(
-            ctx.draggable,
-            bestState,
-            ctx.draggedId,
-            false,
-          );
           return {
-            preview,
+            preview: () =>
+              renderDraggableInert(
+                ctx.draggable,
+                bestState,
+                ctx.draggedId,
+                false,
+              ),
             dropState: bestState,
             gap: draggedPos.dist(POSITIONS[bestIndex]),
             activePath: `custom/${bestIndex}`,

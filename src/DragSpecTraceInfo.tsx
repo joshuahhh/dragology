@@ -12,12 +12,13 @@ export type RenderedState = { layered: LayeredSvgx; position: Vec2 };
 export type DragSpecTraceInfoByType = {
   fixed: { outputPreview: LayeredSvgx; position: Vec2 | null };
   "with-floating": {
-    outputPreview: LayeredSvgx;
+    outputPreview?: LayeredSvgx;
     /**
      * Where the element is floated FROM. Will be null if the element
-     * is not found (is floating from memory).
+     * is not found (is floating from memory), or undefined if the
+     * preview hasn't been computed yet (lazy evaluation).
      */
-    elementPos: Vec2 | null;
+    elementPos?: Vec2 | null;
   };
   closest: { bestIndex: number };
   "when-far": { inForeground: boolean };

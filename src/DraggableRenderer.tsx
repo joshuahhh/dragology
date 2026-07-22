@@ -328,7 +328,10 @@ function DraggableRendererControlled<T extends object>({
             draggedId: simId,
             anchorPos: center,
             startState: state,
-            debug: { varyVisualizer: false },
+            debug: {
+              varyVisualizer: false,
+              trace: showDebugOverlay ?? false,
+            },
           };
           const frame: DragFrame = { pointer };
           setStatus(initDrag(dragSpec, behaviorCtx, state, frame, null));
@@ -392,7 +395,7 @@ function DraggableRendererControlled<T extends object>({
         type: "idle",
         state: dropState,
         springOrigin: makeSpringOrigin(result.dropTransition, () =>
-          runSpring(status.springOrigin, result.preview),
+          runSpring(status.springOrigin, result.preview()),
         ),
       };
       setStatus(newState);
@@ -423,6 +426,7 @@ function DraggableRendererControlled<T extends object>({
       onDropState,
       dragThreshold,
       showVaryVisualizer: showVaryVisualizer ?? false,
+      showDebugOverlay: showDebugOverlay ?? false,
     }),
     [
       catchToRenderError,
@@ -432,6 +436,7 @@ function DraggableRendererControlled<T extends object>({
       setStatus,
       setPointerFromEvent,
       showVaryVisualizer,
+      showDebugOverlay,
     ],
   );
 
@@ -523,7 +528,7 @@ function advanceFrame<T extends object>(
     // Detect activePath change → start new spring from current display
     if (result.activePath !== status.result.activePath) {
       springOrigin = makeSpringOrigin(result.activePathTransition, () =>
-        runSpring(springOrigin, status.result.preview),
+        runSpring(springOrigin, status.result.preview()),
       );
     }
 
@@ -592,7 +597,7 @@ function resolveChainNows<T extends object>(
   // before. That means: no references to the new `result`!
   const chainTransition = result.chainNow.transition;
   const newSpringOrigin = makeSpringOrigin(chainTransition, () =>
-    runSpring(status.springOrigin, status.result.preview),
+    runSpring(status.springOrigin, status.result.preview()),
   );
 
   const newDraggedPath = getPath(found.element);
@@ -659,6 +664,7 @@ type RenderContext<T extends object> = {
   onDropState?: (state: T) => void;
   dragThreshold: number;
   showVaryVisualizer: boolean;
+  showDebugOverlay: boolean;
 };
 
 /**
@@ -721,6 +727,7 @@ function postProcessForInteraction<T extends object>(
               startState: state,
               debug: {
                 varyVisualizer: ctx.showVaryVisualizer,
+                trace: ctx.showDebugOverlay,
               },
             };
 
@@ -813,7 +820,7 @@ const DrawDraggingMode = memoGeneric(
     showDebugOverlay?: boolean;
     pointer?: Vec2;
   }) => {
-    const rendered = runSpring(status.springOrigin, status.result.preview);
+    const rendered = runSpring(status.springOrigin, status.result.preview());
     return (
       <>
         {drawLayered(rendered)}

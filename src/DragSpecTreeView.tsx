@@ -115,7 +115,7 @@ function SpecNode<T extends object>({
     const { color, childPath, traceInfo } = info(spec);
     return (
       <Box label="withFloating" color={color} path={path}>
-        {traceInfo && (
+        {traceInfo?.outputPreview && (
           <OutputThumbnail outputPreview={traceInfo.outputPreview} />
         )}
         <SpecNode spec={spec.inner} path={childPath} />
