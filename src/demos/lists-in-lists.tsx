@@ -26,6 +26,25 @@ const colors = [
   "#e8d4f0", // soft lavender
 ];
 
+export function singleRowState(n: number): State {
+  return {
+    rows: [
+      {
+        type: "row",
+        id: "row1",
+        items: _.range(n).map((i) => ({
+          type: "tile",
+          id: "A" + i,
+          label: "" + i,
+        })),
+        color: colors[0],
+        x: 10,
+        y: 10,
+      },
+    ],
+  };
+}
+
 export const initialState: State = {
   rows: [
     {

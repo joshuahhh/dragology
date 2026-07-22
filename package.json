@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "dev": "vite",
+    "bench": "vitest bench",
     "build": "vite build",
     "clean": "rm -rf dist-lib dist-demo",
     "build:lib": "bash build-lib.sh",
