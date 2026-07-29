@@ -182,12 +182,12 @@ export default demo(
   ),
   {
     tags: [
-      "d.switchToStateAndFollow",
       "d.closest",
-      "d.fixed",
-      "spec.withFloating [while missing]",
       "d.dropTarget",
+      "d.fixed",
+      "d.switchToStateAndFollow",
       "spec.whenFar",
+      "spec.withFloating [while missing]",
     ],
   },
 );

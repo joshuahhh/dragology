@@ -116,8 +116,8 @@ export default demo(
   ),
   {
     tags: [
-      "d.vary",
       "d.closest",
+      "d.vary",
       "spec.whenFar",
       "multiple continuous targets",
     ],

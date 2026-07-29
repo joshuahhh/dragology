@@ -313,11 +313,11 @@ export default demo(
   ),
   {
     tags: [
-      "d.switchToStateAndFollow",
-      "spec.onDrop",
-      "d.vary",
       "d.closest",
       "d.fixed",
+      "spec.onDrop",
+      "d.switchToStateAndFollow",
+      "d.vary",
       "spec.whenFar",
     ],
   },

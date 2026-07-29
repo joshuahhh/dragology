@@ -181,10 +181,10 @@ export default demo(
   ),
   {
     tags: [
-      "spec.onDrop",
       "d.closest",
-      "spec.withFloating [while missing]",
+      "spec.onDrop",
       "spec.whenFar",
+      "spec.withFloating [while missing]",
     ],
   },
 );

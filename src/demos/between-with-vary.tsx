@@ -106,5 +106,5 @@ export default demo(
       />
     </>
   ),
-  { tags: ["d.between [dynamic]", "d.vary", "d.fixed"] },
+  { tags: ["d.between [dynamic]", "d.fixed", "d.vary"] },
 );

@@ -72,6 +72,6 @@ export default demo(
     />
   ),
   {
-    tags: ["d.closest", "spec.withFloating", "spec.whenFar", "reordering"],
+    tags: ["d.closest", "spec.whenFar", "spec.withFloating", "reordering"],
   },
 );

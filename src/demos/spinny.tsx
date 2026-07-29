@@ -90,5 +90,5 @@ export default demo(
       />
     </div>
   ),
-  { tags: ["spec.withSnapRadius [chain]", "d.between", "reordering"] },
+  { tags: ["d.between", "spec.withSnapRadius [chain]", "reordering"] },
 );

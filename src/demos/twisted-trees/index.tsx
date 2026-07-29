@@ -769,6 +769,6 @@ export default demo(
     );
   },
   {
-    tags: ["d.between", "math", "fancy", "reordering", "spec.withSnapRadius"],
+    tags: ["d.between", "spec.withSnapRadius", "math", "fancy", "reordering"],
   },
 );

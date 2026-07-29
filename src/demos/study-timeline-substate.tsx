@@ -109,9 +109,9 @@ export default demo(
   ),
   {
     tags: [
+      "d.closest",
       "d.substate",
       "d.vary [constraint]",
-      "d.closest",
       "spec.withBranchTransition",
     ],
   },

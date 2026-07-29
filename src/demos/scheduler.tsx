@@ -191,5 +191,5 @@ export default demo(
       height={CANVAS_H}
     />
   ),
-  { tags: ["d.vary [constraint]", "d.between", "spec.withSnapRadius"] },
+  { tags: ["d.between", "d.vary [constraint]", "spec.withSnapRadius"] },
 );

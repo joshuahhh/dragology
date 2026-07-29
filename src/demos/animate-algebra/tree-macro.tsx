@@ -872,8 +872,8 @@ export default demo(
     tags: [
       "d.between",
       "d.closest",
-      "spec.withFloating [while missing]",
       "spec.whenFar",
+      "spec.withFloating [while missing]",
       "dragologyEmergeFrom",
     ],
   },

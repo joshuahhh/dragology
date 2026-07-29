@@ -296,6 +296,6 @@ export default demo(
     </div>
   ),
   {
-    tags: ["d.closest", "spec.withFloating", "d.vary", "spec.whenFar"],
+    tags: ["d.closest", "d.vary", "spec.whenFar", "spec.withFloating"],
   },
 );

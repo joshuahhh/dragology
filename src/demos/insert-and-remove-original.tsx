@@ -197,11 +197,11 @@ export default demo(
   ),
   {
     tags: [
-      "spec.onDrop",
       "d.closest",
       "d.fixed",
-      "spec.withFloating",
+      "spec.onDrop",
       "spec.whenFar",
+      "spec.withFloating",
     ],
   },
 );

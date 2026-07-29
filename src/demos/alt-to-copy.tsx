@@ -88,12 +88,12 @@ export default demo(
   ),
   {
     tags: [
+      "d.reactTo",
       "d.switchToStateAndFollow",
       "d.vary",
       "keyboard",
       "copying",
       "setState",
-      "d.reactTo",
     ],
   },
 );

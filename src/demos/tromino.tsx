@@ -268,13 +268,13 @@ export default demo(
   },
   {
     tags: [
+      "d.between",
+      "d.closest",
+      "spec.withChaining",
+      "spec.withFloating [ghost]",
       "spec.withSnapRadius [chain]",
       "math",
       "fancy",
-      "d.closest",
-      "spec.withFloating [ghost]",
-      "d.between",
-      "spec.withChaining",
       "puzzle",
     ],
   },

@@ -362,14 +362,14 @@ export default demo(
   ),
   {
     tags: [
-      "math",
       "d.closest",
-      "d.vary",
-      "d.switchToStateAndFollow",
-      "spec.whenFar",
-      "discrete on top of continuous",
       "d.dropTarget",
+      "d.switchToStateAndFollow",
+      "d.vary",
+      "spec.whenFar",
       "spec.withInitContext [anchorPos]",
+      "math",
+      "discrete on top of continuous",
     ],
   },
 );

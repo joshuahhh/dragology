@@ -209,5 +209,5 @@ export default demo(
       />
     </>
   ),
-  { tags: ["d.vary", "spec.during"] },
+  { tags: ["spec.during", "d.vary"] },
 );

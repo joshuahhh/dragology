@@ -109,5 +109,5 @@ export default demo(
       />
     </>
   ),
-  { tags: ["d.vary", "spec.during", "spec.onDrop", "spec.withSnapRadius"] },
+  { tags: ["spec.during", "spec.onDrop", "d.vary", "spec.withSnapRadius"] },
 );

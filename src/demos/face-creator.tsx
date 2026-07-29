@@ -801,5 +801,5 @@ export default demo(
       </DemoWithConfig>
     );
   },
-  { tags: ["d.vary [w/constraint]", "spec.during"] },
+  { tags: ["spec.during", "d.vary [w/constraint]"] },
 );

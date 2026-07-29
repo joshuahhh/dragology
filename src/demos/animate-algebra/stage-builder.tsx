@@ -1277,14 +1277,14 @@ export default demo(
   ),
   {
     tags: [
-      "spec.onDrop",
-      "setState",
       "d.between",
-      "keyboard",
       "d.closest",
-      "spec.withFloating [while missing]",
-      "spec.whenFar",
+      "spec.onDrop",
       "d.reactTo",
+      "spec.whenFar",
+      "spec.withFloating [while missing]",
+      "setState",
+      "keyboard",
     ],
   },
 );

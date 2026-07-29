@@ -94,5 +94,5 @@ export default demo(
       height={400}
     />
   ),
-  { tags: ["d.vary", "d.closest", "multiple continuous targets"] },
+  { tags: ["d.closest", "d.vary", "multiple continuous targets"] },
 );

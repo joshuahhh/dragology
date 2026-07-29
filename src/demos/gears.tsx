@@ -234,9 +234,9 @@ export default demo(
   ),
   {
     tags: [
-      "d.vary",
       "d.closest",
       "spec.during",
+      "d.vary",
       "spec.whenFar",
       "spec.withFloating",
       "isTracking",

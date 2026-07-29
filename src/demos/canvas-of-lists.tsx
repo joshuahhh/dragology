@@ -211,9 +211,9 @@ export default demo(
   {
     tags: [
       "d.closest",
-      "spec.withFloating",
       "d.vary",
       "spec.whenFar",
+      "spec.withFloating",
       "discrete on top of continuous",
     ],
   },

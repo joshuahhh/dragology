@@ -287,10 +287,10 @@ export default demo(
   },
   {
     tags: [
-      "controlled",
       "d.vary",
       "spec.withDropTransition",
       "spec.withSnapRadius",
+      "controlled",
     ],
   },
 );

@@ -168,8 +168,8 @@ export default demo(
   },
   {
     tags: [
-      "d.vary",
       "spec.during",
+      "d.vary",
       "spec.withChaining [transition]",
       "physics",
     ],

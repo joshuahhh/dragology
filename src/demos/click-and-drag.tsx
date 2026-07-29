@@ -60,5 +60,5 @@ export default demo(
       height={80}
     />
   ),
-  { tags: ["d.between", "setState", "spec.withDropTransition"] },
+  { tags: ["d.between", "spec.withDropTransition", "setState"] },
 );

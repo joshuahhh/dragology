@@ -179,6 +179,6 @@ export default demo(
     </div>
   ),
   {
-    tags: ["d.closest", "spec.withFloating [while missing]", "spec.whenFar"],
+    tags: ["d.closest", "spec.whenFar", "spec.withFloating [while missing]"],
   },
 );

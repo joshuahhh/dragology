@@ -109,10 +109,10 @@ export default demo(
   ),
   {
     tags: [
-      "embed()",
-      "d.vary [constraint]",
       "d.closest",
+      "d.vary [constraint]",
       "spec.withBranchTransition",
+      "embed()",
     ],
   },
 );

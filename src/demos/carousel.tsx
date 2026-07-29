@@ -158,5 +158,5 @@ export default demo(
       />
     </div>
   ),
-  { tags: ["setState", "d.between", "d.closest"] },
+  { tags: ["d.between", "d.closest", "setState"] },
 );

@@ -285,5 +285,5 @@ export default demo(
       </DemoWithConfig>
     );
   },
-  { tags: ["spec.withSnapRadius [chain]", "d.between", "puzzle"] },
+  { tags: ["d.between", "spec.withSnapRadius [chain]", "puzzle"] },
 );

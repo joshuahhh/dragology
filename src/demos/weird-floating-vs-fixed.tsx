@@ -38,5 +38,5 @@ export default demo(
       height={150}
     />
   ),
-  { tags: ["spec.withFloating [ghost]", "d.fixed", "d.closest"] },
+  { tags: ["d.closest", "d.fixed", "spec.withFloating [ghost]"] },
 );

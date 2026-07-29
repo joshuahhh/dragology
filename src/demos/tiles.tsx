@@ -127,9 +127,9 @@ export default demo(
   ),
   {
     tags: [
-      "spec.withSnapRadius [chain]",
       "d.between",
       "spec.withBranchTransition",
+      "spec.withSnapRadius [chain]",
     ],
   },
 );

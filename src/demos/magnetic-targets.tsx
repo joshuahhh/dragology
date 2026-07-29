@@ -74,5 +74,5 @@ export default demo(
       />
     </div>
   ),
-  { tags: ["d.closest", "d.fixed", "spec.changeGap"] },
+  { tags: ["spec.changeGap", "d.closest", "d.fixed"] },
 );

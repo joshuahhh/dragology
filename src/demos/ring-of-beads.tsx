@@ -140,12 +140,12 @@ export default demo(
   },
   {
     tags: [
+      "d.between",
       "d.closest",
       "d.fixed",
-      "spec.withFloating [while missing]",
-      "spec.whenFar",
       "spec.onDrop",
-      "d.between",
+      "spec.whenFar",
+      "spec.withFloating [while missing]",
       "reordering",
     ],
   },
