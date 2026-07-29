@@ -312,6 +312,13 @@ export default demo(
     />
   ),
   {
-    tags: ["d.switchToStateAndFollow", "spec.onDrop", "d.vary", "spec.whenFar"],
+    tags: [
+      "d.switchToStateAndFollow",
+      "spec.onDrop",
+      "d.vary",
+      "d.closest",
+      "d.fixed",
+      "spec.whenFar",
+    ],
   },
 );

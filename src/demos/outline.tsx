@@ -413,6 +413,7 @@ export default demo(
     tags: [
       "d.between",
       "d.closest",
+      "d.fixed",
       "spec.withFloating [while missing]",
       "spec.whenFar",
       "reordering",

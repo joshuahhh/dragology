@@ -1028,7 +1028,7 @@ export default demo(
       "spec.withFloating",
       "spec.whenFar",
       "d.dropTarget",
-      "d.withSnapRadius",
+      "spec.withSnapRadius",
     ],
   },
 );

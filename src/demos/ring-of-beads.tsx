@@ -141,8 +141,11 @@ export default demo(
   {
     tags: [
       "d.closest",
+      "d.fixed",
       "spec.withFloating [while missing]",
       "spec.whenFar",
+      "spec.onDrop",
+      "d.between",
       "reordering",
     ],
   },

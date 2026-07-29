@@ -105,5 +105,5 @@ export default demo(
       </DemoWithConfig>
     );
   },
-  { tags: ["d.between"] },
+  { tags: ["d.between", "spec.withFloating", "spec.withSnapRadius"] },
 );

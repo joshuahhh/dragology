@@ -184,6 +184,7 @@ export default demo(
     tags: [
       "d.switchToStateAndFollow",
       "d.closest",
+      "d.fixed",
       "spec.withFloating [while missing]",
       "d.dropTarget",
       "spec.whenFar",

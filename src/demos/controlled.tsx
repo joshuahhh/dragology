@@ -285,5 +285,12 @@ export default demo(
       </div>
     );
   },
-  { tags: ["controlled"] },
+  {
+    tags: [
+      "controlled",
+      "d.vary",
+      "spec.withDropTransition",
+      "spec.withSnapRadius",
+    ],
+  },
 );

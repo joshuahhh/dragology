@@ -100,5 +100,5 @@ export default demo(
       height={200}
     />
   ),
-  { tags: ["d.between", "reordering"] },
+  { tags: ["d.between", "spec.withSnapRadius", "reordering"] },
 );
