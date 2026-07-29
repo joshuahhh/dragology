@@ -22,6 +22,12 @@ export default defineConfig({
   build: {
     outDir: "dist-demo",
   },
+  resolve: {
+    alias: {
+      "#dragology-built": new URL("dist-lib/index.js", import.meta.url)
+        .pathname,
+    },
+  },
   plugins: [react(), reactProd(), tailwindcss(), qrcode()],
   test: {
     exclude: gitIgnored,

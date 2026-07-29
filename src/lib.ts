@@ -43,3 +43,10 @@ export type { PathIn } from "./paths";
 
 // Utility types
 export type { Many } from "./utils/flexible-types";
+
+// Drag behavior (for d.custom and benchmarking)
+export { dragSpecToBehavior } from "./DragBehavior";
+export type { DragBehavior, DragInitContext, DragResult } from "./DragBehavior";
+
+// Benchmarking
+export { setupListsInListsBenchmark } from "./benchmarking";
