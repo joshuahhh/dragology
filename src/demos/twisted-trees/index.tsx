@@ -84,7 +84,7 @@ const allMorphs3 = getAllMorphs(tree3, tree3);
 export const allMorphs7 = getAllMorphs(tree7, tree7);
 
 const initialState3: State = { morph: allMorphs3[0] };
-const initialState7: State = { morph: allMorphs7[0] };
+export const initialState7: State = { morph: allMorphs7[0] };
 
 export function draggableFactory(
   domainTree: TreeNode,

@@ -15,9 +15,9 @@ const islands = {
 const R_SMALL = 10;
 const R_BIG = 20;
 
-const initialState: State = { type: "on-island", island: "A" };
+export const initialState: State = { type: "on-island", island: "A" };
 
-const draggable: Draggable<State> = ({ state, d }) => (
+export const draggable: Draggable<State> = ({ state, d }) => (
   <g>
     {(["A", "B"] as const).map((id) => {
       const radius =

@@ -27,6 +27,7 @@ export default [
       "src/retro/**",
       "src/studio/**",
       "src/study/**",
+      "src/slideshow/**",
       "src/IndexPage.tsx",
       "src/main.tsx",
       "src/**/*.test.{ts,tsx}",
