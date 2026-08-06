@@ -71,6 +71,7 @@ function ListsInListsWithTree() {
             width={WIDTH}
             height={HEIGHT}
             onDragStatus={setDragStatus}
+            trace
           />
           <div
             style={{ width: 370, height: 500, zoom: 0.7, overflow: "hidden" }}

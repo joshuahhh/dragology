@@ -69,6 +69,7 @@ function RingOfBeadsWithTree({
             width={WIDTH}
             height={HEIGHT}
             onDragStatus={setDragStatus}
+            trace
             simulateDrag={
               simulateDrag ? { id: "A", offset: dragOffset } : undefined
             }

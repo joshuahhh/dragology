@@ -512,6 +512,7 @@ export function DemoDraggable<T extends object>({
               height={height}
               onDragStatus={setStatus}
               showDebugOverlay={showDebugOverlay}
+              trace={showDebugOverlay || showTreeView}
               showVaryVisualizer={showVaryVisualizer}
               onDropState={setOwnState}
             />
