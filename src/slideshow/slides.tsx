@@ -104,8 +104,6 @@ import {
   initialState as algebraInitialState,
   rewriteSets,
 } from "../demos/animate-algebra/tree";
-import braidDemo from "../demos/braid";
-import cardPilesDemo from "../demos/card-piles";
 import dragSpecDesignerDemo from "../demos/drag-spec-designer";
 import {
   draggable as listsInListsDraggable,
@@ -529,8 +527,8 @@ export const slides: Slide[] = [
   demoSlide("Scheduler", wrapDemo(schedulerDemo), {
     subtitles:
       "This diagram of a scheduling problem uses a discrete drag to move meetings between rooms, and a continuous drag to change start and end times.",
-    width: 800,
-    height: 600,
+    width: 560,
+    height: 212,
     overlayTitle: "Alex’s Scheduler",
     demoId: "scheduler",
     transition: "fade-white",
@@ -595,61 +593,10 @@ export const slides: Slide[] = [
   demoSlide("Drag-Spec Designer", wrapDemo(dragSpecDesignerDemo), {
     subtitles:
       "And as a recursive finale, this block-based programming interface lets a user assemble operators to define a Dragology drag spec.",
-    width: 1000,
-    height: 700,
+    width: 600,
+    height: 400,
     overlayTitle: "Drag-Spec Designer",
     demoId: "drag-spec-designer",
     transition: "fade-white",
   }),
-
-  // === Study section (240-265s) ===
-  imageSlide(
-    "slide-29.jpg",
-    "User Study",
-    "We ran a study where thirteen participants got hands-on experience using Dragology.",
-    { transition: "fade-white" },
-  ),
-  imageSlide(
-    "slide-30.jpg",
-    "Study Themes",
-    "They found it produced concise code, made polished interactions by default, and enabled playful design exploration.",
-  ),
-  imageSlide(
-    "slide-31.jpg",
-    "Learnability",
-    "The study also revealed some learnability challenges related to state-space reasoning.",
-  ),
-
-  // === Closing examples & statement ===
-  demoSlide("Braid", wrapDemo(braidDemo), {
-    subtitles:
-      "But despite this challenge, participants across diverse domains saw Dragology as a way to bring their abstractions to life.",
-    width: 500,
-    height: 700,
-    demoId: "braid",
-    transition: "fade-white",
-  }),
-
-  imageSlide(
-    "slide-33.jpg",
-    "3D Scene",
-    "Drag-and-drop makes the digital graspable.",
-    { transition: "fade-white" },
-  ),
-
-  demoSlide("Card Piles", wrapDemo(cardPilesDemo), {
-    subtitles:
-      "But building satisfying drag-and-drop is hard enough that many people often don't bother.",
-    width: 700,
-    height: 600,
-    demoId: "card-piles",
-    transition: "fade-white",
-  }),
-
-  imageSlide(
-    "slide-35.jpg",
-    "Closing",
-    "Without wrestling with tween states, transitions, and trigonometry… what might they build?",
-    { transition: "fade-white" },
-  ),
 ];
