@@ -13,10 +13,12 @@ import { StudioPage } from "./studio/StudioPage";
 import { SingleStudyPage } from "./study/SingleStudyPage";
 import { StudyPage } from "./study/StudyPage";
 
+const HIDE_REACT_PROD = true;
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <HashRouter>
-      {typeof __VITE_REACT_PROD__ !== "undefined" && (
+      {typeof __VITE_REACT_PROD__ !== "undefined" && !HIDE_REACT_PROD && (
         <div
           style={{
             position: "fixed",
