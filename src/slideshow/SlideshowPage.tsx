@@ -10,6 +10,9 @@ import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
 import { useTitle } from "../useTitle";
 import { slides } from "./slides";
 
+const FADE_MS = 300;
+const FADE_WHITE_MS = 200;
+
 function useVideoPlayer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const endTimeRef = useRef<number>(0);
@@ -98,7 +101,9 @@ export function SlideshowPage() {
   const layerSlidesRef = useRef(layerSlides);
   layerSlidesRef.current = layerSlides;
   const [layerOpacity, setLayerOpacity] = useState<[number, number]>([1, 0]);
-  const [transitioning, setTransitioning] = useState(false);
+  const [transitioning, setTransitioning] = useState<
+    false | "fade" | "fade-white"
+  >(false);
   const prevSlideRef = useRef(currentSlide);
 
   // Video player — must be before transition effect so videoRef is available
@@ -161,7 +166,7 @@ export function SlideshowPage() {
 
     if (transition === "fade-white") {
       // Fade active layer out → swap content behind white → fade new content in
-      setTransitioning(true);
+      setTransitioning("fade-white");
       const outOpacity: [number, number] = [0, 0];
       outOpacity[layer] = 1;
       setLayerOpacity(outOpacity);
@@ -189,9 +194,9 @@ export function SlideshowPage() {
           timers.push(
             setTimeout(() => {
               setTransitioning(false);
-            }, 300),
+            }, FADE_WHITE_MS),
           );
-        }, 350),
+        }, FADE_WHITE_MS),
       );
     } else {
       // "fade" — true crossfade using two layers
@@ -207,7 +212,7 @@ export function SlideshowPage() {
       startOpacity[layer] = 1;
       startOpacity[incomingLayer] = 0;
       setLayerOpacity(startOpacity);
-      setTransitioning(true);
+      setTransitioning("fade");
       requestAnimationFrame(() => {
         // Fade: old layer out, new layer in
         const endOpacity: [number, number] = [0, 0];
@@ -219,7 +224,7 @@ export function SlideshowPage() {
         setTimeout(() => {
           setActiveLayer(incomingLayer as 0 | 1);
           setTransitioning(false);
-        }, 300),
+        }, FADE_MS),
       );
     }
 
@@ -300,6 +305,8 @@ export function SlideshowPage() {
     }
   }, [displaySlide, shownSlide, playSlide, stopVideo]);
 
+  const transitionMs = transitioning === "fade-white" ? FADE_WHITE_MS : FADE_MS;
+
   // Compute video visibility from both layers
   const videoSrc = slides.find((s) => s.type === "video")
     ? `${import.meta.env.BASE_URL}slides/model-driven-full.mp4`
@@ -346,7 +353,9 @@ export function SlideshowPage() {
             background: "white",
             visibility: videoVisible ? "visible" : "hidden",
             opacity: videoOpacity,
-            transition: transitioning ? "opacity 300ms linear" : "none",
+            transition: transitioning
+              ? `opacity ${transitionMs}ms linear`
+              : "none",
             pointerEvents: videoVisible ? "auto" : "none",
             zIndex: 5,
           }}
@@ -378,7 +387,9 @@ export function SlideshowPage() {
                 justifyContent: "center",
                 position: "relative",
                 opacity,
-                transition: transitioning ? "opacity 300ms linear" : "none",
+                transition: transitioning
+                  ? `opacity ${transitionMs}ms linear`
+                  : "none",
                 mixBlendMode: "plus-lighter",
                 pointerEvents: isActive ? "auto" : "none",
                 visibility: visible ? "visible" : "hidden",
