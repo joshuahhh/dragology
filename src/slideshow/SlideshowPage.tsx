@@ -346,7 +346,7 @@ export function SlideshowPage() {
             background: "white",
             visibility: videoVisible ? "visible" : "hidden",
             opacity: videoOpacity,
-            transition: transitioning ? "opacity 300ms ease" : "none",
+            transition: transitioning ? "opacity 300ms linear" : "none",
             pointerEvents: videoVisible ? "auto" : "none",
             zIndex: 5,
           }}
@@ -357,7 +357,7 @@ export function SlideshowPage() {
       <div
         ref={slideAreaRef}
         className="flex-1 min-h-0"
-        style={{ display: "grid" }}
+        style={{ display: "grid", isolation: "isolate" }}
       >
         {([0, 1] as const).map((layerIdx) => {
           const s = slides[layerSlides[layerIdx]];
@@ -378,7 +378,8 @@ export function SlideshowPage() {
                 justifyContent: "center",
                 position: "relative",
                 opacity,
-                transition: transitioning ? "opacity 300ms ease" : "none",
+                transition: transitioning ? "opacity 300ms linear" : "none",
+                mixBlendMode: "plus-lighter",
                 pointerEvents: isActive ? "auto" : "none",
                 visibility: visible ? "visible" : "hidden",
               }}
