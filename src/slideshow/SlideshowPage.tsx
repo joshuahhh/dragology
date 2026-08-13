@@ -92,8 +92,9 @@ export function SlideshowPage() {
 
   useEffect(() => {
     if (currentSlide === prevSlideRef.current) return;
+    const goingForward = currentSlide > prevSlideRef.current;
     const targetSlide = slides[currentSlide];
-    const transition = targetSlide.transition;
+    const transition = goingForward ? targetSlide.transition : undefined;
     const layer = activeLayerRef.current;
 
     // Cancel any in-progress transition
