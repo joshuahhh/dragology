@@ -51,7 +51,22 @@ function useVideoPlayer() {
     playingSlideRef.current = -1;
   }, []);
 
-  return { videoRef, playSlide, stop };
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    video.addEventListener("play", onPlay);
+    video.addEventListener("pause", onPause);
+    return () => {
+      video.removeEventListener("play", onPlay);
+      video.removeEventListener("pause", onPause);
+    };
+  }, []);
+
+  return { videoRef, playSlide, stop, playing };
 }
 
 export function SlideshowPage() {
@@ -87,7 +102,12 @@ export function SlideshowPage() {
   const prevSlideRef = useRef(currentSlide);
 
   // Video player — must be before transition effect so videoRef is available
-  const { videoRef, playSlide, stop: stopVideo } = useVideoPlayer();
+  const {
+    videoRef,
+    playSlide,
+    stop: stopVideo,
+    playing: videoPlaying,
+  } = useVideoPlayer();
   const [videoSeekedSlide, setVideoSeekedSlide] = useState<number>(-1);
 
   useEffect(() => {
@@ -450,6 +470,20 @@ export function SlideshowPage() {
         style={{ zIndex: 30 }}
       >
         {currentSlide + 1}/{slides.length}
+        <svg
+          width="8"
+          height="9"
+          viewBox="0 0 8 9"
+          fill="currentColor"
+          style={{
+            display: "inline",
+            verticalAlign: "middle",
+            marginLeft: 4,
+            opacity: videoPlaying ? 1 : 0,
+          }}
+        >
+          <path d="M0 0.5L8 4.5L0 8.5Z" />
+        </svg>
       </div>
     </div>
   );

@@ -431,6 +431,13 @@ export const slides: Slide[] = [
     demoId: "ring-of-beads",
   }),
 
+  imageSlide(
+    "slide-04.jpg",
+    "",
+    "Traditionally you would make this manually, by adding listeners to pointer events. Model-driven dragging works at a higher level.",
+    { transition: "fade-white" },
+  ),
+
   // === Model state → View explanation (35-65s) ===
   imageSlide(
     "slide-07.jpg",
@@ -441,7 +448,7 @@ export const slides: Slide[] = [
   videoSlide(
     "Speculative Rendering",
     7.5,
-    13.5,
+    9,
     "Next, they specify, for each draggable element, a set of new model states the drag should be able to access.",
   ),
   videoSlide(
