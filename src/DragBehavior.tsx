@@ -308,7 +308,13 @@ function withFloatingBehavior<T extends object>(
       gap: innerResult.gap,
       activePath: `with-floating/${innerResult.activePath}`,
       tracedSpec: ctx.debug.trace
-        ? setTraceInfo({ ...spec, inner: innerResult.tracedSpec }, {})
+        ? setTraceInfo(
+            { ...spec, inner: innerResult.tracedSpec },
+            {
+              outputPreview: computePreview().preview,
+              elementPos: computePreview().elementPos,
+            },
+          )
         : spec,
     };
   };
