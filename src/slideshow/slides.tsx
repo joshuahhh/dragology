@@ -7,11 +7,14 @@ import {
 } from "../DragSpecTreeView";
 import { StudioHackContext } from "../studio/StudioHackContext";
 
+type Transition = "fade-white" | "fade";
+
 type ImageSlide = {
   type: "image";
   image: string;
   title: string;
   subtitles?: string;
+  transition?: Transition;
 };
 
 type DemoSlide = {
@@ -21,9 +24,22 @@ type DemoSlide = {
   subtitles?: string;
   width?: string | number;
   height?: string | number;
+  overlayTitle?: string;
+  demoId?: string;
+  transition?: Transition;
 };
 
-export type Slide = ImageSlide | DemoSlide;
+type VideoSlide = {
+  type: "video";
+  video: string;
+  startTime: number;
+  endTime: number;
+  title: string;
+  subtitles?: string;
+  transition?: Transition;
+};
+
+export type Slide = ImageSlide | DemoSlide | VideoSlide;
 
 function demoSlide(
   title: string,
@@ -32,6 +48,9 @@ function demoSlide(
     subtitles?: string;
     width?: string | number;
     height?: string | number;
+    overlayTitle?: string;
+    demoId?: string;
+    transition?: Transition;
   },
 ): DemoSlide {
   return { type: "demo", title, Component, ...opts };
@@ -41,8 +60,27 @@ function imageSlide(
   image: string,
   title: string,
   subtitles?: string,
+  opts?: { transition?: Transition },
 ): ImageSlide {
-  return { type: "image", image, title, subtitles };
+  return { type: "image", image, title, subtitles, ...opts };
+}
+
+function videoSlide(
+  title: string,
+  startTime: number,
+  endTime: number,
+  subtitles?: string,
+  opts?: { transition?: Transition },
+): VideoSlide {
+  return {
+    type: "video",
+    video: "model-driven-full.mp4",
+    startTime,
+    endTime,
+    title,
+    subtitles,
+    ...opts,
+  };
 }
 
 // Wrapper to provide demo settings context
@@ -79,12 +117,8 @@ import {
   makeDraggable,
 } from "../demos/ring-of-beads";
 import schedulerDemo from "../demos/scheduler";
-import {
-  draggable as snapToIslandsDraggable,
-  initialState as snapToIslandsInitialState,
-} from "../demos/snap-to-islands";
 import tactileTessellationsDemo from "../demos/tactile-tessellations";
-import twistedTreesDemo, {
+import {
   allMorphs7,
   draggableFactory,
   initialState7,
@@ -312,20 +346,6 @@ function TwistedTrees7() {
   );
 }
 
-// Snap to islands — no DemoNotes
-function SnapToIslandsClean() {
-  return (
-    <DemoSettingsProvider>
-      <DemoDraggable
-        draggable={snapToIslandsDraggable}
-        initialState={snapToIslandsInitialState}
-        width={400}
-        height={300}
-      />
-    </DemoSettingsProvider>
-  );
-}
-
 // Lists in lists — no DemoNotes
 function ListsInListsClean() {
   return (
@@ -377,17 +397,22 @@ export const slides: Slide[] = [
     subtitles: "How would you make a drag-and-drop interface like this?",
     width: 900,
     height: 600,
+    demoId: "tactile-tessellations",
   }),
   demoSlide("Opening — Nodes & Noodles", wrapDemo(nodesAndNoodlesDemo), {
     subtitles: "Or like this?",
     width: 500,
     height: 200,
+    transition: "fade",
+    demoId: "nodes-and-noodles",
   }),
   demoSlide("Opening — Twisted Trees", TwistedTrees7, {
     subtitles:
       "It takes a lot of work to make high quality, bespoke drag-and-drop interactions.",
     width: 400,
     height: 600,
+    transition: "fade",
+    demoId: "twisted-trees",
   }),
 
   // === Title slide (13-25s) ===
@@ -395,11 +420,13 @@ export const slides: Slide[] = [
     "slide-04.jpg",
     "Declarative Dragging — Model-Driven",
     "Declarative dragging is our new approach, combining two new pieces: model-driven dragging…",
+    { transition: "fade-white" },
   ),
   imageSlide(
     "slide-05.jpg",
     "Declarative Dragging — Both Pillars",
     "…which lets drags be defined from semantic transformations rather than low-level logic, and composable dragging, which lets complex drag-and-drop behaviors be built up from simpler ones.",
+    { transition: "fade" },
   ),
 
   // === Ring of beads intro (25-35s) ===
@@ -408,36 +435,44 @@ export const slides: Slide[] = [
       "Here's a simple drag-and-drop interface for reordering beads in a ring.",
     width: 300,
     height: 300,
+    transition: "fade-white",
+    demoId: "ring-of-beads",
   }),
 
-  // === Model state → View explanation (35-55s) ===
-  imageSlide(
-    "slide-07.jpg",
+  // === Model state → View explanation (35-65s) — animated video clips ===
+  videoSlide(
     "Model State → View",
+    0,
+    8.5,
     "First, the interface developer represents this diagram as a function from model state to view tree, like in React.",
+    { transition: "fade-white" },
   ),
-  imageSlide(
-    "slide-08.jpg",
+  videoSlide(
     "Speculative Rendering",
+    8.5,
+    13.5,
     "Next, they specify, for each draggable element, a set of new model states the drag should be able to access.",
   ),
-  imageSlide(
-    "slide-09.jpg",
+  videoSlide(
     "Target Positions",
+    13.5,
+    17.0,
     "When a drag starts, we speculatively render each of these states to view trees, and we extract possible target locations of the dragged element.",
   ),
-  imageSlide(
-    "slide-10.jpg",
+  videoSlide(
     "Drag Synthesis",
+    17.0,
+    24.5,
     "This gives us enough information to synthesize a high-quality animated drag drop interaction.",
   ),
-  imageSlide("slide-11.jpg", "Live Drag", ""),
+  videoSlide("Live Drag", 24.5, 30.5, ""),
 
   // === Dragology title (65-70s) ===
   imageSlide(
     "slide-12.jpg",
     "Dragology",
     "Here's how an interface developer builds this with our prototype library, Dragology.",
+    { transition: "fade" },
   ),
 
   // === Code walkthrough (70-90s) ===
@@ -458,6 +493,8 @@ export const slides: Slide[] = [
       'The "closest" combinator snaps the dragged element to the closest target position to the cursor.',
     width: 960,
     height: 540,
+    transition: "fade",
+    demoId: "ring-of-beads",
   }),
 
   // === withFloating demo (100-110s) ===
@@ -466,6 +503,7 @@ export const slides: Slide[] = [
       'The "withFloating" modifier detaches the dragged element, letting it follow the cursor immediately.',
     width: 960,
     height: 540,
+    transition: "fade",
   }),
 
   // === whenFar demo (110-120s) ===
@@ -474,6 +512,7 @@ export const slides: Slide[] = [
       'The "whenFar" modifier allows us to switch to a new behavior when the cursor is far from any target.',
     width: 960,
     height: 540,
+    transition: "fade",
   }),
 
   // === Composable recap (120-130s) ===
@@ -481,6 +520,7 @@ export const slides: Slide[] = [
     "slide-18.jpg",
     "Composable Dragging",
     "We call this approach composable dragging, and it lets us build up sophisticated interactions from model-driven primitives.",
+    { transition: "fade-white" },
   ),
 
   // === More examples section (130+) ===
@@ -491,77 +531,83 @@ export const slides: Slide[] = [
       "This diagram of a scheduling problem uses a discrete drag to move meetings between rooms, and a continuous drag to change start and end times.",
     width: 800,
     height: 600,
+    overlayTitle: "Alex’s Scheduler",
+    demoId: "scheduler",
+    transition: "fade-white",
   }),
 
-  // Snap to islands with vary (155s)
-  demoSlide("Snap to Islands", SnapToIslandsClean, {
-    subtitles:
-      "This interface uses vary inside whenFar to combine a continuous drag on the canvas with a drag into discrete snapping points.",
-    width: 400,
-    height: 300,
-  }),
-
-  // Lists in Lists (160-175s)
+  // Lists in Lists (155-170s)
   demoSlide("Lists in Lists", ListsInListsClean, {
     subtitles:
-      "Dragology extends past repositioning drags to support complex nested structures.",
+      "Vary can be combined freely with other behaviors using Dragology’s DSL.",
     width: 400,
     height: 400,
+    overlayTitle: "Lists in Lists",
+    demoId: "lists-in-lists",
+    transition: "fade-white",
   }),
 
-  // Tactile Tessellations (175-185s)
+  // Tactile Tessellations (170-180s)
   demoSlide("Tactile Tessellations", wrapDemo(tactileTessellationsDemo), {
     subtitles:
       "Dragology extends past repositioning drags to support drags that create and destroy objects, like these tessellated shapes.",
     width: 900,
     height: 600,
+    overlayTitle: "Tactile Tessellations",
+    demoId: "tactile-tessellations",
+    transition: "fade-white",
   }),
 
-  // Nodes and Noodles (185-195s)
+  // Nodes and Noodles (180-190s)
   demoSlide("Nodes & Noodles", wrapDemo(nodesAndNoodlesDemo), {
     subtitles:
       "In this mock nodes and wires programming interface, edges are created by dragging between ports and they can be destroyed by detachment.",
     width: 500,
     height: 200,
+    overlayTitle: "Nodes and Noodles",
+    demoId: "nodes-and-noodles",
+    transition: "fade-white",
   }),
 
-  // Animate Algebra (195-215s)
+  // Animate Algebra (190-210s)
   demoSlide("Animate Algebra", AnimateAlgebraClean, {
     subtitles:
       "This interface shows an algebraic expression and makes the commutative and associative laws into drags.",
     width: 300,
     height: 350,
+    overlayTitle: "Animate Algebra",
+    demoId: "animate-algebra-tree",
+    transition: "fade-white",
   }),
 
-  // Between / interpolation (215-225s)
-  demoSlide("2D Interpolation — Twisted Trees", TwistedTrees7, {
+  // Twisted Trees (210-230s) — single slide combining both
+  demoSlide("Twisted Trees", TwistedTrees7, {
     subtitles:
       "The way these tracks interpolate between previews as you drag can be extended into two dimensions.",
     width: 400,
     height: 600,
+    overlayTitle: "Twisted Trees",
+    demoId: "twisted-trees",
+    transition: "fade-white",
   }),
 
-  // Twisted Trees (225s)
-  demoSlide("Twisted Trees", wrapDemo(twistedTreesDemo), {
-    subtitles:
-      "This diagram of an order-preserving map between trees lets the black dots be dragged freely between gray dots.",
-    width: 700,
-    height: 700,
-  }),
-
-  // Drag-Spec Designer (225-235s)
+  // Drag-Spec Designer (230-240s)
   demoSlide("Drag-Spec Designer", wrapDemo(dragSpecDesignerDemo), {
     subtitles:
       "And as a recursive finale, this block-based programming interface lets a user assemble operators to define a Dragology drag spec.",
     width: 1000,
     height: 700,
+    overlayTitle: "Drag-Spec Designer",
+    demoId: "drag-spec-designer",
+    transition: "fade-white",
   }),
 
-  // === Study section (235-260s) ===
+  // === Study section (240-265s) ===
   imageSlide(
     "slide-29.jpg",
     "User Study",
     "We ran a study where thirteen participants got hands-on experience using Dragology.",
+    { transition: "fade-white" },
   ),
   imageSlide(
     "slide-30.jpg",
@@ -580,12 +626,15 @@ export const slides: Slide[] = [
       "But despite this challenge, participants across diverse domains saw Dragology as a way to bring their abstractions to life.",
     width: 500,
     height: 700,
+    demoId: "braid",
+    transition: "fade-white",
   }),
 
   imageSlide(
     "slide-33.jpg",
     "3D Scene",
     "Drag-and-drop makes the digital graspable.",
+    { transition: "fade-white" },
   ),
 
   demoSlide("Card Piles", wrapDemo(cardPilesDemo), {
@@ -593,11 +642,14 @@ export const slides: Slide[] = [
       "But building satisfying drag-and-drop is hard enough that many people often don't bother.",
     width: 700,
     height: 600,
+    demoId: "card-piles",
+    transition: "fade-white",
   }),
 
   imageSlide(
     "slide-35.jpg",
     "Closing",
     "Without wrestling with tween states, transitions, and trigonometry… what might they build?",
+    { transition: "fade-white" },
   ),
 ];
