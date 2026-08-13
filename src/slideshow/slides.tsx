@@ -395,7 +395,6 @@ export const slides: Slide[] = [
     subtitles: "Or like this?",
     width: 500,
     height: 200,
-    transition: "fade",
     demoId: "nodes-and-noodles",
   }),
   demoSlide("Opening — Twisted Trees", TwistedTrees7, {
@@ -403,7 +402,6 @@ export const slides: Slide[] = [
       "It takes a lot of work to make high quality, bespoke drag-and-drop interactions.",
     width: 400,
     height: 600,
-    transition: "fade",
     demoId: "twisted-trees",
   }),
 
