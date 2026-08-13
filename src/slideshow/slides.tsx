@@ -1,5 +1,5 @@
 import { ComponentType, useMemo, useState } from "react";
-import { DemoDraggable, DemoSettingsProvider } from "../demo/ui";
+import { DemoDraggable } from "../demo/ui";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import {
   DragSpecTreeView,
@@ -85,13 +85,7 @@ function videoSlide(
 
 // Wrapper to provide demo settings context
 function withSettings(Component: ComponentType): ComponentType {
-  return function WrappedDemo() {
-    return (
-      <DemoSettingsProvider>
-        <Component />
-      </DemoSettingsProvider>
-    );
-  };
+  return Component;
 }
 
 // ── Demo wrappers ──
@@ -129,14 +123,14 @@ function BeadsWhenFar() {
     [],
   );
   return (
-    <DemoSettingsProvider>
+    <>
       <DemoDraggable
         draggable={draggable}
         initialState={beadsInitialState}
         width={300}
         height={300}
       />
-    </DemoSettingsProvider>
+    </>
   );
 }
 
@@ -302,14 +296,14 @@ function BeadsWhenFarLabeled() {
 function BeadsBetween() {
   const draggable = useMemo(() => makeDraggable("d.between()"), []);
   return (
-    <DemoSettingsProvider>
+    <>
       <DemoDraggable
         draggable={draggable}
         initialState={beadsInitialState}
         width={300}
         height={300}
       />
-    </DemoSettingsProvider>
+    </>
   );
 }
 
@@ -333,28 +327,28 @@ function TwistedTrees7() {
     [],
   );
   return (
-    <DemoSettingsProvider>
+    <>
       <DemoDraggable
         draggable={draggable}
         initialState={initialState7}
         width={400}
         height={600}
       />
-    </DemoSettingsProvider>
+    </>
   );
 }
 
 // Lists in lists — no DemoNotes
 function ListsInListsClean() {
   return (
-    <DemoSettingsProvider>
+    <>
       <DemoDraggable
         draggable={listsInListsDraggable}
         initialState={listsInListsInitialState}
         width={400}
         height={400}
       />
-    </DemoSettingsProvider>
+    </>
   );
 }
 
@@ -370,14 +364,14 @@ function AnimateAlgebraClean() {
     [],
   );
   return (
-    <DemoSettingsProvider>
+    <>
       <DemoDraggable
         draggable={draggable}
         initialState={algebraInitialState}
         width={300}
         height={350}
       />
-    </DemoSettingsProvider>
+    </>
   );
 }
 
@@ -437,40 +431,39 @@ export const slides: Slide[] = [
     demoId: "ring-of-beads",
   }),
 
-  // === Model state → View explanation (35-65s) — animated video clips ===
-  videoSlide(
+  // === Model state → View explanation (35-65s) ===
+  imageSlide(
+    "slide-07.jpg",
     "Model State → View",
-    0,
-    8.5,
     "First, the interface developer represents this diagram as a function from model state to view tree, like in React.",
     { transition: "fade-white" },
   ),
   videoSlide(
     "Speculative Rendering",
-    8.5,
+    7.5,
     13.5,
     "Next, they specify, for each draggable element, a set of new model states the drag should be able to access.",
   ),
   videoSlide(
     "Target Positions",
-    13.5,
-    17.0,
+    14.7,
+    17.2,
     "When a drag starts, we speculatively render each of these states to view trees, and we extract possible target locations of the dragged element.",
   ),
   videoSlide(
     "Drag Synthesis",
-    17.0,
-    24.5,
+    17.5,
+    23,
     "This gives us enough information to synthesize a high-quality animated drag drop interaction.",
   ),
-  videoSlide("Live Drag", 24.5, 30.5, ""),
+  videoSlide("Live Drag", 23, 27.7, ""),
 
   // === Dragology title (65-70s) ===
   imageSlide(
     "slide-12.jpg",
     "Dragology",
     "Here's how an interface developer builds this with our prototype library, Dragology.",
-    { transition: "fade" },
+    { transition: "fade-white" },
   ),
 
   // === Code walkthrough (70-90s) ===

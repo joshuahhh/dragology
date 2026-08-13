@@ -6,37 +6,52 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
 import { useTitle } from "../useTitle";
-import { type Slide, slides } from "./slides";
+import { slides } from "./slides";
 
-function useVideoPlayer(shownSlide: Slide, displaySlide: number) {
+function useVideoPlayer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const endTimeRef = useRef<number>(0);
+  const playingSlideRef = useRef<number>(-1);
+  const rafIdRef = useRef<number>(0);
 
-  useEffect(() => {
+  const checkFrame = useCallback(() => {
     const video = videoRef.current;
-    if (!video || shownSlide.type !== "video") return;
-
-    video.currentTime = shownSlide.startTime;
-    endTimeRef.current = shownSlide.endTime;
-
-    const playPromise = video.play();
-    if (playPromise) playPromise.catch(() => {});
-
-    const onTimeUpdate = () => {
-      if (video.currentTime >= endTimeRef.current) {
-        video.pause();
-        video.currentTime = endTimeRef.current;
-      }
-    };
-    video.addEventListener("timeupdate", onTimeUpdate);
-    return () => {
-      video.removeEventListener("timeupdate", onTimeUpdate);
+    if (!video || video.paused) return;
+    if (video.currentTime >= endTimeRef.current) {
       video.pause();
-    };
-  }, [displaySlide, shownSlide]);
+      return;
+    }
+    rafIdRef.current = video.requestVideoFrameCallback(checkFrame);
+  }, []);
 
-  return videoRef;
+  const playSlide = useCallback(
+    (slideIdx: number) => {
+      const video = videoRef.current;
+      const slide = slides[slideIdx];
+      if (!video || slide.type !== "video") return;
+      if (playingSlideRef.current === slideIdx) return;
+      playingSlideRef.current = slideIdx;
+      video.currentTime = slide.startTime;
+      endTimeRef.current = slide.endTime;
+      const playPromise = video.play();
+      if (playPromise) playPromise.catch(() => {});
+      rafIdRef.current = video.requestVideoFrameCallback(checkFrame);
+    },
+    [checkFrame],
+  );
+
+  const stop = useCallback(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.cancelVideoFrameCallback(rafIdRef.current);
+      video.pause();
+    }
+    playingSlideRef.current = -1;
+  }, []);
+
+  return { videoRef, playSlide, stop };
 }
 
 export function SlideshowPage() {
@@ -53,8 +68,6 @@ export function SlideshowPage() {
   useEffect(() => {
     navigate(`/slideshow/${currentSlide + 1}`, { replace: true });
   }, [currentSlide, navigate]);
-
-  const slide = slides[currentSlide];
 
   // ── Transition state ──
   // Two-layer system: layers[0] and layers[1] are always rendered in the same
@@ -73,6 +86,10 @@ export function SlideshowPage() {
   const [transitioning, setTransitioning] = useState(false);
   const prevSlideRef = useRef(currentSlide);
 
+  // Video player — must be before transition effect so videoRef is available
+  const { videoRef, playSlide, stop: stopVideo } = useVideoPlayer();
+  const [videoSeekedSlide, setVideoSeekedSlide] = useState<number>(-1);
+
   useEffect(() => {
     if (currentSlide === prevSlideRef.current) return;
     const targetSlide = slides[currentSlide];
@@ -82,7 +99,33 @@ export function SlideshowPage() {
     // Cancel any in-progress transition
     setTransitioning(false);
 
+    // Pre-seek video if the target slide is a video
+    if (targetSlide.type === "video" && videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = targetSlide.startTime;
+    }
+
     if (!transition) {
+      if (targetSlide.type === "video" && videoRef.current) {
+        // Don't swap layer content yet — keep showing the old slide
+        // until the video has seeked to the correct frame
+        const video = videoRef.current;
+        const slideIdx = currentSlide;
+        const onSeeked = () => {
+          setVideoSeekedSlide(slideIdx);
+          const next: [number, number] = [...layerSlidesRef.current] as [
+            number,
+            number,
+          ];
+          next[activeLayerRef.current] = currentSlide;
+          setLayerSlides(next);
+          video.removeEventListener("seeked", onSeeked);
+        };
+        video.addEventListener("seeked", onSeeked);
+        prevSlideRef.current = currentSlide;
+        return () => video.removeEventListener("seeked", onSeeked);
+      }
+
       const next: [number, number] = [...layerSlidesRef.current] as [
         number,
         number,
@@ -161,7 +204,7 @@ export function SlideshowPage() {
 
     prevSlideRef.current = currentSlide;
     return () => timers.forEach(clearTimeout);
-  }, [currentSlide]);
+  }, [currentSlide, videoRef]);
 
   const displaySlide = layerSlides[activeLayer];
   const shownSlide = slides[displaySlide];
@@ -218,13 +261,45 @@ export function SlideshowPage() {
     return () => ro.disconnect();
   }, [layerSlide0, layerSlide1]);
 
-  // Video player for video slides
-  const videoRef = useVideoPlayer(shownSlide, displaySlide);
+  // Mark video ready once seek completes (for transitions)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onSeeked = () => setVideoSeekedSlide(currentSlide);
+    video.addEventListener("seeked", onSeeked);
+    return () => video.removeEventListener("seeked", onSeeked);
+  }, [videoRef, currentSlide]);
 
-  // Find the video source (shared across all video slides)
+  // Start/stop video when active slide changes
+  useEffect(() => {
+    if (shownSlide.type === "video") {
+      playSlide(displaySlide);
+    } else {
+      stopVideo();
+    }
+  }, [displaySlide, shownSlide, playSlide, stopVideo]);
+
+  // Compute video visibility from both layers
   const videoSrc = slides.find((s) => s.type === "video")
     ? `${import.meta.env.BASE_URL}slides/model-driven-full.mp4`
     : null;
+
+  // Video is visible if any layer has a video slide AND the video is seeked
+  // to some video slide (not necessarily the target — so video→video cuts
+  // keep showing the old frame until the new seek completes)
+  const videoIsReady =
+    videoSeekedSlide >= 0 && slides[videoSeekedSlide]?.type === "video";
+  let videoOpacity = 0;
+  let videoVisible = false;
+  for (const i of [0, 1] as const) {
+    if (slides[layerSlides[i]].type === "video") {
+      const op = transitioning ? layerOpacity[i] : i === activeLayer ? 1 : 0;
+      if (op > 0 && videoIsReady) {
+        videoOpacity = op;
+        videoVisible = true;
+      }
+    }
+  }
 
   return (
     <div
@@ -245,11 +320,14 @@ export function SlideshowPage() {
             top: 0,
             left: 0,
             width: "100%",
-            height: "calc(100% - 48px)",
+            height: "100%",
             objectFit: "contain",
             background: "white",
-            display: shownSlide.type === "video" ? "block" : "none",
-            zIndex: 1,
+            visibility: videoVisible ? "visible" : "hidden",
+            opacity: videoOpacity,
+            transition: transitioning ? "opacity 300ms ease" : "none",
+            pointerEvents: videoVisible ? "auto" : "none",
+            zIndex: 5,
           }}
         />
       )}
@@ -347,86 +425,30 @@ export function SlideshowPage() {
                 />
               )}
               {s.type === "demo" && (
-                <div
-                  className="flex items-center justify-center"
-                  style={{
-                    zoom: demoZooms[layerIdx],
-                    marginTop: s.overlayTitle ? 40 : 0,
-                  }}
-                >
-                  <s.Component />
-                </div>
+                <DemoSettingsProvider persist={false}>
+                  <div
+                    className="flex items-center justify-center"
+                    style={{
+                      zoom: demoZooms[layerIdx],
+                      marginTop: s.overlayTitle ? 40 : 0,
+                    }}
+                  >
+                    <s.Component />
+                  </div>
+                  {isActive && <DemoSettingsBar compact />}
+                </DemoSettingsProvider>
               )}
             </div>
           );
         })}
       </div>
 
-      {/* Subtitle bar */}
-      {shownSlide.subtitles && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 max-w-2xl px-6 py-3 bg-black/75 text-white text-lg text-center rounded-lg pointer-events-none">
-          {shownSlide.subtitles}
-        </div>
-      )}
-
-      {/* Bottom bar */}
-      <div className="h-12 flex items-center justify-between px-4 bg-gray-100 border-t border-gray-200 text-sm text-gray-600 shrink-0">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={goPrev}
-            disabled={currentSlide === 0}
-            className="px-2 py-1 rounded hover:bg-gray-200 disabled:opacity-30"
-          >
-            ←
-          </button>
-          <span>
-            {currentSlide + 1} / {slides.length}
-          </span>
-          <button
-            onClick={goNext}
-            disabled={currentSlide === slides.length - 1}
-            className="px-2 py-1 rounded hover:bg-gray-200 disabled:opacity-30"
-          >
-            →
-          </button>
-        </div>
-        <div className="text-xs text-gray-400">
-          {slide.title}
-          {slide.type === "demo" && (
-            <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
-              LIVE
-            </span>
-          )}
-          {slide.type === "video" && (
-            <span className="ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
-              VIDEO
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-4">
-          {/* Slide dots / scrubber */}
-          <div className="flex gap-0.5">
-            {slides.map((s, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentSlide(i)}
-                className="p-0 border-0 bg-transparent cursor-pointer"
-              >
-                <div
-                  className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                    i === currentSlide
-                      ? "bg-blue-500"
-                      : s.type === "demo"
-                        ? "bg-blue-200"
-                        : s.type === "video"
-                          ? "bg-purple-200"
-                          : "bg-gray-300"
-                  }`}
-                />
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Slide counter (minimal, bottom-left) */}
+      <div
+        className="fixed bottom-2 left-3 text-xs text-gray-300 select-none pointer-events-none"
+        style={{ zIndex: 30 }}
+      >
+        {currentSlide + 1}/{slides.length}
       </div>
     </div>
   );
