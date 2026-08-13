@@ -471,6 +471,7 @@ export const slides: Slide[] = [
     "slide-13.jpg",
     "Code — Static View",
     "They start with a function that maps a model state to a static view. Here's the code that draws the beads.",
+    { transition: "fade" },
   ),
   imageSlide(
     "slide-14.jpg",
