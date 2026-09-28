@@ -116,6 +116,7 @@ export const demoList: DemoListEntry[] = [
       "plane-partition",
       "aztec-diamond",
       "rotations-rebalancing",
+      "knot",
     ],
   },
 ];

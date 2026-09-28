@@ -2,6 +2,7 @@ import { PrettyPrint } from "@joshuahhh/pretty-print";
 import {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -467,6 +468,7 @@ export function DemoDraggable<T extends object>({
   height,
   stateRef,
   stateOverride,
+  transformDropState,
 }: {
   draggable: Draggable<T>;
   initialState: T;
@@ -474,6 +476,8 @@ export function DemoDraggable<T extends object>({
   height: number;
   stateRef?: React.RefObject<T | null>;
   stateOverride?: Partial<T>;
+  /** Applied to each dropped state before it becomes the new state. */
+  transformDropState?: (state: T) => T;
 }) {
   const collectedRef = useRef(false);
   if (collector && !collectedRef.current) {
@@ -501,6 +505,10 @@ export function DemoDraggable<T extends object>({
     thumbArea,
   } = useDemoSettings();
   const [status, setStatus] = useState<DragStatus<T> | null>(null);
+  const handleDropState = useCallback(
+    (s: T) => setOwnState(transformDropState ? transformDropState(s) : s),
+    [transformDropState],
+  );
   const [hoveredLayerBounds, setHoveredLayerBounds] = useState<Bounds | null>(
     null,
   );
@@ -549,7 +557,7 @@ export function DemoDraggable<T extends object>({
               showDebugOverlay={showDebugOverlay}
               trace={showDebugOverlay || showTreeView}
               showVaryVisualizer={showVaryVisualizer}
-              onDropState={setOwnState}
+              onDropState={handleDropState}
             />
             {hoveredLayerBounds && (
               <LayerHighlight

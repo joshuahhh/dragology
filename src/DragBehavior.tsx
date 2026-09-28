@@ -917,10 +917,15 @@ function betweenProjectAndRender<T extends object>(
     }
   }
 
-  const preview = lerpLayeredWeighted(
-    renderedStates.map((rs) => rs.layered),
-    weights,
-  );
+  // Lazy: a `between` inside a `closest` or `whenFar` is evaluated
+  // every frame whether or not its preview is shown, and the lerp is
+  // the expensive part.
+  let previewCache: LayeredSvgx | undefined;
+  const preview = () =>
+    (previewCache ??= lerpLayeredWeighted(
+      renderedStates.map((rs) => rs.layered),
+      weights,
+    ));
 
   // Drop state: closest rendered state by pointer distance
   const closest = _.minBy(renderedStates, (rs) =>
@@ -929,7 +934,7 @@ function betweenProjectAndRender<T extends object>(
   const closestIndex = renderedStates.indexOf(closest);
 
   return {
-    preview: () => preview,
+    preview,
     dropState: closest.state,
     gap: projection.dist,
     activePath: "between",
@@ -940,7 +945,7 @@ function betweenProjectAndRender<T extends object>(
             position: rs.position,
           })),
           closestIndex,
-          outputPreview: preview,
+          outputPreview: preview(),
           delaunayTriangles,
           projectedPoint: projection.projectedPt,
           weights,
