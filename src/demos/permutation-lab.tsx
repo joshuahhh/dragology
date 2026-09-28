@@ -333,7 +333,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
           i < n - 1 &&
             d.between([state, { ...state, word: applyGenerator(word, i) }]),
         ])
-        .withSnapRadius(10, { chain: true });
+        .withSnapRadius(3, { chain: true });
     } else {
       // Free reordering of the one-line notation.
       const without = perm.filter((x) => x !== v);
@@ -915,7 +915,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
                           d.between([state, { ...state, word: w }]),
                         ),
                       )
-                      .withSnapRadius(10, { chain: true })
+                      .withSnapRadius(3, { chain: true })
               }
               style={{ cursor: moves.length === 0 ? "not-allowed" : "grab" }}
             >
