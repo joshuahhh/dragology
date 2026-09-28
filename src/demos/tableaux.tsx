@@ -292,17 +292,31 @@ const shapeDraggable: Draggable<ShapeState> = ({ state, d, draggedId }) => {
 
 type FillState = {
   cells: Record<string, { r: number; c: number; value: number }>;
+  found: string[]; // valid fillings discovered so far, as keys
+};
+
+const FILL_SHAPE = [3, 2, 1];
+const FILL_COUNT = 16; // standard tableaux of shape (3,2,1)
+
+/** A filling as a string like "124/35/6". */
+function fillKey(state: FillState): string {
+  const rows: number[][] = FILL_SHAPE.map(() => []);
+  for (const { r, c, value } of Object.values(state.cells)) rows[r][c] = value;
+  return rows.map((row) => row.join("")).join("/");
+}
+
+const fillInitialCells: FillState["cells"] = {
+  n1: { r: 0, c: 0, value: 1 },
+  n2: { r: 0, c: 1, value: 2 },
+  n4: { r: 0, c: 2, value: 4 },
+  n3: { r: 1, c: 0, value: 3 },
+  n5: { r: 1, c: 1, value: 5 },
+  n6: { r: 2, c: 0, value: 6 },
 };
 
 const fillInitial: FillState = {
-  cells: {
-    n1: { r: 0, c: 0, value: 1 },
-    n2: { r: 0, c: 1, value: 2 },
-    n4: { r: 0, c: 2, value: 4 },
-    n3: { r: 1, c: 0, value: 3 },
-    n5: { r: 1, c: 1, value: 5 },
-    n6: { r: 2, c: 0, value: 6 },
-  },
+  cells: fillInitialCells,
+  found: [fillKey({ cells: fillInitialCells, found: [] })],
 };
 
 function fillViolations(state: FillState) {
@@ -318,8 +332,22 @@ function fillViolations(state: FillState) {
   return out;
 }
 
+/** On drop: if the filling is valid and new, record it. */
+function fillRecord(state: FillState): FillState {
+  if (fillViolations(state).length > 0) return state;
+  const key = fillKey(state);
+  if (state.found.includes(key)) return state;
+  return { ...state, found: [...state.found, key] };
+}
+
+const MINI = 13; // mini cell size for the gallery
+const FILL_GALLERY_X = 3 * S + 80;
+const FILL_GALLERY_COLS = 4;
+const FILL_GALLERY_PITCH = 3 * MINI + 12;
+
 const fillDraggable: Draggable<FillState> = ({ state, d, draggedId }) => {
   const violations = fillViolations(state);
+  const currentKey = violations.length === 0 ? fillKey(state) : null;
   return (
     <g transform={translate(10, 10)}>
       {Object.entries(state.cells).map(([id, cl]) =>
@@ -336,7 +364,10 @@ const fillDraggable: Draggable<FillState> = ({ state, d, draggedId }) => {
                   [a.r, a.c, b.r, b.c] = [b.r, b.c, a.r, a.c];
                 }),
               );
-            return d.closest([state, ...swaps]).withFloating();
+            return d
+              .closest([state, ...swaps])
+              .withFloating()
+              .onDrop(fillRecord);
           },
         }),
       )}
@@ -369,6 +400,52 @@ const fillDraggable: Draggable<FillState> = ({ state, d, draggedId }) => {
             `✗ ${violations.length} broken rule${violations.length === 1 ? "" : "s"}`,
             "#dc2626",
           )}
+
+      {/* gallery: one blank template per standard tableau of this shape */}
+      <g transform={translate(FILL_GALLERY_X, 0)}>
+        {_.range(FILL_COUNT).map((i) => {
+          const key = state.found[i];
+          const isCurrent = key !== undefined && key === currentKey;
+          const rows = key?.split("/") ?? FILL_SHAPE.map(() => "");
+          const gx = (i % FILL_GALLERY_COLS) * FILL_GALLERY_PITCH;
+          const gy = Math.floor(i / FILL_GALLERY_COLS) * FILL_GALLERY_PITCH;
+          return (
+            <g id={`slot-${i}`} transform={translate(gx, gy)}>
+              {FILL_SHAPE.map((len, r) =>
+                _.range(len).map((c) => (
+                  <g
+                    id={`slot-${i}-${r}-${c}`}
+                    transform={translate(c * MINI, r * MINI)}
+                  >
+                    <rect
+                      width={MINI}
+                      height={MINI}
+                      fill={key ? (isCurrent ? "#bfdbfe" : "#dbeafe") : "white"}
+                      stroke={key ? "#333" : "#d1d5db"}
+                      strokeWidth={0.8}
+                      strokeDasharray={key ? undefined : "2 2"}
+                    />
+                    {key && (
+                      <text
+                        x={MINI / 2}
+                        y={MINI / 2}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fontSize={8}
+                        fontFamily="ui-sans-serif, system-ui, sans-serif"
+                        fill="#111"
+                        pointerEvents="none"
+                      >
+                        {rows[r][c]}
+                      </text>
+                    )}
+                  </g>
+                )),
+              )}
+            </g>
+          );
+        })}
+      </g>
     </g>
   );
 };
@@ -869,7 +946,7 @@ export default demo(
             key={fillKey}
             draggable={fillDraggable}
             initialState={fillInitial}
-            width={200}
+            width={FILL_GALLERY_X + FILL_GALLERY_COLS * FILL_GALLERY_PITCH + 10}
             height={S * 3 + 36}
           />
         </Figure>
