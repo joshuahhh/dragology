@@ -34,6 +34,7 @@ export const demoList: DemoListEntry[] = [
   "animate-algebra-tree",
   "animate-algebra-stage-builder",
   "animate-algebra-tree-macro",
+  "catalan-explorer",
   "outline",
   "braid",
   "todo",
