@@ -49,4 +49,7 @@ export { dragSpecToBehavior } from "./DragBehavior";
 export type { DragBehavior, DragInitContext, DragResult } from "./DragBehavior";
 
 // Benchmarking
-export { setupListsInListsBenchmark } from "./benchmarking";
+export {
+  setupListsInListsBenchmark,
+  setupPivotTableBenchmark,
+} from "./benchmarking";
