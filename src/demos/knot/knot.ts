@@ -431,15 +431,25 @@ export function formatJones(p: Poly): string {
     .trim();
 }
 
+/**
+ * The combinatorial content of a diagram: its code plus the crossing
+ * signs (in visit order). Two consistent diagrams with the same key
+ * are planar-isotopic; the key is what cosmetic dragging must keep.
+ */
+export function diagramKey(an: Analysis): string | null {
+  if (!an.consistent) return null;
+  return (
+    an.knot.code.map((e) => `${e.id}${e.over ? "o" : "u"}`).join(",") +
+    "|" +
+    an.visitInfo.map((i) => i.sign).join("")
+  );
+}
+
 const invariantsCache = new Map<string, Invariants>();
 
 export function invariants(an: Analysis): Invariants {
-  // Everything here depends only on the code and the crossing signs,
-  // which don't change during cosmetic dragging.
-  const key =
-    an.knot.code.map((e) => `${e.id}${e.over ? "o" : "u"}`).join(",") +
-    "|" +
-    an.infos.map((i) => i.sign).join("");
+  // Everything here depends only on the code and the crossing signs.
+  const key = diagramKey(an) ?? "inconsistent";
   const cached = invariantsCache.get(key);
   if (cached) return cached;
   const tc = tricolor(an);
@@ -457,48 +467,6 @@ export function invariants(an: Analysis): Invariants {
 }
 
 // # Code derivation
-
-/**
- * Re-derive the code for new geometry by matching crossings to the
- * old ones by position (for changes that leave every crossing ~where
- * it was, e.g. resampling). Null if the match fails.
- */
-export function rematchByPosition(
-  old: Analysis,
-  newPts: Pt[],
-  tol = 4,
-): CodeEntry[] | null {
-  const samples = sampleClosed(newPts, SUB);
-  const crossings = findCrossings(samples);
-  if (crossings.length !== old.crossings.length) return null;
-  const used = new Set<number>();
-  const entries: { u: number; id: string; over: boolean }[] = [];
-  for (const cr of crossings) {
-    let bi = -1;
-    let bd = tol;
-    old.infos.forEach((info, i) => {
-      if (used.has(i)) return;
-      const dd = dist(info.cr.p, cr.p);
-      if (dd < bd) {
-        bd = dd;
-        bi = i;
-      }
-    });
-    if (bi < 0) return null;
-    used.add(bi);
-    const info = old.infos[bi];
-    const oldOver = tangentAt(old.samples, info.overU);
-    const t1 = tangentAt(samples, cr.u1);
-    const t2 = tangentAt(samples, cr.u2);
-    const d1 = oldOver.x * t1.x + oldOver.y * t1.y;
-    const d2 = oldOver.x * t2.x + oldOver.y * t2.y;
-    const overFirst = d1 > d2;
-    entries.push({ u: cr.u1, id: info.id, over: overFirst });
-    entries.push({ u: cr.u2, id: info.id, over: !overFirst });
-  }
-  entries.sort((a, b) => a.u - b.u);
-  return entries.map(({ id, over }) => ({ id, over }));
-}
 
 type NewInvolved = {
   cr: Crossing;
@@ -681,11 +649,11 @@ function prepareWindow(
     newPts.findIndex((p) => p.id === id0),
   );
   const rotated = [...newPts.slice(r), ...newPts.slice(0, r)];
-  const code = rematchByPosition(an, rotated);
-  if (!code) return null;
-  const k2: Knot = { pts: rotated, code, nextId, brush: ZERO_BRUSH };
+  // The curve's shape is unchanged, so the code carries over as-is;
+  // verify that the crossings still pair up (and keep their signs).
+  const k2: Knot = { pts: rotated, code: knot.code, nextId, brush: ZERO_BRUSH };
   const an2 = analyze(k2);
-  if (!an2.consistent) return null;
+  if (diagramKey(an2) !== diagramKey(an)) return null;
   const a2 = rotated.findIndex((p) => p.id === knot.pts[w.a].id);
   const b2 = rotated.findIndex((p) => p.id === knot.pts[w.b].id);
   const i2 = rotated.findIndex((p) => p.id === knot.pts[i].id);
@@ -1252,10 +1220,8 @@ export function resampleKnot(k0: Knot): Knot {
       j === 0 ? { ...k.pts[0] } : { id: `p${nextId++}`, x: p.x, y: p.y },
     );
   }
-  const code = rematchByPosition(an, pts, 6);
-  if (!code) return k;
-  const k2: Knot = { pts, code, nextId, brush: ZERO_BRUSH };
-  return analyze(k2).consistent ? k2 : k;
+  const k2: Knot = { pts, code: k.code, nextId, brush: ZERO_BRUSH };
+  return diagramKey(analyze(k2)) === diagramKey(an) ? k2 : k;
 }
 
 /**

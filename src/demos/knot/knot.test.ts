@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Knot, analyze, invariants, movesAt, resampleKnot } from "./knot";
 
-import { figureEight, trefoil, unknot } from "./presets";
+import { figureEight, scramble, trefoil, unknot } from "./presets";
 
 function inv(k: Knot) {
   return invariants(analyze(k));
@@ -117,6 +117,16 @@ describe("moves", () => {
     }
     console.log("R3 found", found);
     expect(found).toBeGreaterThan(0);
+  });
+  it("scrambling keeps the Jones polynomial", () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const a = scramble(unknot(), seed, 8);
+      expect(inv(a).jones).toBe("1");
+      expect(inv(a).n).toBeGreaterThan(5);
+      const b = scramble(trefoil(), seed, 5);
+      expect(inv(b).jones).toBe(inv(trefoil()).jones);
+      expect(inv(b).n).toBeGreaterThan(5);
+    }
   });
   it("resample keeps invariants", () => {
     const k = trefoil();

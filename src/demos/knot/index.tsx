@@ -9,12 +9,12 @@ import {
   Knot,
   analyze,
   arcAt,
+  diagramKey,
   invariants,
-  isConsistent,
   movesAt,
   resampleKnot,
 } from "./knot";
-import { figureEight, trefoil, unknot } from "./presets";
+import { figureEight, scramble, trefoil, unknot } from "./presets";
 
 const WIDTH = 560;
 const HEIGHT = 470;
@@ -27,12 +27,14 @@ const PALETTE = ["#e11d48", "#2563eb", "#16a34a"];
 const MONO = "#334155";
 
 const presets: { label: string; make: () => Knot }[] = [
+  { label: "tangle A", make: () => scramble(unknot(), 2, 8) },
+  { label: "tangle B", make: () => scramble(trefoil(), 8, 5) },
   { label: "trefoil", make: trefoil },
   { label: "figure-eight", make: figureEight },
   { label: "unknot", make: unknot },
 ];
 
-const initialState: Knot = trefoil();
+const initialState: Knot = presets[0].make();
 
 const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
   const an = analyze(state);
@@ -138,11 +140,14 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
                   ...state,
                   brush: { at: kp.id, dx: 0, dy: 0 },
                 };
+                // Free dragging may only move the curve around: the
+                // crossings' structure and signs must stay as they are.
+                const key = diagramKey(analyze(state));
                 let lastGood = start;
                 const cosmetic = d
                   .vary(start, [param("brush", "dx"), param("brush", "dy")])
                   .during((s) => {
-                    if (isConsistent(s)) {
+                    if (diagramKey(analyze(s)) === key) {
                       lastGood = s;
                       return s;
                     }
@@ -150,7 +155,6 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
                   });
                 return d
                   .closest(moves.map((m) => d.between([m.from, m.to])))
-                  .withSnapRadius(4, { chain: true })
                   .whenFar(cosmetic, { gapIn: 12, gapOut: 24 });
               })
             }
@@ -179,27 +183,40 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
       </g>
 
       {/* presets */}
-      {presets.map((preset, k) => (
-        <g
-          id={`preset-${preset.label}`}
-          className="knot-preset"
-          transform={translate(WIDTH - 16 - (presets.length - k) * 96, 14)}
-          style={{ cursor: "pointer" }}
-          onClick={() => setState(preset.make())}
-        >
-          <rect width={88} height={24} rx={6} fill="#f1f5f9" stroke="#cbd5e1" />
-          <text
-            x={44}
-            y={16}
-            textAnchor="middle"
-            fontSize={12}
-            fill="#334155"
-            fontFamily="ui-sans-serif, system-ui"
+      {presets.map((preset, k) => {
+        const w = 16 + preset.label.length * 6.5;
+        let x = WIDTH - 12;
+        for (let j = presets.length - 1; j >= k; j--) {
+          x -= 16 + presets[j].label.length * 6.5 + 6;
+        }
+        return (
+          <g
+            id={`preset-${preset.label}`}
+            className="knot-preset"
+            transform={translate(x, 14)}
+            style={{ cursor: "pointer" }}
+            onClick={() => setState(preset.make())}
           >
-            {preset.label}
-          </text>
-        </g>
-      ))}
+            <rect
+              width={w}
+              height={24}
+              rx={6}
+              fill="#f1f5f9"
+              stroke="#cbd5e1"
+            />
+            <text
+              x={w / 2}
+              y={16}
+              textAnchor="middle"
+              fontSize={12}
+              fill="#334155"
+              fontFamily="ui-sans-serif, system-ui"
+            >
+              {preset.label}
+            </text>
+          </g>
+        );
+      })}
     </g>
   );
 };
