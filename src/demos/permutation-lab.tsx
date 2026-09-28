@@ -11,6 +11,7 @@ import {
 } from "../demo/ui";
 import { Draggable } from "../draggable";
 import { Vec2 } from "../math/vec2";
+import { Svgx } from "../svgx";
 import { translate } from "../svgx/helpers";
 
 // # Permutation Lab
@@ -31,20 +32,30 @@ import { translate } from "../svgx/helpers";
 
 type Mode = "free" | "adjacent";
 
+/** A letter s_i, or `null` for a blank column. Blank columns only exist
+ * mid-drag: cancelling s_i s_i first empties the two columns (so nothing
+ * to the right shifts while you drag), then the drop compacts them. */
+type Letter = number | null;
+
 type State = {
   n: number;
-  word: number[];
+  word: Letter[];
   mode: Mode;
 };
 
 // ## Permutation math
 
-function permFromWord(n: number, word: number[]): number[] {
+function permFromWord(n: number, word: Letter[]): number[] {
   const arr = _.range(1, n + 1);
   for (const i of word) {
+    if (i === null) continue;
     [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
   }
   return arr;
+}
+
+function compact(word: Letter[]): number[] {
+  return word.filter((l): l is number => l !== null);
 }
 
 function inversions(perm: number[]): number {
@@ -80,7 +91,7 @@ function wordFromPerm(perm: number[]): number[] {
 /** Multiply the word on the right by s_i: literally append the letter,
  * even if that makes the word non-reduced (e.g. dragging a tile right
  * and then back left writes s_i s_i). */
-function applyGenerator(word: number[], i: number): number[] {
+function applyGenerator(word: Letter[], i: number): Letter[] {
   return [...word, i];
 }
 
@@ -115,36 +126,46 @@ function permFromCycles(n: number, cycles: number[][]): number[] {
 
 /** Words reachable from `word` by one Coxeter relation that moves the
  * crossing at column `j`: a commutation s_i s_k = s_k s_i (|i−k| ≥ 2)
- * with a neighbor, or a braid move s_i s_k s_i = s_k s_i s_k (|i−k| = 1)
- * in which the dragged crossing jumps two columns across the third
- * strand. */
-function crossingMoves(word: number[], j: number): number[][] {
+ * with a neighbor, or a braid move s_i s_k s_i = s_k s_i s_k (|i−k| = 1).
+ * In a braid move the dragged crossing is either an end (it jumps two
+ * columns across the third strand) or the middle (it moves one row
+ * vertically). */
+function crossingMoves(word: Letter[], j: number): Letter[][] {
   const i = word[j];
-  const L = word.length;
-  const moves: number[][] = [];
+  if (i === null) return [];
+  const at = (k: number): Letter =>
+    k >= 0 && k < word.length ? word[k] : null;
+  const commutes = (k: number) => {
+    const l = at(k);
+    return l !== null && Math.abs(l - i) >= 2;
+  };
+  const isBraid = (start: number) => {
+    const a = at(start);
+    const b = at(start + 1);
+    return (
+      a !== null && b !== null && at(start + 2) === a && Math.abs(a - b) === 1
+    );
+  };
   const swapped = (a: number, b: number) => {
     const w = word.slice();
     [w[a], w[b]] = [w[b], w[a]];
     return w;
   };
-  const braided = (start: number) => {
-    const k = word[start + 1];
+  const braidAt = (start: number) => {
+    const a = word[start];
+    const b = word[start + 1];
     const w = word.slice();
-    w[start] = k;
-    w[start + 1] = i;
-    w[start + 2] = k;
+    w[start] = b;
+    w[start + 1] = a;
+    w[start + 2] = b;
     return w;
   };
-  // leftward moves
-  if (j - 1 >= 0 && Math.abs(word[j - 1] - i) >= 2)
-    moves.push(swapped(j - 1, j));
-  if (j - 2 >= 0 && word[j - 2] === i && Math.abs(word[j - 1] - i) === 1)
-    moves.push(braided(j - 2));
-  // rightward moves
-  if (j + 1 < L && Math.abs(word[j + 1] - i) >= 2)
-    moves.push(swapped(j, j + 1));
-  if (j + 2 < L && word[j + 2] === i && Math.abs(word[j + 1] - i) === 1)
-    moves.push(braided(j));
+  const moves: Letter[][] = [];
+  if (commutes(j - 1)) moves.push(swapped(j - 1, j));
+  if (isBraid(j - 2)) moves.push(braidAt(j - 2)); // dragged = right end
+  if (commutes(j + 1)) moves.push(swapped(j, j + 1));
+  if (isBraid(j)) moves.push(braidAt(j)); // dragged = left end
+  if (isBraid(j - 1)) moves.push(braidAt(j - 1)); // dragged = middle
   return moves;
 }
 
@@ -263,19 +284,25 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   // ### Word & inversion count
   const infoOrigin = Vec2(250, 32);
   const letterW = Math.min(22, 350 / Math.max(state.word.length, 1));
+  // Letters of the word with their column index and a stable id: the
+  // pair of wires that cross there (suffixed if a pair crosses twice).
   const wordLetters = (() => {
     const arr = _.range(1, n + 1);
     const seen = new Set<string>();
-    return word.map((i, j) => {
+    const letters: { i: number; j: number; pairId: string }[] = [];
+    word.forEach((i, j) => {
+      if (i === null) return;
       const a = arr[i];
       const b = arr[i + 1];
       [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
       let pairId = `${Math.min(a, b)}-${Math.max(a, b)}`;
       while (seen.has(pairId)) pairId += "x";
       seen.add(pairId);
-      return { i, j, pairId };
+      letters.push({ i, j, pairId });
     });
+    return letters;
   })();
+  const L = wordLetters.length;
 
   // ### Two-line notation
   const twoLineOrigin = Vec2(38, 108);
@@ -339,10 +366,10 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   // ### Wiring diagram
   const RS = 24; // row spacing
   const wiringOrigin = Vec2(48, 356);
-  const L = word.length;
-  const CW = Math.min(44, (WIDTH - 110) / Math.max(L, 1)); // column width
+  const Lcols = word.length; // columns, including blank ones
+  const CW = Math.min(44, (WIDTH - 110) / (Lcols + 1)); // column width
   const wireX0 = 0;
-  const wireX1 = wireX0 + L * CW + (L === 0 ? 40 : 0);
+  const wireX1 = wireX0 + (Lcols + 1) * CW; // one spare column at the end
   const rowY = (r: number) => r * RS;
 
   const wirePath = (v: number) => {
@@ -350,7 +377,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
     let x = wireX0;
     let dstr = `M ${x - 14} ${rowY(r)} L ${x} ${rowY(r)}`;
     for (const i of word) {
-      const next = r === i ? i + 1 : r === i + 1 ? i : r;
+      const next = i === null ? r : r === i ? i + 1 : r === i + 1 ? i : r;
       if (next === r) {
         dstr += ` L ${x + CW} ${rowY(r)}`;
       } else {
@@ -380,6 +407,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       )}
       <g transform={translate(infoOrigin.add(Vec2(0, 22)))}>
         <text
+          id="word-pi"
           fontSize={18}
           fontFamily="Georgia, serif"
           fontStyle="italic"
@@ -397,9 +425,13 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
             e
           </text>
         )}
-        {wordLetters.map(({ i, j, pairId }) => (
+        {wordLetters.map(({ i, j, pairId }, k) => (
           <text
             id={`word-letter-${pairId}`}
+            dragologyEmergeFrom={
+              k === 0 ? "word-pi" : `word-letter-${wordLetters[k - 1].pairId}`
+            }
+            dragologyEmergeMode="scale"
             transform={translate(34 + j * letterW, 0)}
             fontSize={18}
             fontFamily="Georgia, serif"
@@ -603,7 +635,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
 
       {/* ## Wiring diagram */}
       {label(
-        "wiring diagram (drag a crossing past its neighbor)",
+        "wiring diagram (drag crossings past each other, or a strand over its neighbor)",
         wiringOrigin.add(Vec2(-28, -22)),
       )}
       <g transform={translate(wiringOrigin)}>
@@ -674,6 +706,104 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
             </g>
           );
         })}
+        {/* Strand handles: drag a straight bit of strand across its
+            neighbor to write s_i s_i; drag the apex of such a double
+            crossing back across to cancel it (s_i s_i = e). */}
+        {_.range(1, n + 1).map((v) => {
+          const handles: Svgx[] = [];
+          let rMut = v - 1;
+          let jMut = 0;
+          while (jMut <= Lcols) {
+            // snapshot the loop variables so drag closures don't see
+            // later mutations
+            const j = jMut;
+            const r = rMut;
+            const letter: Letter = j < Lcols ? word[j] : null;
+            const next =
+              letter === null
+                ? r
+                : r === letter
+                  ? letter + 1
+                  : r === letter + 1
+                    ? letter
+                    : r;
+            const id = `strand-${v}-${j}`;
+            if (letter !== null && next !== r && word[j + 1] === letter) {
+              // apex of a double crossing at columns j, j+1
+              const gapped: State = {
+                ...state,
+                word: word.map((l, k) => (k === j || k === j + 1 ? null : l)),
+              };
+              handles.push(
+                <g
+                  id={id}
+                  transform={translate((j + 1) * CW, rowY(next))}
+                  dragologyZIndex={1}
+                  dragologyOnDrag={() =>
+                    d
+                      .between([state, gapped])
+                      .onDrop((s) => ({ ...s, word: compact(s.word) }))
+                  }
+                  style={{ cursor: "ns-resize" }}
+                >
+                  <rect
+                    transform={translate(-RS * 0.35, -RS * 0.35)}
+                    width={RS * 0.7}
+                    height={RS * 0.7}
+                    rx={4}
+                    fill="#dc2626"
+                    opacity={draggedId === id ? 0.35 : 0}
+                    className="plab-hit"
+                  />
+                </g>,
+              );
+              jMut += 2;
+              continue;
+            }
+            if (letter === null && j + 1 < Lcols && word[j + 1] === null) {
+              // two blank columns (mid-cancel): the apex handle lands here
+              handles.push(
+                <g id={id} transform={translate((j + 1) * CW, rowY(r))} />,
+              );
+              jMut += 2;
+              continue;
+            }
+            if (next === r) {
+              // straight segment
+              const insert = (i: number): State => ({
+                ...state,
+                word: [...word.slice(0, j), i, i, ...word.slice(j)],
+              });
+              handles.push(
+                <g
+                  id={id}
+                  transform={translate((j + 0.5) * CW, rowY(r))}
+                  dragologyZIndex={1}
+                  dragologyOnDrag={() =>
+                    d.closest([
+                      r > 0 && d.between([state, insert(r - 1)]),
+                      r < n - 1 && d.between([state, insert(r)]),
+                    ])
+                  }
+                  style={{ cursor: "ns-resize" }}
+                >
+                  <rect
+                    transform={translate(-CW * 0.4, -RS * 0.3)}
+                    width={CW * 0.8}
+                    height={RS * 0.6}
+                    rx={4}
+                    fill="#dc2626"
+                    opacity={draggedId === id ? 0.35 : 0}
+                    className="plab-hit"
+                  />
+                </g>,
+              );
+            }
+            rMut = next;
+            jMut += 1;
+          }
+          return <g>{handles}</g>;
+        })}
       </g>
     </g>
   );
@@ -702,7 +832,10 @@ export default demo(
           diagram into any cycle at any position. Drag a dot in the matrix
           within its column. Drag a crossing in the wiring diagram past its
           neighbor: commutations slide it one column, braid moves jump it across
-          the third strand — the word changes, π doesn't.
+          the third strand (or drag the middle crossing of a braid vertically) —
+          the word changes, π doesn't. Drag a straight bit of strand over its
+          neighbor to write s<sub>i</sub>s<sub>i</sub>; drag the apex of such a
+          double crossing back to cancel it.
         </DemoNotes>
         <div className="flex flex-wrap items-start gap-6 bg-gray-50 rounded p-3 mb-3 text-xs">
           <ConfigSelect
