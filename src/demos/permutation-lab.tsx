@@ -773,7 +773,8 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
                     ]),
                   ),
                 )
-                .withSnapRadius(10, { chain: true })
+                // targets are close together, so snap late
+                .withSnapRadius(3, { chain: true })
             }
             style={{ cursor: "grab" }}
           >
@@ -817,20 +818,23 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
               dragologyZIndex={1}
               dragologyOnDrag={() => {
                 const row = perm.indexOf(v);
-                return d
-                  .closest([
-                    row > 0 &&
-                      d.between([
-                        state,
-                        { ...state, word: applyGenerator(word, row - 1) },
-                      ]),
-                    row < n - 1 &&
-                      d.between([
-                        state,
-                        { ...state, word: applyGenerator(word, row) },
-                      ]),
-                  ])
-                  .withSnapRadius(10, { chain: true });
+                return (
+                  d
+                    .closest([
+                      row > 0 &&
+                        d.between([
+                          state,
+                          { ...state, word: applyGenerator(word, row - 1) },
+                        ]),
+                      row < n - 1 &&
+                        d.between([
+                          state,
+                          { ...state, word: applyGenerator(word, row) },
+                        ]),
+                    ])
+                    // rows are only RS apart, so snap late
+                    .withSnapRadius(3, { chain: true })
+                );
               }}
               style={{ cursor: "ns-resize" }}
             >
