@@ -8,6 +8,7 @@ const defaultConfig = {
   oneNodeAtATime: false,
   showTradRep: false,
   interpolation: "natural-neighbor" as const,
+  dragQuality: "good" as const,
 };
 
 export function TwistedTreesSection() {
