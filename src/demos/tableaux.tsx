@@ -336,7 +336,7 @@ const fillDraggable: Draggable<FillState> = ({ state, d, draggedId }) => {
                   [a.r, a.c, b.r, b.c] = [b.r, b.c, a.r, a.c];
                 }),
               );
-            return d.closest(swaps).whenFar(state).withFloating();
+            return d.closest([state, ...swaps]).withFloating();
           },
         }),
       )}
