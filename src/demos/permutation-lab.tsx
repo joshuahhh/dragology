@@ -809,18 +809,48 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
             >
               {v}
             </text>
-            <text
+            {/* the strand's end label: drag it past a neighbor to add a
+                crossing (appends s_row, chained) */}
+            <g
               id={`wire-end-${v}`}
               transform={translate(wireX1 + 22, rowY(perm.indexOf(v)))}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontSize={11}
-              fontWeight={600}
-              fill={colorOf(v).stroke}
-              fontFamily="system-ui, sans-serif"
+              dragologyZIndex={1}
+              dragologyOnDrag={() => {
+                const row = perm.indexOf(v);
+                return d
+                  .closest([
+                    row > 0 &&
+                      d.between([
+                        state,
+                        { ...state, word: applyGenerator(word, row - 1) },
+                      ]),
+                    row < n - 1 &&
+                      d.between([
+                        state,
+                        { ...state, word: applyGenerator(word, row) },
+                      ]),
+                  ])
+                  .withSnapRadius(10, { chain: true });
+              }}
+              style={{ cursor: "ns-resize" }}
             >
-              {v}
-            </text>
+              <circle
+                r={RS / 2 - 1}
+                fill={colorOf(v).fill}
+                opacity={draggedId === `wire-end-${v}` ? 0.6 : 0}
+                className="plab-hit"
+              />
+              <text
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={11}
+                fontWeight={600}
+                fill={colorOf(v).stroke}
+                fontFamily="system-ui, sans-serif"
+              >
+                {v}
+              </text>
+            </g>
           </g>
         ))}
         {_.range(1, n + 1).map((v) => (
