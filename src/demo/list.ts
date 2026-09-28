@@ -24,6 +24,7 @@ export const demoList: DemoListEntry[] = [
   "lists-in-lists-vanilla",
   "two-kinds-of-tree",
   "kanban",
+  "pivot-table",
   "ring-of-beads",
   "insert-and-remove",
   "insert-and-remove-original",
