@@ -1,12 +1,14 @@
 import { produce } from "immer";
 import _ from "lodash";
+import { useState } from "react";
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
+import { dragSpecToBehavior } from "../DragBehavior";
 import { Draggable } from "../draggable";
 import { and, DragSpec, DragSpecBuilder, inOrder, param } from "../DragSpec";
 import { Vec2 } from "../math/vec2";
 import { altKey } from "../modifierKeys";
-import { path, translate } from "../svgx/helpers";
+import { path, scale, translate } from "../svgx/helpers";
 
 // # ZX string diagrams as direct manipulation
 //
@@ -14,20 +16,29 @@ import { path, translate } from "../svgx/helpers";
 // phase) joined by wires, plus boundary wires at the top (inputs)
 // and bottom (outputs). We draw it as a *string diagram*: every
 // generator sits on its own horizontal level, and wires are strings
-// running vertically between levels. Dragging a generator is a proof
-// step:
+// running vertically between levels. Every drag is a rewrite rule:
 //
-// - drag vertically past another generator: interchange law
+// - drag a generator vertically past another: interchange law
 //   (`d.vary` on y, with `during` re-laying-out the other levels);
-// - drag a spider onto an adjacent same-colored spider: spider
-//   fusion, phases add (`d.dropTarget` per fusable spider, in a
-//   `closest` with the free-move `vary`);
+// - drop a spider on an adjacent same-colored spider: spider fusion,
+//   phases add (`d.dropTarget` per fusable spider, in a `closest`
+//   with the free-move `vary`);
+// - drop a bare spider (phase 0, two legs) on either neighbor:
+//   identity removal (same mechanism);
 // - alt-drag out of a spider: unfusion – a fresh phase-0 spider of
 //   the same color is pulled out, and legs follow it
 //   (`switchToStateAndFollow`);
+// - drag a phase label onto an adjacent same-colored spider: the
+//   phase moves across the wire (fusion followed by unfusion);
+// - drag a wire's bead sideways: the wire bows (isotopy). Pull it
+//   across a parallel twin between a Z and an X: both wires vanish
+//   (Hopf rule) – `whenFar` from a constrained `vary`;
 // - drag a cup up past its cap (or a cap down past its cup): the
-//   snake equation yanks the zigzag straight (`whenFar` from a
-//   constrained `vary` into the straightened state).
+//   snake equation yanks the zigzag straight, carrying along any
+//   spiders threaded on it (same `whenFar` pattern).
+//
+// Each puzzle is a diagram plus a goal diagram; the badge lights up
+// when the two are isomorphic as graphs.
 
 // ## State
 
@@ -48,27 +59,42 @@ type Node = Spider | Bend | Boundary;
 
 /** slot picks the left (0) or right (1) foot of a bend */
 type Port = { node: string; slot?: 0 | 1 };
-type Wire = { a: Port; b: Port };
+type Wire = {
+  a: Port;
+  b: Port;
+  /** horizontal bowing of the string, in px */
+  bow?: number;
+  /** where along the string its bead sits, 0..1 */
+  beadT?: number;
+};
+
+type PuzzleId = "cnot2" | "snake" | "phase" | "playground";
 
 type State = {
+  puzzle: PuzzleId;
   nodes: Record<string, Node>;
   wires: Record<string, Wire>;
 };
 
 // ## Layout constants
 
-const W = 360;
+const DIAG_W = 320;
+const GOAL_W = 150;
+const W = DIAG_W + GOAL_W;
+const H = 500;
 const TOP = 34;
 const ROW_H = 56;
 const X_MIN = 30;
-const X_MAX = W - 30;
+const X_MAX = DIAG_W - 30;
 const BEND_W = 14;
 const SPIDER_R = 11;
+const BOW_GAP = 28;
 
 const COLORS = {
   Z: { fill: "#d9f6d3", stroke: "#3f8f3a" },
   X: { fill: "#f6c8c8", stroke: "#b03a3a" },
 };
+const INK = "#374151";
 
 // ## Layout
 //
@@ -95,8 +121,7 @@ function relayout(state: State, floatingId?: string): State {
       ? (state.nodes[floatingId] as Spider | Bend)
       : undefined;
   return produce(state, (s) => {
-    let slot = 0;
-    for (const id of others) {
+    others.forEach((id, slot) => {
       const collapsedY = TOP + (slot + 1) * ROW_H;
       const node = s.nodes[id] as Spider | Bend;
       // Is the floater above this collapsed level? Then this node
@@ -104,9 +129,40 @@ function relayout(state: State, floatingId?: string): State {
       const pushed =
         floater !== undefined && floater.y < collapsedY + ROW_H / 2;
       node.y = pushed ? collapsedY + ROW_H : collapsedY;
-      slot++;
+    });
+  });
+}
+
+function pairKey(w: Wire): string {
+  return [w.a.node, w.b.node].sort().join("|");
+}
+
+/** Parallel wires that sit on top of each other get fanned out. */
+function spreadParallel(state: State): State {
+  const groups = _.groupBy(Object.keys(state.wires), (wid) =>
+    pairKey(state.wires[wid]),
+  );
+  return produce(state, (s) => {
+    for (const wids of Object.values(groups)) {
+      if (wids.length < 2) continue;
+      const sorted = _.sortBy(
+        wids,
+        (wid) => s.wires[wid].bow ?? 0,
+        (wid) => wid,
+      );
+      const bows = sorted.map((wid) => s.wires[wid].bow ?? 0);
+      const crowded = bows.some((b, i) => i > 0 && b - bows[i - 1] < 8);
+      if (!crowded) continue;
+      sorted.forEach((wid, i) => {
+        s.wires[wid].bow = (i - (sorted.length - 1) / 2) * BOW_GAP;
+      });
     }
   });
+}
+
+/** Clean up after a rewrite: levels and parallel wires. */
+function tidy(state: State): State {
+  return spreadParallel(relayout(state));
 }
 
 function outputY(state: State): number {
@@ -138,14 +194,37 @@ function portInfo(
   }
 }
 
-function wirePath(state: State, wire: Wire): string {
+function wireGeom(state: State, wire: Wire): [Vec2, Vec2, Vec2, Vec2] {
   const a = portInfo(state, wire.a);
   const b = portInfo(state, wire.b);
   const dy = b.pos.y - a.pos.y;
   const stiff = Math.max(Math.abs(dy) / 2, 24);
-  const cp1 = a.pos.add(Vec2(0, a.tangent === 0 ? dy / 2 : a.tangent * stiff));
-  const cp2 = b.pos.add(Vec2(0, b.tangent === 0 ? -dy / 2 : b.tangent * stiff));
-  return path("M", a.pos, "C", cp1, cp2, b.pos);
+  // bowing is perpendicular to the chord, so sliding the bead along
+  // the string and pulling it sideways are independent
+  const chord = b.pos.sub(a.pos);
+  const perp = chord.len() < 1 ? Vec2(1, 0) : Vec2(-chord.y, chord.x).norm();
+  const bow = perp.mul(wire.bow ?? 0);
+  const cp1 = a.pos
+    .add(Vec2(0, a.tangent === 0 ? dy / 2 : a.tangent * stiff))
+    .add(bow);
+  const cp2 = b.pos
+    .add(Vec2(0, b.tangent === 0 ? -dy / 2 : b.tangent * stiff))
+    .add(bow);
+  return [a.pos, cp1, cp2, b.pos];
+}
+
+function bezierAt([p0, p1, p2, p3]: [Vec2, Vec2, Vec2, Vec2], t: number) {
+  const u = 1 - t;
+  return p0
+    .mul(u * u * u)
+    .add(p1.mul(3 * u * u * t))
+    .add(p2.mul(3 * u * t * t))
+    .add(p3.mul(t * t * t));
+}
+
+function wirePath(state: State, wire: Wire): string {
+  const [p0, p1, p2, p3] = wireGeom(state, wire);
+  return path("M", p0, "C", p1, p2, p3);
 }
 
 // ## Graph helpers
@@ -160,24 +239,32 @@ function wiresAt(state: State, nodeId: string): [string, Wire][] {
   );
 }
 
+function neighbors(state: State, nodeId: string): string[] {
+  return _.uniq(
+    wiresAt(state, nodeId).map(([, w]) => otherEnd(w, nodeId).node),
+  );
+}
+
+function isBare(state: State, id: string): boolean {
+  const n = state.nodes[id];
+  return (
+    n.type === "spider" && n.phase % 8 === 0 && wiresAt(state, id).length === 2
+  );
+}
+
 /** Same-colored spiders connected to `id` by a wire: fusion candidates. */
 function fusableWith(state: State, id: string): string[] {
   const me = state.nodes[id];
   if (me.type !== "spider") return [];
-  const ids = new Set<string>();
-  for (const [, w] of wiresAt(state, id)) {
-    const other = otherEnd(w, id).node;
+  return neighbors(state, id).filter((other) => {
     const node = state.nodes[other];
-    if (other !== id && node.type === "spider" && node.color === me.color) {
-      ids.add(other);
-    }
-  }
-  return [...ids];
+    return other !== id && node.type === "spider" && node.color === me.color;
+  });
 }
 
 /** Spider fusion: merge `from` into `into`, adding phases. */
 function fuse(state: State, from: string, into: string): State {
-  return relayout(
+  return tidy(
     produce(state, (s) => {
       const f = s.nodes[from] as Spider;
       const t = s.nodes[into] as Spider;
@@ -193,6 +280,34 @@ function fuse(state: State, from: string, into: string): State {
   );
 }
 
+/** Identity removal: a bare spider's two legs become one wire. */
+function removeIdentity(state: State, id: string): State {
+  const [[keepId, keep], [dropId, drop]] = wiresAt(state, id);
+  return tidy(
+    produce(state, (s) => {
+      const endA = otherEnd(keep, id);
+      const endB = otherEnd(drop, id);
+      delete s.wires[dropId];
+      if (endA.node === endB.node && s.nodes[endA.node].type === "spider") {
+        delete s.wires[keepId]; // would be a self-loop
+      } else {
+        s.wires[keepId] = { ...keep, a: endA, b: endB };
+      }
+      delete s.nodes[id];
+    }),
+  );
+}
+
+/** Move the phase from one spider to an adjacent same-colored one. */
+function transferPhase(state: State, from: string, to: string): State {
+  return produce(state, (s) => {
+    const f = s.nodes[from] as Spider;
+    const t = s.nodes[to] as Spider;
+    t.phase = (t.phase + f.phase) % 8;
+    f.phase = 0;
+  });
+}
+
 /**
  * Unfusion, live: `child` was pulled out of `parent` and is joined
  * to it by one wire. Every other leg of the parent goes to whichever
@@ -205,8 +320,7 @@ function splitLegs(state: State, parent: string, child: string): State {
   if (axis.len() < 1) return state;
   return produce(state, (s) => {
     for (const [, w] of Object.entries(s.wires)) {
-      const ends = [w.a, w.b];
-      for (const end of ends) {
+      for (const end of [w.a, w.b]) {
         if (end.node !== parent && end.node !== child) continue;
         const other = otherEnd(w, end.node);
         if (other.node === parent || other.node === child) continue;
@@ -218,35 +332,79 @@ function splitLegs(state: State, parent: string, child: string): State {
   });
 }
 
-/** Does the wire from this bend lead to an opposite bend, forming a zigzag? */
+/** Hopf rule: two parallel wires between a Z and an X cancel. */
+function hopf(state: State, wid1: string, wid2: string): State {
+  return tidy(
+    produce(state, (s) => {
+      delete s.wires[wid1];
+      delete s.wires[wid2];
+    }),
+  );
+}
+
+/** A parallel wire between the same Z and X spiders, if any (nearest bow). */
+function hopfTwin(state: State, wid: string): string | undefined {
+  const w = state.wires[wid];
+  const na = state.nodes[w.a.node];
+  const nb = state.nodes[w.b.node];
+  if (na.type !== "spider" || nb.type !== "spider" || na.color === nb.color) {
+    return undefined;
+  }
+  const twins = Object.keys(state.wires).filter(
+    (other) => other !== wid && pairKey(state.wires[other]) === pairKey(w),
+  );
+  return _.minBy(twins, (other) =>
+    Math.abs((state.wires[other].bow ?? 0) - (w.bow ?? 0)),
+  );
+}
+
+/**
+ * Follow a string out of a bend through any threaded spiders (degree
+ * 2). If it reaches an opposite bend in zigzag position, that's the
+ * partner for a snake yank.
+ */
 function zigzagPartner(state: State, id: string): string | undefined {
   const me = state.nodes[id] as Bend;
-  for (const [, w] of wiresAt(state, id)) {
-    const other = otherEnd(w, id).node;
-    const node = state.nodes[other];
-    if (node.type !== "bend" || node.dir === me.dir) continue;
-    if (me.dir === "cup" ? node.y < me.y : node.y > me.y) return other;
+  for (const [wid0, w0] of wiresAt(state, id)) {
+    let prevWid = wid0;
+    let cur = otherEnd(w0, id).node;
+    for (let steps = 0; steps < 50; steps++) {
+      const node = state.nodes[cur];
+      if (node.type === "bend") {
+        if (node.dir === me.dir) break;
+        const ok = me.dir === "cup" ? node.y < me.y : node.y > me.y;
+        if (ok) return cur;
+        break;
+      }
+      if (node.type !== "spider") break;
+      const legs = wiresAt(state, cur);
+      if (legs.length !== 2) break;
+      const [nextWid, next] = legs.find(([lw]) => lw !== prevWid)!;
+      prevWid = nextWid;
+      cur = otherEnd(next, cur).node;
+    }
   }
   return undefined;
 }
 
-/** Snake equation: remove a cup/cap pair and join their loose ends. */
+/** Erase a bend, splicing its two legs into one wire. */
+function splice(s: State, bendId: string) {
+  const legs = wiresAt(s, bendId);
+  if (legs.length !== 2) return;
+  const [[keepId, keep], [dropId, drop]] = legs;
+  const endA = otherEnd(keep, bendId);
+  const endB = otherEnd(drop, bendId);
+  delete s.wires[dropId];
+  s.wires[keepId] = { ...keep, a: endA, b: endB };
+  delete s.nodes[bendId];
+}
+
+/** Snake equation: remove a cup/cap pair, keeping what was threaded on them. */
 function yank(state: State, bendA: string, bendB: string): State {
-  const between = wiresAt(state, bendA).find(
-    ([, w]) => otherEnd(w, bendA).node === bendB,
-  );
-  const looseA = wiresAt(state, bendA).find(([wid]) => wid !== between?.[0]);
-  const looseB = wiresAt(state, bendB).find(([wid]) => wid !== between?.[0]);
-  if (!between || !looseA || !looseB) return state;
-  return relayout(
+  return tidy(
     produce(state, (s) => {
-      const endA = otherEnd(looseA[1], bendA);
-      const endB = otherEnd(looseB[1], bendB);
-      delete s.wires[between[0]];
-      delete s.wires[looseB[0]];
-      s.wires[looseA[0]] = { a: endA, b: endB };
-      delete s.nodes[bendA];
-      delete s.nodes[bendB];
+      splice(s, bendA);
+      splice(s, bendB);
     }),
   );
 }
@@ -256,7 +414,95 @@ function phaseLabel(phase: number): string {
   return ["", "π/4", "π/2", "3π/4", "π", "-3π/4", "-π/2", "-π/4"][p];
 }
 
+// ## Graph isomorphism (good enough for tiny diagrams)
+//
+// Boundaries keep their names; internal nodes are refined by their
+// neighborhoods a few times, then the whole thing is serialized.
+
+function graphKey(state: State): string {
+  let labels: Record<string, string> = {};
+  for (const [id, n] of Object.entries(state.nodes)) {
+    labels[id] =
+      n.type === "boundary"
+        ? `B:${id}`
+        : n.type === "spider"
+          ? `S:${n.color}:${((n.phase % 8) + 8) % 8}`
+          : `D:${n.dir}`;
+  }
+  for (let round = 0; round < 4; round++) {
+    const next: Record<string, string> = {};
+    for (const id of Object.keys(state.nodes)) {
+      const nbrs = wiresAt(state, id)
+        .map(([, w]) => labels[otherEnd(w, id).node])
+        .sort();
+      next[id] = `${labels[id]}(${nbrs.join(",")})`;
+    }
+    labels = next;
+  }
+  const nodes = Object.values(labels).sort();
+  const edges = Object.values(state.wires)
+    .map((w) => [labels[w.a.node], labels[w.b.node]].sort().join("~"))
+    .sort();
+  return nodes.join(";") + "//" + edges.join(";");
+}
+
 // ## Drag specs
+
+/** Every node the dragged spider could be dropped on, with the result. */
+function spiderDropTargets(state: State, id: string): [string, State][] {
+  const out: [string, State][] = [];
+  for (const t of fusableWith(state, id)) out.push([t, fuse(state, id, t)]);
+  if (isBare(state, id)) {
+    for (const t of neighbors(state, id)) {
+      if (t === id || out.some(([o]) => o === t)) continue;
+      if (state.nodes[t].type === "bend") continue;
+      out.push([t, removeIdentity(state, id)]);
+    }
+  }
+  return out;
+}
+
+const HIT_R = 34;
+
+/**
+ * Like `d.dropTarget`, but hit-tests the dragged spider's center
+ * against the target node wherever the user might aim: where the
+ * target was when the drag began, and where it comes to rest once the
+ * dragged spider is out of the way (levels reflow, so these can be a
+ * level apart – and the target jumps between them as you cross it).
+ */
+function nearNodeSpec(
+  d: DragSpecBuilder<State>,
+  state: State,
+  draggedNode: string,
+  target: string,
+  result: State,
+): DragSpec<State> {
+  const collapsed = relayout(
+    produce(state, (s) => {
+      delete s.nodes[draggedNode];
+    }),
+  );
+  const spots = [
+    portInfo(state, { node: target }).pos,
+    portInfo(collapsed, { node: target }).pos,
+  ];
+  return d.custom((ctx) => {
+    const inner = dragSpecToBehavior<State>(
+      { type: "fixed", state: result },
+      ctx,
+    );
+    return (frame) => {
+      const center = frame.pointer.sub(ctx.anchorPos);
+      const near = spots.some((spot) => center.dist(spot) < HIT_R);
+      return {
+        ...inner(frame),
+        gap: near ? 0 : Infinity,
+        activePath: "near-node",
+      };
+    };
+  });
+}
 
 function spiderSpec(
   d: DragSpecBuilder<State>,
@@ -264,8 +510,8 @@ function spiderSpec(
   id: string,
   opts: { unfusedFrom?: string } = {},
 ): DragSpec<State> {
-  const fusions = fusableWith(state, id).map((target) =>
-    d.dropTarget(`spider-${target}-target`, fuse(state, id, target)),
+  const drops = spiderDropTargets(state, id).map(([t, result]) =>
+    nearNodeSpec(d, state, id, t, result),
   );
   const move = d
     .vary(state, [param("nodes", id, "x"), param("nodes", id, "y")], {
@@ -277,7 +523,7 @@ function spiderSpec(
       return s;
     });
   return d
-    .closest([...fusions, move])
+    .closest([...drops, move])
     .withBranchTransition(150)
     .onDrop((s) => {
       if (!s.nodes[id]) return s; // fused away
@@ -285,8 +531,12 @@ function spiderSpec(
         // pulled out but given no legs: fuse back in (a no-op proof step)
         return fuse(s, id, opts.unfusedFrom);
       }
-      return relayout(s);
+      return tidy(s);
     });
+}
+
+function freshId(prefix: string): string {
+  return `${prefix}-${_.uniqueId()}-${Date.now().toString(36)}`;
 }
 
 function unfuseSpec(
@@ -295,8 +545,8 @@ function unfuseSpec(
   id: string,
 ): DragSpec<State> {
   const parent = state.nodes[id] as Spider;
-  const childId = `spider-${_.uniqueId()}-${Date.now().toString(36)}`;
-  const wireId = `w-${_.uniqueId()}-${Date.now().toString(36)}`;
+  const childId = freshId("s");
+  const wireId = freshId("w");
   const unfused = produce(state, (s) => {
     s.nodes[childId] = {
       type: "spider",
@@ -312,6 +562,60 @@ function unfuseSpec(
     `spider-${childId}`,
     spiderSpec(d, unfused, childId, { unfusedFrom: id }),
   );
+}
+
+function labelSpec(
+  d: DragSpecBuilder<State>,
+  state: State,
+  id: string,
+): DragSpec<State> {
+  const drops = fusableWith(state, id).map((t) =>
+    d.dropTarget(`spider-${t}-target`, transferPhase(state, id, t)),
+  );
+  return d
+    .closest(drops)
+    .whenFar(state, { gap: 0 })
+    .withFloating()
+    .withBranchTransition(150);
+}
+
+function beadSpec(
+  d: DragSpecBuilder<State>,
+  state: State,
+  wid: string,
+): DragSpec<State> {
+  const twinId = hopfTwin(state, wid);
+  const myBow = state.wires[wid].bow ?? 0;
+  const twinBow = twinId ? (state.wires[twinId].bow ?? 0) : 0;
+  const onRight = myBow >= twinBow;
+  const withBead = produce(state, (s) => {
+    s.wires[wid].bow = myBow;
+    s.wires[wid].beadT = s.wires[wid].beadT ?? 0.5;
+  });
+  const move = d.vary(
+    withBead,
+    [param("wires", wid, "bow"), param("wires", wid, "beadT")],
+    {
+      constraint: (s) => {
+        const w = s.wires[wid];
+        return and(
+          ...inOrder([0.12, w.beadT!, 0.88]),
+          ...inOrder([-70, w.bow!, 70]),
+          // a wire can't be pulled through its twin – until the
+          // pair cancels
+          ...(twinId
+            ? onRight
+              ? inOrder([twinBow + 10, w.bow!])
+              : inOrder([w.bow!, twinBow - 10])
+            : []),
+        );
+      },
+    },
+  );
+  const spec = twinId
+    ? move.whenFar(hopf(state, wid, twinId), { gapIn: 16, gapOut: 30 })
+    : move;
+  return spec.withBranchTransition(200);
 }
 
 function bendSpec(
@@ -342,62 +646,106 @@ function bendSpec(
   const spec = partnerId
     ? move.whenFar(yank(state, id, partnerId), { gapIn: 20, gapOut: 36 })
     : move;
-  return spec.withBranchTransition(200).onDrop((s) => relayout(s));
+  return spec.withBranchTransition(200).onDrop((s) => tidy(s));
 }
 
 // ## Rendering
 
-const draggable: Draggable<State> = ({ state, d, draggedId }) => {
-  const draggedSpider = draggedId?.startsWith("spider-")
-    ? draggedId.slice("spider-".length)
-    : null;
-  const fusables =
-    draggedSpider && state.nodes[draggedSpider]
-      ? new Set(fusableWith(state, draggedSpider))
-      : new Set<string>();
+type RenderCtx = {
+  d: DragSpecBuilder<State>;
+  draggedId: string | null;
+};
+
+function renderDiagram(state: State, ctx: RenderCtx | null, prefix = "") {
+  const P = (id: string) => prefix + id;
+  const draggedId = ctx?.draggedId ?? null;
+
+  // Which nodes light up as drop targets for the current drag?
+  const targets = new Set<string>();
+  if (draggedId) {
+    const m = /^spider-(.+?)(-label)?$/.exec(draggedId);
+    if (m && state.nodes[m[1]]) {
+      if (m[2]) {
+        for (const t of fusableWith(state, m[1])) targets.add(t);
+      } else {
+        for (const [t] of spiderDropTargets(state, m[1])) targets.add(t);
+      }
+    }
+  }
+
   const outY = outputY(state);
+
+  const halo = (id: string, colors: { fill: string; stroke: string }) =>
+    targets.has(id) && (
+      <circle
+        id={P(`halo-${id}`)}
+        r={22}
+        fill={colors.fill}
+        fillOpacity={0.35}
+        stroke={colors.stroke}
+        strokeWidth={1.5}
+        strokeDasharray="4 3"
+        dragologyZIndex={-1}
+      />
+    );
 
   return (
     <g>
-      <style>{`
-        .zx-grab { cursor: grab; }
-        .zx-grab:active { cursor: grabbing; }
-      `}</style>
       {/* boundary rails */}
-      <line x1={0} y1={TOP} x2={W} y2={TOP} stroke="#e5e7eb" strokeWidth={1} />
+      <line x1={0} y1={TOP} x2={DIAG_W} y2={TOP} stroke="#e5e7eb" />
       <line
-        id="zx-out-rail"
+        id={P("out-rail")}
         transform={translate(0, outY)}
         x1={0}
         y1={0}
-        x2={W}
+        x2={DIAG_W}
         y2={0}
         stroke="#e5e7eb"
-        strokeWidth={1}
       />
 
       {/* wires */}
       {Object.entries(state.wires).map(([wid, wire]) => (
         <path
-          id={`wire-${wid}`}
+          id={P(`wire-${wid}`)}
           d={wirePath(state, wire)}
           fill="none"
-          stroke="#374151"
+          stroke={INK}
           strokeWidth={2}
           dragologyZIndex={-1}
         />
       ))}
 
+      {/* beads: grab a wire here to bow it (and pull twins apart) */}
+      {ctx &&
+        Object.entries(state.wires).map(([wid, wire]) => {
+          const pos = bezierAt(wireGeom(state, wire), wire.beadT ?? 0.5);
+          const twin = hopfTwin(state, wid) !== undefined;
+          const isDragged = draggedId === `bead-${wid}`;
+          return (
+            <g
+              id={`bead-${wid}`}
+              className="zx-bead"
+              opacity={twin || isDragged ? 1 : 0}
+              transform={translate(pos)}
+              dragologyOnDrag={() => beadSpec(ctx.d, state, wid)}
+            >
+              <circle r={10} fill="transparent" />
+              <circle r={4.5} fill="white" stroke={INK} strokeWidth={1.5} />
+            </g>
+          );
+        })}
+
       {/* nodes */}
       {Object.entries(state.nodes).map(([id, node]) => {
         if (node.type === "boundary") {
           return (
-            <circle
-              id={`bdry-${id}`}
+            <g
+              id={P(`bdry-${id}`)}
               transform={translate(node.x, node.side === "in" ? TOP : outY)}
-              r={2.5}
-              fill="#374151"
-            />
+            >
+              {halo(id, { fill: "#e5e7eb", stroke: INK })}
+              <circle r={2.5} fill={INK} />
+            </g>
           );
         }
         if (node.type === "bend") {
@@ -415,17 +763,18 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           const isDragged = draggedId === `bend-${id}`;
           return (
             <g
-              id={`bend-${id}`}
-              className="zx-grab"
+              id={P(`bend-${id}`)}
               transform={translate(node.x, node.y)}
               dragologyZIndex={isDragged ? "/1" : false}
-              dragologyOnDrag={() => bendSpec(d, state, id)}
+              dragologyOnDrag={
+                ctx ? () => bendSpec(ctx.d, state, id) : undefined
+              }
             >
               <path d={arc} fill="none" stroke="transparent" strokeWidth={22} />
               <path
                 d={arc}
                 fill="none"
-                stroke="#374151"
+                stroke={INK}
                 strokeWidth={2}
                 strokeLinecap="round"
               />
@@ -434,128 +783,404 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
         }
         // spider
         const label = phaseLabel(node.phase);
-        const boxW = label
-          ? Math.max(2 * SPIDER_R, 12 + label.length * 7)
-          : 2 * SPIDER_R;
         const colors = COLORS[node.color];
         const isDragged = draggedId === `spider-${id}`;
+        const pillW = 8 + label.length * 6.5;
         return (
           <g
-            id={`spider-${id}`}
-            className="zx-grab"
+            id={P(`spider-${id}`)}
             transform={translate(node.x, node.y)}
             dragologyZIndex={isDragged ? "/1" : false}
-            dragologyOnDrag={() =>
-              d.reactTo(altKey, (alt) =>
-                alt ? unfuseSpec(d, state, id) : spiderSpec(d, state, id),
-              )
+            dragologyOnDrag={
+              ctx
+                ? () =>
+                    ctx.d.reactTo(altKey, (alt) =>
+                      alt
+                        ? unfuseSpec(ctx.d, state, id)
+                        : spiderSpec(ctx.d, state, id),
+                    )
+                : undefined
             }
           >
             <circle
-              id={`spider-${id}-target`}
+              id={P(`spider-${id}-target`)}
               r={26}
               fill="transparent"
               dragologyZIndex={-1}
             />
-            {fusables.has(id) && (
-              <circle
-                id={`spider-${id}-halo`}
-                r={22}
-                fill={colors.fill}
-                fillOpacity={0.35}
-                stroke={colors.stroke}
-                strokeWidth={1.5}
-                strokeDasharray="4 3"
-                dragologyZIndex={-1}
-              />
-            )}
-            <rect
-              transform={translate(-boxW / 2, -SPIDER_R)}
-              width={boxW}
-              height={2 * SPIDER_R}
-              rx={SPIDER_R}
+            {halo(id, colors)}
+            <circle
+              r={SPIDER_R}
               fill={colors.fill}
               stroke={colors.stroke}
               strokeWidth={2}
             />
             {label && (
-              <text
-                id={`spider-${id}-label`}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={11}
-                fontFamily="ui-serif, Georgia, serif"
-                fontStyle="italic"
-                fill="#111827"
-                style={{ pointerEvents: "none", userSelect: "none" }}
+              <g
+                id={P(`spider-${id}-label`)}
+                className="zx-label"
+                transform={translate(SPIDER_R + 4, -SPIDER_R - 4)}
+                dragologyZIndex={1}
+                dragologyOnDrag={
+                  ctx ? () => labelSpec(ctx.d, state, id) : undefined
+                }
               >
-                {label}
-              </text>
+                <rect
+                  width={pillW}
+                  height={16}
+                  rx={8}
+                  fill="white"
+                  stroke={colors.stroke}
+                  strokeWidth={1}
+                />
+                <text
+                  transform={translate(pillW / 2, 8)}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize={11}
+                  fontFamily="ui-serif, Georgia, serif"
+                  fontStyle="italic"
+                  fill="#111827"
+                  style={{ userSelect: "none", pointerEvents: "none" }}
+                >
+                  {label}
+                </text>
+              </g>
             )}
           </g>
         );
       })}
     </g>
   );
+}
+
+const draggable: Draggable<State> = ({ state, d, draggedId }) => {
+  const puzzle = PUZZLES[state.puzzle];
+  const proved = puzzle.goal
+    ? graphKey(state) === GOAL_KEYS[state.puzzle]
+    : false;
+  const goalScale = 0.42;
+  const goalH = puzzle.goal ? (outputY(puzzle.goal) + TOP) * goalScale : 0;
+
+  return (
+    <g>
+      <style>{`
+        .zx-bead:hover { opacity: 1; }
+        .zx-label { cursor: grab; }
+      `}</style>
+      {renderDiagram(state, { d, draggedId })}
+      {puzzle.goal && (
+        <g transform={translate(DIAG_W + 8, 12)}>
+          <rect
+            id="goal-frame"
+            width={GOAL_W - 16}
+            height={goalH + 44}
+            rx={8}
+            fill={proved ? "#ecfdf5" : "#f9fafb"}
+            stroke={proved ? "#10b981" : "#e5e7eb"}
+            strokeWidth={proved ? 2 : 1}
+          />
+          <text
+            transform={translate(10, 18)}
+            fontSize={11}
+            fontFamily="ui-sans-serif, system-ui, sans-serif"
+            fill="#6b7280"
+            style={{ userSelect: "none" }}
+          >
+            GOAL
+          </text>
+          {proved && (
+            <text
+              id="goal-proved"
+              transform={translate(GOAL_W - 26, 18)}
+              textAnchor="end"
+              fontSize={11}
+              fontWeight="bold"
+              fontFamily="ui-sans-serif, system-ui, sans-serif"
+              fill="#059669"
+              style={{ userSelect: "none" }}
+            >
+              PROVED ∎
+            </text>
+          )}
+          <g
+            transform={
+              translate((GOAL_W - 16 - DIAG_W * goalScale) / 2, 30) +
+              scale(goalScale)
+            }
+          >
+            {renderDiagram(puzzle.goal, null, "goal-")}
+          </g>
+        </g>
+      )}
+    </g>
+  );
 };
 
-// ## Initial diagram
+// ## Puzzles
 //
-// Three input strings. String 1 carries Z(π/2) then Z(π/4) (fusable).
-// String 2 carries X(π/4), parallel to them (interchangeable). String
-// 3 has a zigzag: down into a cup, back up to a cap, down to the
-// output (yankable).
+// Each is a diagram to start from and (usually) a diagram to reach.
+// Level numbers in `y` are just orderings; `relayout` spaces them.
 
-const IN_X = [70, 160, 250];
-const OUT_X = [70, 160, 310];
+type Puzzle = {
+  title: string;
+  blurb: string;
+  start: State;
+  goal: State | null;
+};
 
-const initialState: State = relayout({
+const bd = (side: "in" | "out", x: number): Boundary => ({
+  type: "boundary",
+  side,
+  x,
+});
+const sp = (color: Color, phase: number, x: number, y: number): Spider => ({
+  type: "spider",
+  color,
+  phase,
+  x,
+  y,
+});
+const bend = (dir: "cup" | "cap", x: number, y: number): Bend => ({
+  type: "bend",
+  dir,
+  x,
+  y,
+});
+const w = (a: string, b: string, extra: Partial<Wire> = {}): Wire => ({
+  a: { node: a },
+  b: { node: b },
+  ...extra,
+});
+const foot = (node: string, slot: 0 | 1): Port => ({ node, slot });
+
+const L = 100; // left qubit
+const R = 220; // right qubit
+
+const cnot2Start: State = tidy({
+  puzzle: "cnot2",
   nodes: {
-    in1: { type: "boundary", side: "in", x: IN_X[0] },
-    in2: { type: "boundary", side: "in", x: IN_X[1] },
-    in3: { type: "boundary", side: "in", x: IN_X[2] },
-    out1: { type: "boundary", side: "out", x: OUT_X[0] },
-    out2: { type: "boundary", side: "out", x: OUT_X[1] },
-    out3: { type: "boundary", side: "out", x: OUT_X[2] },
-    za: { type: "spider", color: "Z", phase: 2, x: 70, y: 1 },
-    xb: { type: "spider", color: "X", phase: 1, x: 160, y: 2 },
-    zc: { type: "spider", color: "Z", phase: 1, x: 70, y: 3 },
-    cap: { type: "bend", dir: "cap", x: 296, y: 4 },
-    cup: { type: "bend", dir: "cup", x: 264, y: 5 },
+    in1: bd("in", L),
+    in2: bd("in", R),
+    out1: bd("out", L),
+    out2: bd("out", R),
+    z1: sp("Z", 0, L, 1),
+    x1: sp("X", 0, R, 2),
+    z2: sp("Z", 0, L, 3),
+    x2: sp("X", 0, R, 4),
   },
   wires: {
-    w1: { a: { node: "in1" }, b: { node: "za" } },
-    w2: { a: { node: "za" }, b: { node: "zc" } },
-    w3: { a: { node: "zc" }, b: { node: "out1" } },
-    w4: { a: { node: "in2" }, b: { node: "xb" } },
-    w5: { a: { node: "xb" }, b: { node: "out2" } },
-    w6: { a: { node: "in3" }, b: { node: "cup", slot: 0 } },
-    w7: { a: { node: "cup", slot: 1 }, b: { node: "cap", slot: 0 } },
-    w8: { a: { node: "cap", slot: 1 }, b: { node: "out3" } },
+    a: w("in1", "z1"),
+    b: w("z1", "z2"),
+    c: w("z2", "out1"),
+    d: w("in2", "x1"),
+    e: w("x1", "x2"),
+    f: w("x2", "out2"),
+    g: w("z1", "x1"),
+    h: w("z2", "x2"),
   },
 });
 
+const identity2: State = tidy({
+  puzzle: "cnot2",
+  nodes: {
+    in1: bd("in", L),
+    in2: bd("in", R),
+    out1: bd("out", L),
+    out2: bd("out", R),
+  },
+  wires: { a: w("in1", "out1"), b: w("in2", "out2") },
+});
+
+const snakeStart: State = tidy({
+  puzzle: "snake",
+  nodes: {
+    in1: bd("in", 100),
+    out1: bd("out", 240),
+    cap: bend("cap", 200, 1),
+    za: sp("Z", 1, 150, 2),
+    cup: bend("cup", 130, 3),
+    zb: sp("Z", 1, 240, 4),
+  },
+  wires: {
+    a: { a: { node: "in1" }, b: foot("cup", 0) },
+    b: { a: foot("cup", 1), b: { node: "za" } },
+    c: { a: { node: "za" }, b: foot("cap", 0) },
+    d: { a: foot("cap", 1), b: { node: "zb" } },
+    e: w("zb", "out1"),
+  },
+});
+
+const snakeGoal: State = tidy({
+  puzzle: "snake",
+  nodes: {
+    in1: bd("in", 160),
+    out1: bd("out", 160),
+    z: sp("Z", 2, 160, 1),
+  },
+  wires: { a: w("in1", "z"), b: w("z", "out1") },
+});
+
+const phaseStart: State = tidy({
+  puzzle: "phase",
+  nodes: {
+    in1: bd("in", L),
+    in2: bd("in", R),
+    out1: bd("out", L),
+    out2: bd("out", R),
+    p: sp("Z", 2, L, 1),
+    z: sp("Z", 0, L, 2),
+    x: sp("X", 0, R, 3),
+  },
+  wires: {
+    a: w("in1", "p"),
+    b: w("p", "z"),
+    c: w("z", "out1"),
+    d: w("in2", "x"),
+    e: w("x", "out2"),
+    f: w("z", "x"),
+  },
+});
+
+const phaseGoal: State = tidy({
+  puzzle: "phase",
+  nodes: {
+    in1: bd("in", L),
+    in2: bd("in", R),
+    out1: bd("out", L),
+    out2: bd("out", R),
+    z: sp("Z", 0, L, 1),
+    x: sp("X", 0, R, 2),
+    p: sp("Z", 2, L, 3),
+  },
+  wires: {
+    a: w("in1", "z"),
+    b: w("z", "p"),
+    c: w("p", "out1"),
+    d: w("in2", "x"),
+    e: w("x", "out2"),
+    f: w("z", "x"),
+  },
+});
+
+const playgroundStart: State = tidy({
+  puzzle: "playground",
+  nodes: {
+    in1: bd("in", 60),
+    in2: bd("in", 150),
+    in3: bd("in", 230),
+    out1: bd("out", 60),
+    out2: bd("out", 150),
+    out3: bd("out", 290),
+    za: sp("Z", 2, 60, 1),
+    xb: sp("X", 1, 150, 2),
+    zc: sp("Z", 1, 60, 3),
+    cap: bend("cap", 276, 4),
+    cup: bend("cup", 244, 5),
+  },
+  wires: {
+    w1: w("in1", "za"),
+    w2: w("za", "zc"),
+    w3: w("zc", "out1"),
+    w4: w("in2", "xb"),
+    w5: w("xb", "out2"),
+    w6: { a: { node: "in3" }, b: foot("cup", 0) },
+    w7: { a: foot("cup", 1), b: foot("cap", 0) },
+    w8: { a: foot("cap", 1), b: { node: "out3" } },
+  },
+});
+
+const PUZZLES: Record<PuzzleId, Puzzle> = {
+  cnot2: {
+    title: "CNOT · CNOT = 1",
+    blurb:
+      "Two CNOTs in a row cancel. Fuse the Zs, fuse the Xs, pull one of the " +
+      "twin wires across the other (Hopf), then drop each bare spider on a neighbor.",
+    start: cnot2Start,
+    goal: identity2,
+  },
+  phase: {
+    title: "Phase through CNOT",
+    blurb:
+      "A Z-phase slides through a CNOT's control. Fuse it into the control, " +
+      "Alt-drag a fresh spider out toward the bottom-left (legs follow the " +
+      "side you pull toward, so only the output goes with it), then drag the " +
+      "phase label down onto it.",
+    start: phaseStart,
+    goal: phaseGoal,
+  },
+  snake: {
+    title: "Spider on a snake",
+    blurb:
+      "Two π/4 spiders sit on a zigzag wire. Drag the cup up past the cap to " +
+      "yank it straight, then fuse.",
+    start: snakeStart,
+    goal: snakeGoal,
+  },
+  playground: {
+    title: "Playground",
+    blurb: "No goal – three independent strands to poke at.",
+    start: playgroundStart,
+    goal: null,
+  },
+};
+
+const GOAL_KEYS = _.mapValues(PUZZLES, (p) => (p.goal ? graphKey(p.goal) : ""));
+
+const PUZZLE_ORDER: PuzzleId[] = ["cnot2", "phase", "snake", "playground"];
+
 export default demo(
-  () => (
-    <>
-      <DemoNotes>
-        A ZX-calculus string diagram where every drag is a rewrite.{" "}
-        <b>Drag a spider vertically</b> past another to slide levels
-        (interchange law).{" "}
-        <b>Drop a spider on an adjacent same-colored spider</b> to fuse them
-        (phases add). <b>Alt/Option-drag</b> out of a spider to unfuse a phase-0
-        spider from it; legs follow the side you pull toward.{" "}
-        <b>Drag the cup up past its cap</b> (or the cap down) to yank the zigzag
-        straight (snake equation).
-      </DemoNotes>
-      <DemoDraggable
-        draggable={draggable}
-        initialState={initialState}
-        width={W}
-        height={TOP + 8 * ROW_H}
-      />
-    </>
-  ),
+  () => {
+    const [puzzleId, setPuzzleId] = useState<PuzzleId>("cnot2");
+    const [attempt, setAttempt] = useState(0);
+    const puzzle = PUZZLES[puzzleId];
+    return (
+      <>
+        <DemoNotes>
+          A ZX-calculus string diagram editor where every drag is a rewrite
+          rule. <b>Drag spiders</b> past each other (interchange), <b>drop</b>{" "}
+          one on an adjacent same-colored spider (fusion; a bare phase-0 spider
+          drops on any neighbor: identity), <b>Alt-drag</b> out of a spider
+          (unfusion), <b>drag a phase label</b> onto a same-colored neighbor,{" "}
+          <b>drag a wire's bead</b> sideways (and through a twin wire: Hopf),
+          and <b>drag a cup past its cap</b> (snake).
+        </DemoNotes>
+        <div className="flex flex-wrap gap-2 mb-3 items-center">
+          {PUZZLE_ORDER.map((id) => (
+            <button
+              key={id}
+              className={
+                "px-2 py-1 text-sm rounded border " +
+                (id === puzzleId
+                  ? "bg-gray-800 text-white border-gray-800"
+                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50")
+              }
+              onClick={() => {
+                setPuzzleId(id);
+                setAttempt((n) => n + 1);
+              }}
+            >
+              {PUZZLES[id].title}
+            </button>
+          ))}
+          <button
+            className="px-2 py-1 text-sm rounded border bg-white text-gray-500 border-gray-300 hover:bg-gray-50"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            reset
+          </button>
+        </div>
+        <DemoNotes>{puzzle.blurb}</DemoNotes>
+        <DemoDraggable
+          key={`${puzzleId}-${attempt}`}
+          draggable={draggable}
+          initialState={puzzle.start}
+          width={W}
+          height={H}
+        />
+      </>
+    );
+  },
   {
     tags: [
       "d.closest",
@@ -565,6 +1190,7 @@ export default demo(
       "d.switchToStateAndFollow",
       "spec.during",
       "spec.whenFar",
+      "spec.withFloating",
       "spec.onDrop",
       "keyboard",
     ],
