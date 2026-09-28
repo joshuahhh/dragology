@@ -59,7 +59,7 @@ const defaultConfig: Config = {
   abstract: true,
   abstractAllOccurrences: false,
   etaExpand: false,
-  etaReduce: true,
+  etaReduce: false,
 };
 
 // # Colors
@@ -99,6 +99,25 @@ function renderTerm(
   let w: number, h: number, contents: Svgx;
 
   switch (term.type) {
+    case "hole": {
+      const of = renderTerm(state, term.of, d, config, null, bound);
+      w = of.w;
+      h = of.h;
+      contents = (
+        <g>
+          <rect
+            width={w}
+            height={h}
+            rx={8}
+            fill="none"
+            stroke="rgba(120, 110, 100, 0.4)"
+            strokeWidth={1}
+            strokeDasharray="4 3"
+          />
+        </g>
+      );
+      break;
+    }
     case "var": {
       w = term.name.length * CHAR_W + 2 * VAR_PAD_X;
       h = VAR_H;
@@ -226,10 +245,24 @@ function dragSpec(
 ) {
   const cands = candidates(state.term, draggedId, config);
   if (cands.length === 0) return d.between([state]);
+  // Candidates with a waypoint (`mid`) are three-state betweens: dragging to
+  // the waypoint shows the dragged node in place with nothing else changed;
+  // dropping there completes the rewrite (via onDrop), and dragging further
+  // scrubs through the rest of it and chains into the next drag.
+  const midToResult = new Map<State, State>();
+  const branches = cands.map((c) => {
+    const base = { term: c.base };
+    const result = { term: c.result };
+    if (c.mid) {
+      const mid = { term: c.mid };
+      midToResult.set(mid, result);
+      return d.between([base, mid, result]);
+    }
+    return d.between([base, result]);
+  });
   return d
-    .closest(
-      cands.map((c) => d.between([{ term: c.base }, { term: c.result }])),
-    )
+    .closest(branches)
+    .onDrop((s) => midToResult.get(s) ?? s)
     .withSnapRadius(1, { chain: true });
 }
 
@@ -275,12 +308,12 @@ export default demo(
     return (
       <div>
         <DemoNotes>
-          λ-terms as nested boxes. <b>β-reduce</b> by dragging an argument
-          leftward into the λ it's applied to: it slides onto the first bound
-          variable, and copies split off for the others. Drag a subterm{" "}
-          <b>rightward out</b> of an enclosing box to abstract over it (the
-          reverse). Once a reduction completes, keep dragging to chain into the
-          next one.
+          λ-terms as nested boxes. <b>β-reduce</b> by dragging an argument onto
+          a bound variable inside the λ it's applied to. Drop it there (or keep
+          dragging left) and the boxes collapse, with copies splitting off for
+          the other occurrences. Drag a subterm <b>rightward out</b> of an
+          enclosing box to abstract over it (the reverse). Once a reduction
+          completes, keep dragging to chain into the next one.
         </DemoNotes>
         <DemoWithConfig>
           <DemoDraggable

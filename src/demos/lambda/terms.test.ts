@@ -78,6 +78,15 @@ describe("substitute", () => {
     expect(clones.every((n) => n.emergeMode === "clone")).toBe(true);
   });
 
+  it("skips shadowed occurrences in waypoints", () => {
+    const t = parseTerm("(λx. x (λx. x) x) y");
+    const cs = candidates(t, byName(t, "y").id, { ...off, beta: true });
+    expect(cs.map((c) => printTerm(c.mid!))).toEqual([
+      "(λx. y (λx. x) x) _",
+      "(λx. x (λx. x) y) _",
+    ]);
+  });
+
   it("respects shadowing", () => {
     const body = parseTerm("x (λx. x)", "b");
     const { term, count } = substitute(body, "x", parseTerm("y", "a"));
@@ -97,8 +106,24 @@ describe("candidates", () => {
     const t = parseTerm("(λx. x x) y");
     const y = byName(t, "y");
     const cs = candidates(t, y.id, { ...off, beta: true });
-    expect(cs.map((c) => printTerm(c.result))).toEqual(["y y"]);
-    expect(findById(cs[0].result, y.id)).toBeTruthy();
+    // one candidate per occurrence; the dragged y lands on a different one each time
+    expect(cs.map((c) => printTerm(c.result))).toEqual(["y y", "y y"]);
+    const roots = cs.map((c) => c.result as Term & { type: "app" });
+    expect(roots[0].fn.id).toBe(y.id);
+    expect(roots[1].arg.id).toBe(y.id);
+    expect(roots[0].arg.emergeFrom).toBe(y.id);
+    expect(roots[1].fn.emergeFrom).toBe(y.id);
+    // waypoints: y sits on that occurrence, a hole where it came from
+    expect(cs.map((c) => printTerm(c.mid!))).toEqual([
+      "(λx. y x) _",
+      "(λx. x y) _",
+    ]);
+    const mid1 = cs[1].mid as Term & { type: "app" };
+    expect((mid1.fn as Term & { type: "lam" }).body).toMatchObject({
+      type: "app",
+      arg: { id: y.id },
+    });
+    expect(mid1.arg).toMatchObject({ type: "hole", of: { id: y.id } });
   });
 
   it("does not β-reduce when the argument would vanish", () => {

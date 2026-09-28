@@ -15,6 +15,8 @@ export type Term = Common &
     | { type: "var"; name: string }
     | { type: "lam"; param: string; body: Term }
     | { type: "app"; fn: Term; arg: Term }
+    /** An empty slot reserving the space of `of`; only used in mid-drag states */
+    | { type: "hole"; of: Term }
   );
 
 export function newId(): string {
@@ -101,6 +103,8 @@ export function printTerm(t: Term): string {
   switch (t.type) {
     case "var":
       return t.name;
+    case "hole":
+      return "_";
     case "lam": {
       // collapse nested λs
       const params = [t.param];
@@ -114,7 +118,9 @@ export function printTerm(t: Term): string {
     case "app": {
       const fn = t.fn.type === "lam" ? `(${printTerm(t.fn)})` : printTerm(t.fn);
       const arg =
-        t.arg.type === "var" ? printTerm(t.arg) : `(${printTerm(t.arg)})`;
+        t.arg.type === "var" || t.arg.type === "hole"
+          ? printTerm(t.arg)
+          : `(${printTerm(t.arg)})`;
       return `${fn} ${arg}`;
     }
   }
@@ -125,6 +131,7 @@ export function printTerm(t: Term): string {
 export function children(t: Term): Term[] {
   switch (t.type) {
     case "var":
+    case "hole":
       return [];
     case "lam":
       return [t.body];
@@ -155,6 +162,7 @@ export function replaceById(t: Term, id: string, replacement: Term): Term {
   if (t.id === id) return replacement;
   switch (t.type) {
     case "var":
+    case "hole":
       return t;
     case "lam": {
       const body = replaceById(t.body, id, replacement);
@@ -172,6 +180,8 @@ export function freeVars(t: Term): Set<string> {
   switch (t.type) {
     case "var":
       return new Set([t.name]);
+    case "hole":
+      return new Set();
     case "lam": {
       const fv = freeVars(t.body);
       fv.delete(t.param);
@@ -209,6 +219,8 @@ export function structurallyEqual(a: Term, b: Term): boolean {
   switch (a.type) {
     case "var":
       return a.name === (b as typeof a).name;
+    case "hole":
+      return false;
     case "lam": {
       const bb = b as typeof a;
       return a.param === bb.param && structurallyEqual(a.body, bb.body);
@@ -226,6 +238,7 @@ export function stripEmerge(t: Term): Term {
   const base = rest as Term;
   switch (base.type) {
     case "var":
+    case "hole":
       return base;
     case "lam":
       return { ...base, body: stripEmerge(base.body) };
@@ -244,6 +257,8 @@ export function cloneWithEmerge(t: Term): Term {
   switch (t.type) {
     case "var":
       return { ...common, type: "var", name: t.name };
+    case "hole":
+      return { ...common, type: "hole", of: t.of };
     case "lam":
       return {
         ...common,
@@ -266,6 +281,8 @@ function rename(t: Term, from: string, to: string): Term {
   switch (t.type) {
     case "var":
       return t.name === from ? { ...t, name: to } : t;
+    case "hole":
+      return t;
     case "lam":
       if (t.param === from) return t;
       return { ...t, body: rename(t.body, from, to) };
@@ -277,25 +294,28 @@ function rename(t: Term, from: string, to: string): Term {
 // # Substitution
 
 /**
- * Capture-avoiding substitution body[x := arg]. The first occurrence of x
- * (in left-to-right order) receives `arg` itself (keeping its ids); later
- * occurrences receive clones that emerge from `arg`. Returns the number of
- * occurrences replaced.
+ * Capture-avoiding substitution body[x := arg]. The occurrence of x with
+ * index `targetIndex` (in left-to-right order) receives `arg` itself
+ * (keeping its ids); the other occurrences receive clones that emerge from
+ * `arg`. Returns the number of occurrences replaced.
  */
 export function substitute(
   body: Term,
   x: string,
   arg: Term,
+  targetIndex = 0,
 ): { term: Term; count: number } {
   const fvArg = freeVars(arg);
   let count = 0;
 
   function go(t: Term): Term {
     switch (t.type) {
+      case "hole":
+        return t;
       case "var":
         if (t.name !== x) return t;
         count++;
-        return count === 1 ? arg : cloneWithEmerge(arg);
+        return count - 1 === targetIndex ? arg : cloneWithEmerge(arg);
       case "lam": {
         if (t.param === x) return t; // shadowed
         if (fvArg.has(t.param) && freeVars(t.body).has(x)) {
@@ -327,6 +347,12 @@ export type Candidate = {
   kind: RewriteKind;
   /** Rewrite starts here; renders identically to the input term. */
   base: Term;
+  /**
+   * Optional waypoint on the way to `result`: the dragged node has been
+   * moved to its destination but nothing else has changed yet. Dropping
+   * here should complete the rewrite.
+   */
+  mid?: Term;
   result: Term;
   description: string;
 };
@@ -338,6 +364,12 @@ export type RewriteOptions = {
   etaExpand: boolean;
   etaReduce: boolean;
 };
+
+/** Is the variable node `id` inside a λ that rebinds `name` (within `root`)? */
+function isShadowed(root: Term, id: string, name: string): boolean {
+  const path = pathTo(root, id)!;
+  return path.slice(0, -1).some((t) => t.type === "lam" && t.param === name);
+}
 
 /** Binder names on the path strictly below `top` down to (not including) `node`. */
 function bindersBetween(path: Term[]): Set<string> {
@@ -376,13 +408,30 @@ export function candidates(
     parent.fn.type === "lam"
   ) {
     const lam = parent.fn;
-    const { term: reduced, count } = substitute(lam.body, lam.param, dragged);
-    if (count >= 1) {
+    // One candidate per occurrence: the dragged argument lands on that
+    // occurrence (keeping its ids) and clones split off for the others.
+    const { count } = substitute(lam.body, lam.param, dragged);
+    for (let i = 0; i < count; i++) {
+      const { term: reduced } = substitute(lam.body, lam.param, dragged, i);
+      // Waypoint: the argument sits on occurrence i, boxes still intact,
+      // and a hole marks where it came from.
+      const occurrence = allNodes(lam.body).filter(
+        (n) =>
+          n.type === "var" &&
+          n.name === lam.param &&
+          !isShadowed(lam.body, n.id, lam.param),
+      )[i];
+      const mid = replaceById(base, parent.id, {
+        ...parent,
+        fn: { ...lam, body: replaceById(lam.body, occurrence.id, dragged) },
+        arg: { type: "hole", id: newId(), of: dragged },
+      });
       results.push({
         kind: "beta",
         base,
+        mid,
         result: replaceById(base, parent.id, reduced),
-        description: `β: substitute ${printTerm(dragged)} for ${lam.param}`,
+        description: `β: substitute ${printTerm(dragged)} for ${lam.param} (occurrence ${i + 1} of ${count})`,
       });
     }
   }
@@ -500,6 +549,7 @@ function annotateMerge(copy: Term, original: Term): Term {
   const common = { emergeFrom: original.id, emergeMode: "clone" as const };
   switch (copy.type) {
     case "var":
+    case "hole":
       return { ...copy, ...common };
     case "lam":
       assert(original.type === "lam");
