@@ -11,7 +11,7 @@ import {
 import { Draggable } from "../draggable";
 import { DragSpecBuilder } from "../DragSpec";
 import { Svgx } from "../svgx";
-import { translate } from "../svgx/helpers";
+import { rotateDeg, translate } from "../svgx/helpers";
 
 // # Catalan objects
 //
@@ -28,6 +28,19 @@ type Node = {
   type: "node";
   id: string;
   edgeId: string;
+  /**
+   * Which way round the diagonal for this edge is drawn (angle + 180°).
+   * Geometrically meaningless, but it decides which way the diagonal
+   * rotates when it flips – see `flipVariants`.
+   */
+  edgeReversed: boolean;
+  /**
+   * Whether the tree-view line for this edge is drawn parent→child
+   * instead of child→parent. Toggled every time the edge is rotated, so
+   * that the line's two ends stay attached to the same two nodes while
+   * the nodes swap roles.
+   */
+  edgeFlipped: boolean;
   left: Tree;
   right: Tree;
 };
@@ -47,6 +60,8 @@ function treeFromShape(shape: Shape): Tree {
     type: "node",
     id: "",
     edgeId: "",
+    edgeReversed: false,
+    edgeFlipped: false,
     left: treeFromShape(shape[0]),
     right: treeFromShape(shape[1]),
   };
@@ -62,6 +77,8 @@ function relabel(root: Node): Node {
       type: "node",
       id: `n${k}`,
       edgeId: k === 0 ? "root" : `e${k}`,
+      edgeReversed: false,
+      edgeFlipped: false,
       left: go(t.left),
       right: go(t.right),
     };
@@ -99,7 +116,7 @@ function nodeCount(t: Tree): number {
 /**
  * Rotate the node with id `target` up above its parent.
  *   x(y(A,B),C) → y(A,x(B,C))     x(A,y(B,C)) → y(x(A,B),C)
- * Node ids stay put; edge ids are swapped between x and y.
+ * Node ids stay put; edges (id + orientation) are swapped between x and y.
  */
 function rotateUp(t: Tree, target: string): Tree {
   if (t.type === "leaf") return t;
@@ -109,8 +126,17 @@ function rotateUp(t: Tree, target: string): Tree {
     return {
       ...y,
       edgeId: t.edgeId,
+      edgeReversed: t.edgeReversed,
+      edgeFlipped: t.edgeFlipped,
       left: y.left,
-      right: { ...t, edgeId: y.edgeId, left: y.right, right: t.right },
+      right: {
+        ...t,
+        edgeId: y.edgeId,
+        edgeReversed: y.edgeReversed,
+        edgeFlipped: !y.edgeFlipped,
+        left: y.right,
+        right: t.right,
+      },
     };
   }
   if (right.type === "node" && right.id === target) {
@@ -118,15 +144,65 @@ function rotateUp(t: Tree, target: string): Tree {
     return {
       ...y,
       edgeId: t.edgeId,
-      left: { ...t, edgeId: y.edgeId, left: t.left, right: y.left },
+      edgeReversed: t.edgeReversed,
+      edgeFlipped: t.edgeFlipped,
+      left: {
+        ...t,
+        edgeId: y.edgeId,
+        edgeReversed: y.edgeReversed,
+        edgeFlipped: !y.edgeFlipped,
+        left: t.left,
+        right: y.left,
+      },
       right: y.right,
     };
   }
   return { ...t, left: rotateUp(left, target), right: rotateUp(right, target) };
 }
 
-function rotateUpState(state: State, target: string): State {
-  return { root: rotateUp(state.root, target) as Node };
+function setEdgeReversed(t: Tree, nodeId: string, value: boolean): Tree {
+  if (t.type === "leaf") return t;
+  if (t.id === nodeId) return { ...t, edgeReversed: value };
+  return {
+    ...t,
+    left: setEdgeReversed(t.left, nodeId, value),
+    right: setEdgeReversed(t.right, nodeId, value),
+  };
+}
+
+/** Shortest signed angular difference from a to b, in (-180, 180]. */
+function angleDelta(a: number, b: number): number {
+  return ((((b - a) % 360) + 540) % 360) - 180;
+}
+
+/**
+ * The two states reachable by rotating `target` up. Both have the same
+ * tree; they differ only in which way round the flipped diagonal is
+ * drawn, i.e. which way it rotates from its current position: the first
+ * is the short rotation (≤ 90°), the second the long one. Everything
+ * except the polygon view renders them identically.
+ */
+function flipVariants(state: State, target: string, n: number): [State, State] {
+  const before = analyze(state.root);
+  const y = before.get(target)!;
+  const x = y.parent!;
+  const angleBefore = diagAngle(y.lo, y.hi, n, y.node.edgeReversed);
+  const rotated = rotateUp(state.root, target) as Node;
+  const after = analyze(rotated);
+  // the flipped diagonal is y's old edge, now on x
+  const xAfter = after.get(x.id)!;
+  const geo = diagAngle(xAfter.lo, xAfter.hi, n, false);
+  const shortIsReversed =
+    Math.abs(angleDelta(angleBefore, geo + 180)) <
+    Math.abs(angleDelta(angleBefore, geo));
+  return [
+    { root: setEdgeReversed(rotated, x.id, shortIsReversed) as Node },
+    { root: setEdgeReversed(rotated, x.id, !shortIsReversed) as Node },
+  ];
+}
+
+function rotateUpState(state: State, target: string, n: number): State {
+  return flipVariants(state, target, n)[0];
 }
 
 type NodeInfo = {
@@ -249,7 +325,15 @@ function allTrees(n: number): Tree[] {
   for (let k = 0; k < n; k++) {
     for (const left of allTrees(k)) {
       for (const right of allTrees(n - 1 - k)) {
-        result.push({ type: "node", id: "", edgeId: "", left, right });
+        result.push({
+          type: "node",
+          id: "",
+          edgeId: "",
+          edgeReversed: false,
+          edgeFlipped: false,
+          left,
+          right,
+        });
       }
     }
   }
@@ -379,6 +463,16 @@ function polygonVertex(k: number, m: number, r = POLY_R) {
   return { x: r * Math.cos(theta), y: r * Math.sin(theta) };
 }
 
+/** Angle (degrees) of the diagonal spanning leaves lo..hi. */
+function diagAngle(lo: number, hi: number, n: number, reversed: boolean) {
+  const m = n + 2;
+  const a = polygonVertex(lo, m);
+  const b = polygonVertex(hi + 1, m);
+  return (
+    (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI + (reversed ? 180 : 0)
+  );
+}
+
 function polygonView(
   state: State,
   infos: Map<string, NodeInfo>,
@@ -443,12 +537,14 @@ function polygonView(
           const a = V[lo];
           const b = V[hi + 1];
           const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const half = Math.hypot(b.x - a.x, b.y - a.y) / 2;
+          const angle = diagAngle(lo, hi, n, node.edgeReversed);
           const line = (stroke: string, strokeWidth: number) => (
             <line
-              x1={a.x - mid.x}
-              y1={a.y - mid.y}
-              x2={b.x - mid.x}
-              y2={b.y - mid.y}
+              x1={-half}
+              y1={0}
+              x2={half}
+              y2={0}
               stroke={stroke}
               strokeWidth={strokeWidth}
               strokeLinecap="round"
@@ -457,10 +553,17 @@ function polygonView(
           return (
             <g
               id={`diag-${node.edgeId}`}
-              transform={translate(mid)}
+              transform={translate(mid) + rotateDeg(angle)}
               style={{ cursor: "grab" }}
               dragologyOnDrag={() =>
-                d.between([state, rotateUpState(state, node.id)])
+                // Both ways the diagonal could rotate into its flipped
+                // position; whichever keeps the grabbed point closest
+                // to the pointer wins.
+                d.closest(
+                  flipVariants(state, node.id, n).map((v) =>
+                    d.between([state, v]),
+                  ),
+                )
               }
             >
               {line("transparent", 16)}
@@ -497,13 +600,11 @@ function treeView(
       {nodes
         .filter(({ parent }) => parent !== null)
         .map(({ node, parent }) => {
-          // Order endpoints by in-order position (preserved by rotations)
-          // rather than by parent/child role (swapped by rotations), so
-          // the line's ends stay attached to their nodes mid-animation.
-          const [a, b] = _.sortBy(
-            [nodePos(parent!.id), nodePos(node.id)],
-            (p) => p.x,
-          );
+          // Child→parent, except that `edgeFlipped` toggles on every
+          // rotation of this edge (which swaps the roles of its two
+          // nodes), so each end of the line stays with its node.
+          const ends = [nodePos(node.id), nodePos(parent!.id)];
+          const [a, b] = node.edgeFlipped ? ends.reverse() : ends;
           return (
             <line
               id={`edge-${node.edgeId}`}
@@ -564,7 +665,7 @@ function treeView(
           style={{ cursor: parent ? "grab" : "default" }}
           dragologyOnDrag={
             parent !== null &&
-            (() => d.between([state, rotateUpState(state, node.id)]))
+            (() => d.between([state, rotateUpState(state, node.id, n)]))
           }
         >
           <circle
@@ -600,10 +701,11 @@ function dyckView(
   const humps = [...infos.values()].map((info) => {
     const moves: State[] = [];
     // hump slides down-right: this node is a right child
-    if (info.side === "right") moves.push(rotateUpState(state, info.node.id));
+    if (info.side === "right")
+      moves.push(rotateUpState(state, info.node.id, n));
     // hump slides up-left: this node's left child is internal
     if (info.node.left.type === "node")
-      moves.push(rotateUpState(state, info.node.left.id));
+      moves.push(rotateUpState(state, info.node.left.id, n));
     return { info, moves };
   });
   return (
@@ -681,6 +783,7 @@ function parenView(
   state: State,
   infos: Map<string, NodeInfo>,
   d: DragSpecBuilder<State>,
+  n: number,
 ): Svgx {
   const tokens = parenTokens(state.root);
   const byEdge = new Map<string, { open: number; close: number }>();
@@ -745,7 +848,8 @@ function parenView(
       {[...byEdge.entries()].map(([edgeId, { open, close }]) => {
         const node = nodeByEdge.get(edgeId)!;
         const color = edgeColor(edgeId);
-        const onDrag = () => d.between([state, rotateUpState(state, node.id)]);
+        const onDrag = () =>
+          d.between([state, rotateUpState(state, node.id, n)]);
         return (
           <g id={`paren-${edgeId}`}>
             {paren(`paren-open-${edgeId}`, "(", open, color, onDrag)}
@@ -809,7 +913,7 @@ function latticeView(
     .filter(({ parent }) => parent !== null)
     .map(({ node }) => ({
       edgeId: node.edgeId,
-      next: rotateUpState(state, node.id),
+      next: rotateUpState(state, node.id, n),
     }));
   return (
     <g transform={translate(LAT_ORIGIN.x, LAT_ORIGIN.y)}>
@@ -896,7 +1000,7 @@ function makeDraggable(n: number): Draggable<State> {
         {label(DYCK_ORIGIN.x - 10, 30, "dyck path")}
         {dyckView(state, infos, d, n)}
         {label(PAREN_ORIGIN.x - 15, PAREN_ORIGIN.y - 24, "parenthesization")}
-        {parenView(state, infos, d)}
+        {parenView(state, infos, d, n)}
         {label(20, LAT_ORIGIN.y - 30, "tamari lattice")}
         {latticeView(state, infos, d, n, draggedId)}
       </g>
