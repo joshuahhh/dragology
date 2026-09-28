@@ -37,9 +37,17 @@ type Mode = "free" | "adjacent";
  * to the right shifts while you drag), then the drop compacts them. */
 type Letter = number | null;
 
+/** What the state's word actually stores: letters, blank columns, and
+ * "closed" columns. A closed column is a blank that has been cancelled:
+ * it draws with zero width, so the drop animation after a cancel is a
+ * plain horizontal slide of everything to its right (the wire paths keep
+ * the same column structure). Closed columns are dropped from the
+ * logical word as soon as the next interaction builds a new state. */
+type Col = Letter | "closed";
+
 type State = {
   n: number;
-  word: Letter[];
+  word: Col[];
   mode: Mode;
 };
 
@@ -52,10 +60,6 @@ function permFromWord(n: number, word: Letter[]): number[] {
     [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
   }
   return arr;
-}
-
-function compact(word: Letter[]): number[] {
-  return word.filter((l): l is number => l !== null);
 }
 
 function inversions(perm: number[]): number {
@@ -303,8 +307,14 @@ function tileContents(v: number, opts: { muted?: boolean } = {}) {
   );
 }
 
-const draggable: Draggable<State> = ({ state, d, draggedId }) => {
-  const { n, word, mode } = state;
+const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
+  const { n, mode } = rawState;
+  // `cols` is the layout (may include zero-width closed columns left by
+  // a cancel drop); `word` is the logical word all the math and drag
+  // specs use, and `state` is the cleaned state they build on.
+  const cols = rawState.word;
+  const word: Letter[] = cols.filter((c): c is Letter => c !== "closed");
+  const state: State = { ...rawState, word };
   const perm = permFromWord(n, word);
   const inv = inversions(perm);
 
@@ -360,11 +370,15 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   const letterW = Math.min(22, 350 / Math.max(state.word.length, 1));
   // Letters of the word with their column index and a stable id: the
   // pair of wires that cross there (suffixed if a pair crosses twice).
+  // `j` is the layout column, `jl` the index in the logical word.
   const wordLetters = (() => {
     const arr = _.range(1, n + 1);
     const seen = new Set<string>();
-    const letters: { i: number; j: number; pairId: string }[] = [];
-    word.forEach((i, j) => {
+    const letters: { i: number; j: number; jl: number; pairId: string }[] = [];
+    let jl = 0;
+    cols.forEach((i, j) => {
+      if (i === "closed") return;
+      const myJl = jl++;
       if (i === null) return;
       const a = arr[i];
       const b = arr[i + 1];
@@ -372,7 +386,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       let pairId = `${Math.min(a, b)}-${Math.max(a, b)}`;
       while (seen.has(pairId)) pairId += "x";
       seen.add(pairId);
-      letters.push({ i, j, pairId });
+      letters.push({ i, j, jl: myJl, pairId });
     });
     return letters;
   })();
@@ -453,28 +467,37 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   // ### Wiring diagram
   const RS = 24; // row spacing
   const wiringOrigin = Vec2(48, 356);
-  const Lcols = word.length; // columns, including blank ones
-  // The diagram always draws a fixed number of columns (padding the word
-  // with straight columns), and every column is one cubic segment. So a
-  // wire's path keeps the same structure when a crossing is appended,
-  // and path interpolation only bends the new column — existing
-  // crossings stay put mid-drag.
-  const COLS = Math.max(13, Lcols + 1); // at least one spare column
+  const rawLen = cols.length; // layout columns (incl. blank and closed)
+  // The diagram always spans a fixed number of column widths (at least
+  // 13, padded with straight columns), and every column is one cubic
+  // segment. So a wire's path keeps the same structure when a crossing
+  // is appended, and path interpolation only bends the new column —
+  // existing crossings stay put mid-drag. Closed columns have zero
+  // width; the last padding column stretches to the right edge.
+  const COLS = Math.max(13, word.length + 1); // at least one spare column
   const CW = (WIDTH - 110) / COLS; // column width
   const wireX0 = 0;
   const wireX1 = wireX0 + COLS * CW;
   const rowY = (r: number) => r * RS;
+  const colW = (j: number) => (j < rawLen && cols[j] === "closed" ? 0 : CW);
+  const colX = (j: number) =>
+    wireX0 +
+    _.sum(_.range(Math.min(j, rawLen)).map(colW)) +
+    Math.max(0, j - rawLen) * CW;
+  const padCols = Math.max(1, 13 - rawLen); // straight columns after the word
 
   const wirePath = (v: number) => {
     let r = v - 1;
     let x = wireX0;
     let dstr = `M ${x - 14} ${rowY(r)} L ${x} ${rowY(r)}`;
-    for (let j = 0; j < COLS; j++) {
-      const i: Letter = j < Lcols ? word[j] : null;
-      const next = i === null ? r : r === i ? i + 1 : r === i + 1 ? i : r;
-      dstr += ` C ${x + CW / 2} ${rowY(r)} ${x + CW / 2} ${rowY(next)} ${x + CW} ${rowY(next)}`;
+    for (let j = 0; j < rawLen + padCols; j++) {
+      const c: Col = j < rawLen ? cols[j] : null;
+      const w = j === rawLen + padCols - 1 ? wireX1 - x : colW(j);
+      const next =
+        typeof c !== "number" ? r : r === c ? c + 1 : r === c + 1 ? c : r;
+      dstr += ` C ${x + w / 2} ${rowY(r)} ${x + w / 2} ${rowY(next)} ${x + w} ${rowY(next)}`;
       r = next;
-      x += CW;
+      x += w;
     }
     dstr += ` L ${wireX1 + 14} ${rowY(r)}`;
     return dstr;
@@ -515,14 +538,14 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
             e
           </text>
         )}
-        {wordLetters.map(({ i, j, pairId }, k) => (
+        {wordLetters.map(({ i, jl, pairId }, k) => (
           <text
             id={`word-letter-${pairId}`}
             dragologyEmergeFrom={
               k === 0 ? "word-pi" : `word-letter-${wordLetters[k - 1].pairId}`
             }
             dragologyEmergeMode="scale"
-            transform={translate(34 + j * letterW, 0)}
+            transform={translate(34 + jl * letterW, 0)}
             fontSize={18}
             fontFamily="Georgia, serif"
             fontStyle="italic"
@@ -874,10 +897,10 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
             strokeLinecap="round"
           />
         ))}
-        {wordLetters.map(({ i, j, pairId }) => {
+        {wordLetters.map(({ i, j, jl, pairId }) => {
           const id = `cross-${pairId}`;
-          const moves = crossingMoves(word, j);
-          const center = Vec2(wireX0 + (j + 0.5) * CW, (i + 0.5) * RS);
+          const moves = crossingMoves(word, jl);
+          const center = Vec2(colX(j) + CW / 2, (i + 0.5) * RS);
           return (
             <g
               id={id}
@@ -912,12 +935,18 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           const handles: Svgx[] = [];
           let rMut = v - 1;
           let jMut = 0;
-          while (jMut <= Lcols) {
+          while (jMut <= rawLen) {
             // snapshot the loop variables so drag closures don't see
             // later mutations
             const j = jMut;
             const r = rMut;
-            const letter: Letter = j < Lcols ? word[j] : null;
+            if (j < rawLen && cols[j] === "closed") {
+              jMut += 1; // zero width, nothing to grab
+              continue;
+            }
+            const letter: Letter = j < rawLen ? (cols[j] as Letter) : null;
+            // index of this column in the logical word
+            const jl = cols.slice(0, j).filter((c) => c !== "closed").length;
             const next =
               letter === null
                 ? r
@@ -927,21 +956,24 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
                     ? letter
                     : r;
             const id = `strand-${v}-${j}`;
-            if (letter !== null && next !== r && word[j + 1] === letter) {
+            if (letter !== null && next !== r && word[jl + 1] === letter) {
               // apex of a double crossing at columns j, j+1
               const gapped: State = {
                 ...state,
-                word: word.map((l, k) => (k === j || k === j + 1 ? null : l)),
+                word: word.map((l, k) => (k === jl || k === jl + 1 ? null : l)),
               };
               handles.push(
                 <g
                   id={id}
-                  transform={translate((j + 1) * CW, rowY(next))}
+                  transform={translate(colX(j + 1), rowY(next))}
                   dragologyZIndex={1}
                   dragologyOnDrag={() =>
-                    d
-                      .between([state, gapped])
-                      .onDrop((s) => ({ ...s, word: compact(s.word) }))
+                    d.between([state, gapped]).onDrop((s) => ({
+                      ...s,
+                      // blanks become zero-width closed columns, so the
+                      // drop animation is a horizontal slide
+                      word: s.word.map((l) => (l === null ? "closed" : l)),
+                    }))
                   }
                   style={{ cursor: "ns-resize" }}
                 >
@@ -959,10 +991,10 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
               jMut += 2;
               continue;
             }
-            if (letter === null && j + 1 < Lcols && word[j + 1] === null) {
+            if (letter === null && j + 1 < rawLen && cols[j + 1] === null) {
               // two blank columns (mid-cancel): the apex handle lands here
               handles.push(
-                <g id={id} transform={translate((j + 1) * CW, rowY(r))} />,
+                <g id={id} transform={translate(colX(j + 1), rowY(r))} />,
               );
               jMut += 2;
               continue;
@@ -971,12 +1003,12 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
               // straight segment
               const insert = (i: number): State => ({
                 ...state,
-                word: [...word.slice(0, j), i, i, ...word.slice(j)],
+                word: [...word.slice(0, jl), i, i, ...word.slice(jl)],
               });
               handles.push(
                 <g
                   id={id}
-                  transform={translate((j + 0.5) * CW, rowY(r))}
+                  transform={translate(colX(j) + CW / 2, rowY(r))}
                   dragologyZIndex={1}
                   dragologyOnDrag={() =>
                     d.closest([
