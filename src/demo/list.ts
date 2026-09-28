@@ -44,6 +44,7 @@ export const demoList: DemoListEntry[] = [
   "sokoban",
   "spinny",
   "scheduler",
+  "gantt",
   "graph",
   "tromino",
   "angle",
