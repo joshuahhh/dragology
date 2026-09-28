@@ -110,6 +110,7 @@ export const demoList: DemoListEntry[] = [
       "gantt",
       "tableaux",
       "layout-editor",
+      "zx-string-diagram",
     ],
   },
 ];
