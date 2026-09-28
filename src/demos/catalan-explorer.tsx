@@ -348,8 +348,48 @@ type LatticeVertex = { key: string; tree: Node; x: number; y: number };
 type Lattice = {
   vertices: LatticeVertex[];
   byKey: Map<string, LatticeVertex>;
-  edges: [string, string][];
+  /** [key, key, class]: class = which two in-order positions rotate */
+  edges: [string, string, string][];
+  /** every edge class, in legend order */
+  classes: string[];
 };
+
+// # Edge classes
+//
+// A rotation involves two internal nodes; their in-order positions
+// (i, j) are unchanged by the rotation, and in Loday's realization every
+// rotation of the same (i, j) is an edge parallel to e_j − e_i. So
+// coloring lattice edges by (i, j) is fixed, and parallel edges of the
+// associahedron share a color.
+
+const CLASS_COLORS = [
+  "#e11d48",
+  "#2563eb",
+  "#16a34a",
+  "#d97706",
+  "#9333ea",
+  "#0891b2",
+  "#db2777",
+  "#65a30d",
+  "#7c3aed",
+  "#ea580c",
+];
+
+/** In-order position (0-based, among internal nodes) of a node. */
+const slot = (info: NodeInfo) => (info.inorder - 1) / 2;
+
+function edgeClass(child: NodeInfo, parent: NodeInfo): string {
+  const [i, j] = _.sortBy([slot(child), slot(parent)]);
+  return `${i}-${j}`;
+}
+
+function allEdgeClasses(n: number): string[] {
+  return _.range(n).flatMap((i) => _.range(i + 1, n).map((j) => `${i}-${j}`));
+}
+
+function classColor(cls: string, classes: string[]) {
+  return CLASS_COLORS[classes.indexOf(cls) % CLASS_COLORS.length];
+}
 
 function allTrees(n: number): Tree[] {
   if (n === 0) return [LEAF];
@@ -396,15 +436,20 @@ function getLattice(n: number, width: number, height: number): Lattice {
   const keys = trees.map(shapeKey);
   const coords = trees.map(lodayCoords);
   const keyIndex = new Map(keys.map((k, i) => [k, i]));
-  const edges: [string, string][] = [];
+  const edges: [string, string, string][] = [];
   const neighbors: number[][] = trees.map(() => []);
   const ups: number[][] = trees.map(() => []);
   trees.forEach((tree, i) => {
-    for (const info of analyze(tree).values()) {
+    const infos = analyze(tree);
+    for (const info of infos.values()) {
       if (info.side !== "left") continue;
       // rotating a left child up is a right rotation: goes up in Tamari
       const j = keyIndex.get(shapeKey(rotateUp(tree, info.node.id)))!;
-      edges.push([keys[i], keys[j]]);
+      edges.push([
+        keys[i],
+        keys[j],
+        edgeClass(info, infos.get(info.parent!.id)!),
+      ]);
       neighbors[i].push(j);
       neighbors[j].push(i);
       ups[i].push(j);
@@ -463,6 +508,7 @@ function getLattice(n: number, width: number, height: number): Lattice {
     vertices,
     byKey: new Map(vertices.map((v) => [v.key, v])),
     edges,
+    classes: allEdgeClasses(n),
   };
   latticeCache.set(cacheKey, lattice);
   return lattice;
@@ -486,7 +532,7 @@ const PAREN_ORIGIN = { x: 275, y: 270 };
 const PAREN_ADV = 20;
 
 const LAT_ORIGIN = { x: 40, y: 340 };
-const LAT_W = 620;
+const LAT_W = 560;
 const LEVEL_DY = 46;
 const latticeHeight = (n: number) => ((n * (n - 1)) / 2) * LEVEL_DY;
 const canvasHeight = (n: number) => LAT_ORIGIN.y + latticeHeight(n) + 30;
@@ -959,13 +1005,14 @@ function latticeView(
   const current = lattice.byKey.get(currentKey)!;
   const moves = [...infos.values()]
     .filter(({ parent }) => parent !== null)
-    .map(({ node }) => ({
-      edgeId: node.edgeId,
-      next: flipMove(state, node.id).to,
+    .map((info) => ({
+      edgeId: info.node.edgeId,
+      cls: edgeClass(info, infos.get(info.parent!.id)!),
+      next: flipMove(state, info.node.id).to,
     }));
   return (
     <g transform={translate(LAT_ORIGIN.x, LAT_ORIGIN.y)}>
-      {lattice.edges.map(([a, b]) => {
+      {lattice.edges.map(([a, b, cls]) => {
         const va = lattice.byKey.get(a)!;
         const vb = lattice.byKey.get(b)!;
         return (
@@ -974,12 +1021,14 @@ function latticeView(
             y1={va.y}
             x2={vb.x}
             y2={vb.y}
-            stroke="#cbd5e1"
+            stroke={classColor(cls, lattice.classes)}
             strokeWidth={1.5}
+            opacity={0.45}
           />
         );
       })}
-      {moves.map(({ edgeId, next }) => {
+      {/* the current vertex's edges, emphasized */}
+      {moves.map(({ edgeId, cls, next }) => {
         const vb = lattice.byKey.get(shapeKey(next.root))!;
         return (
           <line
@@ -988,12 +1037,39 @@ function latticeView(
             y1={current.y}
             x2={vb.x}
             y2={vb.y}
-            stroke={edgeColor(edgeId)}
-            strokeWidth={3}
+            stroke={classColor(cls, lattice.classes)}
+            strokeWidth={4}
             strokeLinecap="round"
           />
         );
       })}
+      {/* legend: edge color = which two operator slots re-associate */}
+      <g transform={translate(LAT_W + 10, 0)}>
+        {lattice.classes.map((cls, k) => {
+          const [i, j] = cls.split("-").map(Number);
+          return (
+            <g transform={translate(0, k * 18)}>
+              <line
+                x1={0}
+                y1={0}
+                x2={18}
+                y2={0}
+                stroke={classColor(cls, lattice.classes)}
+                strokeWidth={3}
+                strokeLinecap="round"
+              />
+              <text
+                transform={translate(24, 0)}
+                dominantBaseline="middle"
+                fontSize={11}
+                fill="#64748b"
+              >
+                {`${LETTERS[i]}·${LETTERS[i + 1]}, ${LETTERS[j]}·${LETTERS[j + 1]}`}
+              </text>
+            </g>
+          );
+        })}
+      </g>
       {lattice.vertices.map((v) => (
         <g transform={translate(v.x, v.y)}>
           {miniTriangulation(v.tree, miniR)}
