@@ -1091,7 +1091,11 @@ function dropTargetBehavior<T extends object>(
   ctx: DragInitContext<T>,
 ): DragBehavior<T> {
   const preview = renderStateReadOnly(ctx, spec.state);
-  const targetLayer = preview.byId.get(spec.targetId);
+  const boundsLayered =
+    spec.boundsState === undefined
+      ? preview
+      : renderStateReadOnly(ctx, spec.boundsState);
+  const targetLayer = boundsLayered.byId.get(spec.targetId);
   assert(
     targetLayer !== undefined,
     `dropTarget: element with id "${spec.targetId}" not found in rendered state`,

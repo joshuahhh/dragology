@@ -69,6 +69,7 @@ export const demoList = [
   "bluefish-perm",
   "bluefish-lists-2d-sizes",
   "emerge-from",
+  "proof-by-dragging",
   "drag-spec-designer",
   "floating-dynamic-switch",
   "card-piles",

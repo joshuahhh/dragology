@@ -91,7 +91,17 @@ export type DragSpecData<T extends object> = {
       draggedId: string;
       followSpec?: DragSpec<T>;
     }
-  | { type: "drop-target"; state: T; targetId: string }
+  | {
+      type: "drop-target";
+      state: T;
+      targetId: string;
+      /**
+       * State to render for computing the target's bounds. Defaults
+       * to `state`. Useful when the target element moves or vanishes
+       * in `state` (e.g. because dropping there rewrites it).
+       */
+      boundsState?: T;
+    }
   | {
       type: "with-branch-transition";
       inner: DragSpecData<T>;
@@ -524,9 +534,23 @@ export class DragSpecBuilder<T extends object> {
    * This drag behavior renders a state and checks whether the
    * pointer is inside the bounds of a target element (identified by
    * ID). Gap is 0 when inside, Infinity when outside.
+   *
+   * By default, the target's bounds are computed by rendering
+   * `state`. Pass `options.boundsState` to compute bounds from a
+   * different state (e.g. the current one), which is useful when
+   * the target element moves or vanishes in `state`.
    */
-  dropTarget(targetId: string, state: T): DragSpec<T> {
-    return attachMethods({ type: "drop-target", state, targetId });
+  dropTarget(
+    targetId: string,
+    state: T,
+    options?: { boundsState?: T },
+  ): DragSpec<T> {
+    return attachMethods({
+      type: "drop-target",
+      state,
+      targetId,
+      boundsState: options?.boundsState,
+    });
   }
 
   /**
