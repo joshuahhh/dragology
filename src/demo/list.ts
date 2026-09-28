@@ -49,6 +49,8 @@ export const demoList: DemoListEntry[] = [
   "scheduler",
   "graph",
   "tromino",
+  "plane-partition",
+  "aztec-diamond",
   "angle",
   "angle-via-transform",
   "bezier",
