@@ -3,7 +3,7 @@ import { Draggable } from "../../draggable";
 import { DragSpec } from "../../DragSpec";
 import { translate } from "../../svgx/helpers";
 import { Pos } from "./bst";
-import { caption, edgeLine, keyCircle, svgButton } from "./render";
+import { caption, edgeLines, keyCircle, svgButton } from "./render";
 
 // # Binary max-heap
 //
@@ -190,11 +190,14 @@ export const heapDraggable: Draggable<State> = ({
         dragologyZIndex={-3}
       />
 
-      {/* Tree edges */}
-      {state.heap.map((it, i) =>
-        i === 0
-          ? null
-          : edgeLine(`hedge-${it.id}`, treePos((i - 1) >> 1), treePos(i)),
+      {/* Tree edges. Heap positions depend only on the index, so a
+          swap changes which pair an edge joins but not its geometry;
+          pair-keyed edges simply cross-fade in place. */}
+      {edgeLines(
+        "hedge",
+        state.heap.slice(1).map((it, j) => [state.heap[j >> 1].id, it.id]),
+        undefined,
+        new Map(state.heap.map((it, i) => [it.id, treePos(i)])),
       )}
 
       {/* Tree nodes */}

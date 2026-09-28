@@ -4,12 +4,13 @@ import {
   BstNode,
   SplayStep,
   bstInsert,
-  edges,
+  edgePairs,
   inOrder,
   layoutByRank,
   splayStep,
+  withGhostEdges,
 } from "./bst";
-import { caption, edgeLine, keyCircle, svgButton } from "./render";
+import { caption, edgeLines, keyCircle, svgButton } from "./render";
 
 // # Splay tree
 //
@@ -23,6 +24,8 @@ type State = {
   root: BstNode;
   lastStep: SplayStep | null;
   lastKey: number | null;
+  /** Edges of the tree being interpolated toward/from; see edgeLines. */
+  ghostEdges?: [string, string][];
 };
 
 const INSERT_ORDER = [6, 3, 9, 1, 4, 8, 10, 2, 5, 7];
@@ -62,9 +65,7 @@ export const splayDraggable: Draggable<State> = ({
         setState(buildInitial(), { transition: 300 }),
       )}
 
-      {edges(state.root).map(([p, c]) =>
-        edgeLine(`edge-${c.id}`, positions.get(p.id)!, positions.get(c.id)!),
-      )}
+      {edgeLines("edge", edgePairs(state.root), state.ghostEdges, positions)}
 
       {inOrder(state.root).map((node) => {
         const isRoot = node.id === state.root.id;
@@ -85,8 +86,20 @@ export const splayDraggable: Draggable<State> = ({
                   lastStep: next.step,
                   lastKey: node.key,
                 };
+                // Both targets carry the other's edges as ghosts, so
+                // every edge is attached to nodes throughout the lerp.
+                // onDrop strips the ghosts again (and lands exactly on
+                // `state` if we didn't move, so no chain fires).
                 return d
-                  .between([state, stepped])
+                  .between([
+                    withGhostEdges(state, stepped.root),
+                    withGhostEdges(stepped, state.root),
+                  ])
+                  .onDrop((s) =>
+                    s.root === state.root
+                      ? state
+                      : { ...s, ghostEdges: undefined },
+                  )
                   .withSnapRadius(10, { chain: true });
               }),
           },

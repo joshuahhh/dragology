@@ -245,7 +245,7 @@ export const twoThreeDraggable: Draggable<State> = ({
           const c = positions.get(child.id)!;
           return (
             <line
-              id={`tt-edge-${child.id}`}
+              id={`tt-edge-${node.id}-${child.id}`}
               x1={p.x}
               y1={p.y + NODE_H / 2}
               x2={c.x}

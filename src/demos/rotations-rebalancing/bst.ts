@@ -293,3 +293,18 @@ export function edges(root: BstNode | null): [BstNode, BstNode][] {
   }
   return out;
 }
+
+export function edgePairs(root: BstNode | null): [string, string][] {
+  return edges(root).map(([p, c]) => [p.id, c.id]);
+}
+
+/**
+ * Give `state` the edges of `other`'s tree as ghost edges (see
+ * `edgeLines` in render.tsx). Used so that `d.between([A, B])` has every
+ * edge present in both A and B.
+ */
+export function withGhostEdges<
+  S extends { root: BstNode | null; ghostEdges?: [string, string][] },
+>(state: S, other: BstNode | null): S {
+  return { ...state, ghostEdges: edgePairs(other) };
+}

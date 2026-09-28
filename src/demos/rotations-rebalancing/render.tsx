@@ -58,19 +58,51 @@ export function keyCircle({
   );
 }
 
-export function edgeLine(id: string, a: Pos, b: Pos, stroke = "#94a3b8"): Svgx {
-  return (
-    <line
-      id={id}
-      x1={a.x}
-      y1={a.y}
-      x2={b.x}
-      y2={b.y}
-      stroke={stroke}
-      strokeWidth={2}
-      dragologyZIndex={-1}
-    />
-  );
+export type EdgePair = [parentId: string, childId: string];
+
+/**
+ * Edges are keyed by the (parent, child) pair. An edge whose parent
+ * changes (e.g. in a rotation) has no counterpart in the other tree —
+ * so when interpolating, its endpoints would slide through space, or it
+ * would cross-fade at a fixed position, detached from the moving nodes.
+ *
+ * To avoid both, a state can carry *ghost edges*: the other tree's
+ * edges, drawn at opacity 0 between this tree's node positions. Then
+ * every edge exists in both renderings with both endpoints attached to
+ * nodes, and only the opacity cross-fades. See `withGhostEdges`.
+ */
+export function edgeLines(
+  prefix: string,
+  real: EdgePair[],
+  ghosts: EdgePair[] | undefined,
+  positions: Map<string, Pos>,
+  stroke = "#94a3b8",
+): Svgx[] {
+  const realKeys = new Set(real.map(([p, c]) => `${p}-${c}`));
+  const out: Svgx[] = [];
+  const draw = (p: string, c: string, opacity: number) => {
+    const a = positions.get(p);
+    const b = positions.get(c);
+    if (!a || !b) return;
+    out.push(
+      <line
+        id={`${prefix}-${p}-${c}`}
+        x1={a.x}
+        y1={a.y}
+        x2={b.x}
+        y2={b.y}
+        stroke={stroke}
+        strokeWidth={2}
+        opacity={opacity}
+        dragologyZIndex={-1}
+      />,
+    );
+  };
+  for (const [p, c] of real) draw(p, c, 1);
+  for (const [p, c] of ghosts ?? []) {
+    if (!realKeys.has(`${p}-${c}`)) draw(p, c, 0);
+  }
+  return out;
 }
 
 /** A small clickable text button drawn inside the SVG. */

@@ -11,13 +11,14 @@ import {
   BstNode,
   avlInsert,
   balanceFactor,
-  edges,
+  edgePairs,
   inOrder,
   layoutByRank,
   nodeId,
   rbInsert,
+  withGhostEdges,
 } from "./bst";
-import { NODE_R, caption, edgeLine, keyCircle, svgButton } from "./render";
+import { NODE_R, caption, edgeLines, keyCircle, svgButton } from "./render";
 
 // # AVL / red-black insertion
 //
@@ -31,6 +32,8 @@ type Mode = "avl" | "red-black";
 type State = {
   root: BstNode | null;
   deck: number[];
+  /** Edges of the tree being transitioned toward/from; see edgeLines. */
+  ghostEdges?: [string, string][];
 };
 
 const ALL_KEYS = [5, 2, 8, 1, 9, 3, 7, 4, 6, 10];
@@ -103,14 +106,20 @@ export function balancedDraggable(mode: Mode): Draggable<State> {
             dragged: draggedId === id,
             extra: {
               dragologyOnDrag: () => {
+                const newRoot = insert(state.root, key);
                 const inserted: State = {
-                  root: insert(state.root, key),
+                  root: newRoot,
                   deck: state.deck.filter((k) => k !== key),
                 };
+                // Each side carries the other's edges as invisible
+                // ghosts, so the branch transition between them keeps
+                // every edge attached to its nodes (see edgeLines).
                 return d
-                  .dropTarget("tree-area", inserted)
+                  .dropTarget("tree-area", withGhostEdges(inserted, state.root))
                   .withFloating()
-                  .whenFar(d.fixed(state).withFloating());
+                  .whenFar(
+                    d.fixed(withGhostEdges(state, newRoot)).withFloating(),
+                  );
               },
             },
           });
@@ -125,9 +134,7 @@ export function balancedDraggable(mode: Mode): Draggable<State> {
           fill="transparent"
           dragologyZIndex={-3}
         />
-        {edges(state.root).map(([p, c]) =>
-          edgeLine(`edge-${c.id}`, positions.get(p.id)!, positions.get(c.id)!),
-        )}
+        {edgeLines("edge", edgePairs(state.root), state.ghostEdges, positions)}
 
         {inOrder(state.root).map((node) =>
           keyCircle({
