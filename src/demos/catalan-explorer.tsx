@@ -957,10 +957,9 @@ function latticeView(
         dragologyZIndex={draggedId === "token" ? "/1" : 1}
         style={{ cursor: "grab" }}
         dragologyOnDrag={() =>
-          d
-            .closest([state, ...moves.map((m) => m.next)])
-            .withFloating({ ghost: { opacity: 0.35 } })
-            .withChaining()
+          // Interpolate along the edges to the neighbors; chaining lets
+          // one drag walk several edges.
+          d.between([state, ...moves.map((m) => m.next)]).withChaining()
         }
       >
         <circle
@@ -1047,13 +1046,6 @@ export default demo(
     );
   },
   {
-    tags: [
-      "d.between",
-      "d.closest",
-      "spec.withFloating [ghost]",
-      "spec.withChaining",
-      "math",
-      "fancy",
-    ],
+    tags: ["d.between", "d.closest", "spec.withChaining", "math", "fancy"],
   },
 );
