@@ -11,7 +11,7 @@ import {
 import { Draggable } from "../draggable";
 import { DragSpecBuilder } from "../DragSpec";
 import { Svgx } from "../svgx";
-import { rotateDeg, translate } from "../svgx/helpers";
+import { translate } from "../svgx/helpers";
 
 // # Catalan objects
 //
@@ -41,10 +41,19 @@ type Node = {
    * the nodes swap roles.
    */
   edgeFlipped: boolean;
+  /**
+   * Which edge of this node's triangle was involved in the most recent
+   * flip. The triangle's corners are listed active-edge-first, so that
+   * during a flip its shared edge interpolates exactly like the
+   * diagonal. Set on both the start and end states of a move by
+   * `flipVariants`.
+   */
+  active: Side;
   left: Tree;
   right: Tree;
 };
 type Tree = Leaf | Node;
+type Side = "top" | "left" | "right";
 
 type State = { root: Node };
 
@@ -62,6 +71,7 @@ function treeFromShape(shape: Shape): Tree {
     edgeId: "",
     edgeReversed: false,
     edgeFlipped: false,
+    active: "top",
     left: treeFromShape(shape[0]),
     right: treeFromShape(shape[1]),
   };
@@ -79,6 +89,7 @@ function relabel(root: Node): Node {
       edgeId: k === 0 ? "root" : `e${k}`,
       edgeReversed: false,
       edgeFlipped: false,
+      active: "top",
       left: go(t.left),
       right: go(t.right),
     };
@@ -160,49 +171,70 @@ function rotateUp(t: Tree, target: string): Tree {
   return { ...t, left: rotateUp(left, target), right: rotateUp(right, target) };
 }
 
-function setEdgeReversed(t: Tree, nodeId: string, value: boolean): Tree {
+function setNode(t: Tree, nodeId: string, props: Partial<Node>): Tree {
   if (t.type === "leaf") return t;
-  if (t.id === nodeId) return { ...t, edgeReversed: value };
+  if (t.id === nodeId) return { ...t, ...props };
   return {
     ...t,
-    left: setEdgeReversed(t.left, nodeId, value),
-    right: setEdgeReversed(t.right, nodeId, value),
+    left: setNode(t.left, nodeId, props),
+    right: setNode(t.right, nodeId, props),
   };
 }
 
-/** Shortest signed angular difference from a to b, in (-180, 180]. */
-function angleDelta(a: number, b: number): number {
-  return ((((b - a) % 360) + 540) % 360) - 180;
-}
+type Move = { from: State; to: State };
 
 /**
- * The two states reachable by rotating `target` up. Both have the same
- * tree; they differ only in which way round the flipped diagonal is
- * drawn, i.e. which way it rotates from its current position: the first
- * is the short rotation (≤ 90°), the second the long one. Everything
- * except the polygon view renders them identically.
+ * Rotating `target` up above its parent, as a pair of states to
+ * interpolate between. `from` renders identically to `state` but with
+ * the two triangles next to the flipped diagonal marked `active` on
+ * that edge, so their corners pair up with the diagonal's ends.
+ *
+ * There are two ways the diagonal's ends can travel to the ends of the
+ * new diagonal. With one of them each neighboring triangle keeps its
+ * own corners and just follows the diagonal (`to[0]`); with the other
+ * the diagonal sweeps straight through both triangles, which collapse
+ * to a sliver at the midpoint and re-emerge (`to[1]`). Which is which
+ * is fixed by the tree: the good one always pairs the diagonal's
+ * lower-indexed end with the new diagonal's higher-indexed end, i.e.
+ * it toggles `edgeReversed`. The variants differ only in that bit.
  */
-function flipVariants(state: State, target: string, n: number): [State, State] {
+function flipVariants(
+  state: State,
+  target: string,
+): { from: State; to: [State, State] } {
   const before = analyze(state.root);
   const y = before.get(target)!;
   const x = y.parent!;
-  const angleBefore = diagAngle(y.lo, y.hi, n, y.node.edgeReversed);
-  const rotated = rotateUp(state.root, target) as Node;
-  const after = analyze(rotated);
-  // the flipped diagonal is y's old edge, now on x
-  const xAfter = after.get(x.id)!;
-  const geo = diagAngle(xAfter.lo, xAfter.hi, n, false);
-  const shortIsReversed =
-    Math.abs(angleDelta(angleBefore, geo + 180)) <
-    Math.abs(angleDelta(angleBefore, geo));
-  return [
-    { root: setEdgeReversed(rotated, x.id, shortIsReversed) as Node },
-    { root: setEdgeReversed(rotated, x.id, !shortIsReversed) as Node },
-  ];
+  const side = y.side!;
+  const fromRoot = setNode(
+    setNode(state.root, x.id, { active: side }),
+    target,
+    {
+      active: "top",
+    },
+  ) as Node;
+
+  // after the rotation, x hangs off y on the other side
+  const rotated = setNode(
+    setNode(rotateUp(state.root, target), target, {
+      active: side === "right" ? "left" : "right",
+    }),
+    x.id,
+    { active: "top" },
+  ) as Node;
+  // the flipped diagonal is y's old edge, now on x; rotateUp carried
+  // its `edgeReversed` bit along unchanged
+  const rev = (analyze(rotated).get(x.id)!.node as Node).edgeReversed;
+  const keep: State = { root: rotated };
+  const swap: State = {
+    root: setNode(rotated, x.id, { edgeReversed: !rev }) as Node,
+  };
+  return { from: { root: fromRoot }, to: [swap, keep] };
 }
 
-function rotateUpState(state: State, target: string, n: number): State {
-  return flipVariants(state, target, n)[0];
+function flipMove(state: State, target: string): Move {
+  const { from, to } = flipVariants(state, target);
+  return { from, to: to[0] };
 }
 
 type NodeInfo = {
@@ -331,6 +363,7 @@ function allTrees(n: number): Tree[] {
           edgeId: "",
           edgeReversed: false,
           edgeFlipped: false,
+          active: "top",
           left,
           right,
         });
@@ -463,16 +496,6 @@ function polygonVertex(k: number, m: number, r = POLY_R) {
   return { x: r * Math.cos(theta), y: r * Math.sin(theta) };
 }
 
-/** Angle (degrees) of the diagonal spanning leaves lo..hi. */
-function diagAngle(lo: number, hi: number, n: number, reversed: boolean) {
-  const m = n + 2;
-  const a = polygonVertex(lo, m);
-  const b = polygonVertex(hi + 1, m);
-  return (
-    (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI + (reversed ? 180 : 0)
-  );
-}
-
 function polygonView(
   state: State,
   infos: Map<string, NodeInfo>,
@@ -486,14 +509,31 @@ function polygonView(
   return (
     <g transform={translate(POLY_C.x, POLY_C.y)}>
       {/* triangles */}
-      {nodes.map(({ node, lo, split, hi }) => (
-        <polygon
-          id={`tri-${node.id}`}
-          points={`${pt(lo)} ${pt(split)} ${pt(hi + 1)}`}
-          fill={nodeFill(node.id)}
-          stroke="none"
-        />
-      ))}
+      {nodes.map(({ node, lo, split, hi }) => {
+        // corners: the active edge's two ends (A end first), then apex
+        let ends: [number, number, boolean];
+        let apex: number;
+        if (node.active === "left" && node.left.type === "node") {
+          ends = [lo, split, node.left.edgeReversed];
+          apex = hi + 1;
+        } else if (node.active === "right" && node.right.type === "node") {
+          ends = [split, hi + 1, node.right.edgeReversed];
+          apex = lo;
+        } else {
+          ends = [lo, hi + 1, node.edgeReversed];
+          apex = split;
+        }
+        const [u, v, rev] = ends;
+        const corners = rev ? [v, u, apex] : [u, v, apex];
+        return (
+          <polygon
+            id={`tri-${node.id}`}
+            points={corners.map(pt).join(" ")}
+            fill={nodeFill(node.id)}
+            stroke="none"
+          />
+        );
+      })}
       {/* outline */}
       <polygon
         points={V.map((_v, k) => pt(k)).join(" ")}
@@ -534,40 +574,45 @@ function polygonView(
       {nodes
         .filter(({ parent }) => parent !== null)
         .map(({ node, lo, hi }) => {
-          const a = V[lo];
-          const b = V[hi + 1];
-          const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-          const half = Math.hypot(b.x - a.x, b.y - a.y) / 2;
-          const angle = diagAngle(lo, hi, n, node.edgeReversed);
-          const line = (stroke: string, strokeWidth: number) => (
-            <line
-              x1={-half}
-              y1={0}
-              x2={half}
-              y2={0}
-              stroke={stroke}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          );
+          // Drawn as two halves, each anchored (via its transform) at
+          // one end of the diagonal. Grabbing a half tracks that end,
+          // so `d.closest` can tell which way the user is swinging it.
+          const [pa, pb] = node.edgeReversed
+            ? [V[hi + 1], V[lo]]
+            : [V[lo], V[hi + 1]];
+          const mid = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
+          const onDrag = () => {
+            const { from, to } = flipVariants(state, node.id);
+            return d.closest(to.map((t) => d.between([from, t])));
+          };
+          const half = (end: "a" | "b", anchor: { x: number; y: number }) => {
+            const line = (stroke: string, strokeWidth: number) => (
+              <line
+                x1={0}
+                y1={0}
+                x2={mid.x - anchor.x}
+                y2={mid.y - anchor.y}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+              />
+            );
+            return (
+              <g
+                id={`diag-${node.edgeId}-${end}`}
+                transform={translate(anchor)}
+                style={{ cursor: "grab" }}
+                dragologyOnDrag={onDrag}
+              >
+                {line("transparent", 16)}
+                {line(edgeColor(node.edgeId), 3.5)}
+              </g>
+            );
+          };
           return (
-            <g
-              id={`diag-${node.edgeId}`}
-              transform={translate(mid) + rotateDeg(angle)}
-              style={{ cursor: "grab" }}
-              dragologyOnDrag={() =>
-                // Both ways the diagonal could rotate into its flipped
-                // position; whichever keeps the grabbed point closest
-                // to the pointer wins.
-                d.closest(
-                  flipVariants(state, node.id, n).map((v) =>
-                    d.between([state, v]),
-                  ),
-                )
-              }
-            >
-              {line("transparent", 16)}
-              {line(edgeColor(node.edgeId), 3.5)}
+            <g id={`diag-${node.edgeId}`}>
+              {half("a", pa)}
+              {half("b", pb)}
             </g>
           );
         })}
@@ -665,7 +710,10 @@ function treeView(
           style={{ cursor: parent ? "grab" : "default" }}
           dragologyOnDrag={
             parent !== null &&
-            (() => d.between([state, rotateUpState(state, node.id, n)]))
+            (() => {
+              const m = flipMove(state, node.id);
+              return d.between([m.from, m.to]);
+            })
           }
         >
           <circle
@@ -699,13 +747,12 @@ function dyckView(
     segsById.get(s.id)!.push({ a: i, b: i + 1 });
   });
   const humps = [...infos.values()].map((info) => {
-    const moves: State[] = [];
+    const moves: Move[] = [];
     // hump slides down-right: this node is a right child
-    if (info.side === "right")
-      moves.push(rotateUpState(state, info.node.id, n));
+    if (info.side === "right") moves.push(flipMove(state, info.node.id));
     // hump slides up-left: this node's left child is internal
     if (info.node.left.type === "node")
-      moves.push(rotateUpState(state, info.node.left.id, n));
+      moves.push(flipMove(state, info.node.left.id));
     return { info, moves };
   });
   return (
@@ -750,7 +797,7 @@ function dyckView(
             style={{ cursor: moves.length > 0 ? "grab" : "default" }}
             dragologyOnDrag={
               moves.length > 0 &&
-              (() => d.closest(moves.map((m) => d.between([state, m]))))
+              (() => d.closest(moves.map((m) => d.between([m.from, m.to]))))
             }
           >
             {segs.map(({ a, b }, k) => {
@@ -783,7 +830,6 @@ function parenView(
   state: State,
   infos: Map<string, NodeInfo>,
   d: DragSpecBuilder<State>,
-  n: number,
 ): Svgx {
   const tokens = parenTokens(state.root);
   const byEdge = new Map<string, { open: number; close: number }>();
@@ -848,8 +894,10 @@ function parenView(
       {[...byEdge.entries()].map(([edgeId, { open, close }]) => {
         const node = nodeByEdge.get(edgeId)!;
         const color = edgeColor(edgeId);
-        const onDrag = () =>
-          d.between([state, rotateUpState(state, node.id, n)]);
+        const onDrag = () => {
+          const m = flipMove(state, node.id);
+          return d.between([m.from, m.to]);
+        };
         return (
           <g id={`paren-${edgeId}`}>
             {paren(`paren-open-${edgeId}`, "(", open, color, onDrag)}
@@ -913,7 +961,7 @@ function latticeView(
     .filter(({ parent }) => parent !== null)
     .map(({ node }) => ({
       edgeId: node.edgeId,
-      next: rotateUpState(state, node.id, n),
+      next: flipMove(state, node.id).to,
     }));
   return (
     <g transform={translate(LAT_ORIGIN.x, LAT_ORIGIN.y)}>
@@ -999,7 +1047,7 @@ function makeDraggable(n: number): Draggable<State> {
         {label(DYCK_ORIGIN.x - 10, 30, "dyck path")}
         {dyckView(state, infos, d, n)}
         {label(PAREN_ORIGIN.x - 15, PAREN_ORIGIN.y - 24, "parenthesization")}
-        {parenView(state, infos, d, n)}
+        {parenView(state, infos, d)}
         {label(20, LAT_ORIGIN.y - 30, "tamari lattice")}
         {latticeView(state, infos, d, n, draggedId)}
       </g>
