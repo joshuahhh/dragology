@@ -85,7 +85,7 @@ const initialState: State = {
             type: "box",
             id: "sidebar",
             direction: "column",
-            cols: 1,
+            cols: 2,
             gap: 6,
             padding: 6,
             children: [
