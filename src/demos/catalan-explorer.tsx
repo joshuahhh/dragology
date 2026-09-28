@@ -1147,8 +1147,10 @@ export default demo(
             animates the same move. Colors follow identity: pastel fills are
             tree nodes (= triangles = humps); saturated strokes are tree edges
             (= diagonals = paren pairs). Below, the Tamari lattice: drag the
-            ring along the colored edges to walk the flip graph (left comb at
-            the bottom, right comb at the top).
+            ring along edges to walk the flip graph (left comb at the bottom,
+            right comb at the top). Lattice edges have fixed colors by which two
+            operator slots the rotation re-associates – in Loday&apos;s
+            associahedron these are exactly the parallel classes of edges.
           </DemoNotes>
           <DemoDraggable
             key={n}
