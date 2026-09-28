@@ -1008,7 +1008,7 @@ function latticeView(
     .map((info) => ({
       edgeId: info.node.edgeId,
       cls: edgeClass(info, infos.get(info.parent!.id)!),
-      next: flipMove(state, info.node.id).to,
+      move: flipMove(state, info.node.id),
     }));
   return (
     <g transform={translate(LAT_ORIGIN.x, LAT_ORIGIN.y)}>
@@ -1028,8 +1028,8 @@ function latticeView(
         );
       })}
       {/* the current vertex's edges, emphasized */}
-      {moves.map(({ edgeId, cls, next }) => {
-        const vb = lattice.byKey.get(shapeKey(next.root))!;
+      {moves.map(({ edgeId, cls, move }) => {
+        const vb = lattice.byKey.get(shapeKey(move.to.root))!;
         return (
           <line
             id={`lat-edge-${edgeId}`}
@@ -1081,9 +1081,12 @@ function latticeView(
         dragologyZIndex={draggedId === "token" ? "/1" : 1}
         style={{ cursor: "grab" }}
         dragologyOnDrag={() =>
-          // Interpolate along the edges to the neighbors; chaining lets
-          // one drag walk several edges.
-          d.between([state, ...moves.map((m) => m.next)]).withChaining()
+          // One two-point between per edge; the nearest edge wins. On
+          // reaching a neighbor, snap there and chain into a new drag
+          // from it, so one drag can walk several edges.
+          d
+            .closest(moves.map((m) => d.between([m.move.from, m.move.to])))
+            .withSnapRadius(1, { chain: true })
         }
       >
         <circle
@@ -1172,6 +1175,12 @@ export default demo(
     );
   },
   {
-    tags: ["d.between", "d.closest", "spec.withChaining", "math", "fancy"],
+    tags: [
+      "d.between",
+      "d.closest",
+      "spec.withSnapRadius [chain]",
+      "math",
+      "fancy",
+    ],
   },
 );
