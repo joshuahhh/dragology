@@ -169,6 +169,80 @@ function crossingMoves(word: Letter[], j: number): Letter[][] {
   return moves;
 }
 
+// ## Permutohedron layout
+//
+// Vertices are the permutations of {1..n} as points in R^n (centered);
+// edges join permutations differing by an adjacent transposition. For
+// n = 3 that's a hexagon in a plane; for n = 4 it's a truncated
+// octahedron in a 3-space, which we draw as a Schlegel diagram (a
+// perspective projection from just outside one hexagonal face).
+
+type PermutohedronLayout = {
+  pos: Map<string, Vec2>; // unit-radius coords keyed by one-line string
+  edges: [string, string][];
+};
+
+const permKey = (perm: number[]) => perm.join("");
+
+const permutohedronLayouts = new Map<number, PermutohedronLayout>();
+
+function permutohedronLayout(n: number): PermutohedronLayout {
+  const cached = permutohedronLayouts.get(n);
+  if (cached) return cached;
+  const dot = (u: number[], v: number[]) =>
+    u.reduce((acc, x, k) => acc + x * v[k], 0);
+  const perms: number[][] = [];
+  const gen = (rest: number[], acc: number[]) => {
+    if (rest.length === 0) perms.push(acc);
+    rest.forEach((x, k) =>
+      gen([...rest.slice(0, k), ...rest.slice(k + 1)], [...acc, x]),
+    );
+  };
+  gen(_.range(1, n + 1), []);
+  const mid = (n + 1) / 2;
+  let project: (v: number[]) => [number, number];
+  if (n === 3) {
+    const a = [1 / Math.SQRT2, -1 / Math.SQRT2, 0];
+    const b = [1 / Math.sqrt(6), 1 / Math.sqrt(6), -2 / Math.sqrt(6)];
+    project = (v) => [dot(v, a), dot(v, b)];
+  } else {
+    // Schlegel diagram: eye just outside the face where π(4) = 4.
+    const c = [-0.5, -0.5, -0.5, 1.5];
+    const cLen = Math.sqrt(dot(c, c));
+    const cHat = c.map((x) => x / cLen);
+    const eye = c.map((x) => x * 1.6);
+    const a = [1 / Math.SQRT2, -1 / Math.SQRT2, 0, 0];
+    const b = [1 / Math.sqrt(6), 1 / Math.sqrt(6), -2 / Math.sqrt(6), 0];
+    project = (v) => {
+      const t =
+        dot(eye, cHat) /
+        dot(
+          eye.map((e, k) => e - v[k]),
+          cHat,
+        );
+      const w = eye.map((e, k) => e + t * (v[k] - e));
+      return [dot(w, a), dot(w, b)];
+    };
+  }
+  const raw = perms.map((perm) => ({
+    key: permKey(perm),
+    xy: Vec2(project(perm.map((x) => x - mid))),
+  }));
+  const R = Math.max(...raw.map(({ xy }) => xy.len()));
+  const pos = new Map(raw.map(({ key, xy }) => [key, xy.div(R)]));
+  const edges: [string, string][] = [];
+  for (const perm of perms) {
+    for (let i = 0; i < n - 1; i++) {
+      const q = perm.slice();
+      [q[i], q[i + 1]] = [q[i + 1], q[i]];
+      if (permKey(perm) < permKey(q)) edges.push([permKey(perm), permKey(q)]);
+    }
+  }
+  const layout = { pos, edges };
+  permutohedronLayouts.set(n, layout);
+  return layout;
+}
+
 // ## Rendering
 
 const COLORS = [
@@ -185,7 +259,7 @@ const SUBSCRIPTS = "₀₁₂₃₄₅₆₇₈₉";
 const sub = (k: number) => SUBSCRIPTS[k];
 
 const TS = 34; // tile size
-const WIDTH = 640;
+const WIDTH = 680;
 const HEIGHT = 500;
 
 function label(text: string, pos: Vec2) {
@@ -363,26 +437,42 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
     return d.closest(states).withFloating();
   };
 
+  // ### Permutohedron
+  const PH_R = 88;
+  const phOrigin = Vec2(WIDTH - PH_R - 12, 218);
+  const ph: PermutohedronLayout =
+    n <= 4 ? permutohedronLayout(n) : { pos: new Map(), edges: [] };
+  // the walk from the identity along the word (a path on the map)
+  const phWalk =
+    n <= 4
+      ? _.range(word.length + 1).map(
+          (k) => ph.pos.get(permKey(permFromWord(n, word.slice(0, k))))!,
+        )
+      : [];
+
   // ### Wiring diagram
   const RS = 24; // row spacing
   const wiringOrigin = Vec2(48, 356);
   const Lcols = word.length; // columns, including blank ones
-  const CW = Math.min(44, (WIDTH - 110) / (Lcols + 1)); // column width
+  // The diagram always draws a fixed number of columns (padding the word
+  // with straight columns), and every column is one cubic segment. So a
+  // wire's path keeps the same structure when a crossing is appended,
+  // and path interpolation only bends the new column — existing
+  // crossings stay put mid-drag.
+  const COLS = Math.max(13, Lcols + 1); // at least one spare column
+  const CW = (WIDTH - 110) / COLS; // column width
   const wireX0 = 0;
-  const wireX1 = wireX0 + (Lcols + 1) * CW; // one spare column at the end
+  const wireX1 = wireX0 + COLS * CW;
   const rowY = (r: number) => r * RS;
 
   const wirePath = (v: number) => {
     let r = v - 1;
     let x = wireX0;
     let dstr = `M ${x - 14} ${rowY(r)} L ${x} ${rowY(r)}`;
-    for (const i of word) {
+    for (let j = 0; j < COLS; j++) {
+      const i: Letter = j < Lcols ? word[j] : null;
       const next = i === null ? r : r === i ? i + 1 : r === i + 1 ? i : r;
-      if (next === r) {
-        dstr += ` L ${x + CW} ${rowY(r)}`;
-      } else {
-        dstr += ` C ${x + CW / 2} ${rowY(r)} ${x + CW / 2} ${rowY(next)} ${x + CW} ${rowY(next)}`;
-      }
+      dstr += ` C ${x + CW / 2} ${rowY(r)} ${x + CW / 2} ${rowY(next)} ${x + CW} ${rowY(next)}`;
       r = next;
       x += CW;
     }
@@ -628,9 +718,77 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           );
         })}
       </g>
-      {label(
-        "row i, column π(i)",
-        matrixOrigin.add(Vec2(n * CS + 12, n * CS - 2)),
+      {label("row i, column π(i)", matrixOrigin.add(Vec2(0, n * CS + 14)))}
+
+      {/* ## Permutohedron */}
+      {label("permutohedron", phOrigin.add(Vec2(-PH_R, -PH_R - 14)))}
+      {n <= 4 ? (
+        <g transform={translate(phOrigin)}>
+          {ph.edges.map(([a, b]) => (
+            <line
+              {...ph.pos.get(a)!.mul(PH_R).xy1()}
+              {...ph.pos.get(b)!.mul(PH_R).xy2()}
+              stroke="#d1d5db"
+              strokeWidth={1}
+            />
+          ))}
+          <path
+            id="ph-walk"
+            d={"M " + phWalk.map((p) => p.mul(PH_R).str(" ")).join(" L ")}
+            fill="none"
+            stroke="#2563eb"
+            strokeWidth={3}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            opacity={0.3}
+          />
+          {[...ph.pos.entries()].map(([key, p]) => (
+            <g transform={translate(p.mul(PH_R))}>
+              <circle r={2.5} fill="#9ca3af" />
+              {n === 3 && (
+                <text
+                  transform={translate(p.mul(14))}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize={9}
+                  fill="#9ca3af"
+                  fontFamily="system-ui, sans-serif"
+                >
+                  {key}
+                </text>
+              )}
+            </g>
+          ))}
+          <g
+            id="ph-token"
+            transform={translate(ph.pos.get(permKey(perm))!.mul(PH_R))}
+            dragologyZIndex={1}
+            dragologyOnDrag={() =>
+              d
+                .closest(
+                  _.range(n - 1).map((i) =>
+                    d.between([
+                      state,
+                      { ...state, word: applyGenerator(word, i) },
+                    ]),
+                  ),
+                )
+                .withSnapRadius(10, { chain: true })
+            }
+            style={{ cursor: "grab" }}
+          >
+            <circle r={8} fill="#2563eb" stroke="white" strokeWidth={2} />
+          </g>
+        </g>
+      ) : (
+        <text
+          transform={translate(phOrigin.add(Vec2(-PH_R, 0)))}
+          fontSize={11}
+          fill="#9ca3af"
+          fontFamily="system-ui, sans-serif"
+        >
+          (drawn for n ≤ 4 only)
+        </text>
       )}
 
       {/* ## Wiring diagram */}
@@ -835,7 +993,9 @@ export default demo(
           the third strand (or drag the middle crossing of a braid vertically) —
           the word changes, π doesn't. Drag a straight bit of strand over its
           neighbor to write s<sub>i</sub>s<sub>i</sub>; drag the apex of such a
-          double crossing back to cancel it.
+          double crossing back to cancel it. The permutohedron (n ≤ 4) maps
+          every permutation to a vertex, with edges for adjacent transpositions;
+          drag the token along edges to walk (and write) a word.
         </DemoNotes>
         <div className="flex flex-wrap items-start gap-6 bg-gray-50 rounded p-3 mb-3 text-xs">
           <ConfigSelect
