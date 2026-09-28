@@ -37,6 +37,7 @@ export const demoList: DemoListEntry[] = [
   "catalan-explorer",
   "outline",
   "braid",
+  "permutation-lab",
   "todo",
   "text-box",
   "carousel",
