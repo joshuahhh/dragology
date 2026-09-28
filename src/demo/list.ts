@@ -48,6 +48,7 @@ export const demoList: DemoListEntry[] = [
   "spinny",
   "scheduler",
   "graph",
+  "git-graph-surgery",
   "tromino",
   "plane-partition",
   "aztec-diamond",
