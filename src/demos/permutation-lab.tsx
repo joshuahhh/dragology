@@ -732,16 +732,23 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
               strokeWidth={1}
             />
           ))}
-          <path
-            id="ph-walk"
-            d={"M " + phWalk.map((p) => p.mul(PH_R).str(" ")).join(" L ")}
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth={3}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            opacity={0.3}
-          />
+          {/* The walk, one id'd segment per step so earlier steps never
+              change shape, plus a zero-length tip segment at the last
+              vertex: when a step is appended, the tip stretches along
+              the new edge with the token. */}
+          {[...phWalk, phWalk[phWalk.length - 1]].map((p, k) =>
+            k === 0 ? null : (
+              <line
+                id={`ph-walk-${k - 1}`}
+                {...phWalk[k - 1].mul(PH_R).xy1()}
+                {...p.mul(PH_R).xy2()}
+                stroke="#2563eb"
+                strokeWidth={3}
+                strokeLinecap="round"
+                opacity={0.3}
+              />
+            ),
+          )}
           {[...ph.pos.entries()].map(([key, p]) => (
             <g transform={translate(p.mul(PH_R))}>
               <circle r={2.5} fill="#9ca3af" />
@@ -1057,7 +1064,12 @@ export default demo(
         <DemoDraggable
           key={`${n}-${resetCount}`}
           draggable={draggable}
-          initialState={{ n, word: wordFromPerm(INITIAL_PERMS[n]), mode }}
+          initialState={{
+            n,
+            // start somewhere interesting; reset goes to the identity
+            word: resetCount === 0 ? wordFromPerm(INITIAL_PERMS[n]) : [],
+            mode,
+          }}
           stateOverride={{ mode }}
           width={WIDTH}
           height={HEIGHT}
