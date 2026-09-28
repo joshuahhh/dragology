@@ -321,11 +321,21 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
   // Drag spec for a tile showing value `v` in a one-line-style row.
   // Shared by the one-line notation and the bottom row of the
   // two-line notation.
+  // ### Wiring-diagram capacity
+  // The wiring diagram has a fixed number of columns for a given n (room
+  // for the longest reduced word plus a few), so the column width never
+  // changes and transitions stay pure slides. Drags that would append
+  // past the last column are refused.
+  const COLS = Math.max(13, (n * (n - 1)) / 2 + 4);
+  const CAP = COLS - 1; // letters, leaving one spare column
+  const canAppend = (k: number) => word.length + k <= CAP;
+
   const tileDragSpec = (v: number) => {
     const i = perm.indexOf(v);
     if (mode === "adjacent") {
       // Only adjacent transpositions: each step multiplies by s_i and
       // writes a letter. Chaining lets one drag write a whole word.
+      if (!canAppend(1)) return d.fixed(state);
       return d
         .closest([
           i > 0 &&
@@ -468,13 +478,11 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
   const RS = 24; // row spacing
   const wiringOrigin = Vec2(48, 356);
   const rawLen = cols.length; // layout columns (incl. blank and closed)
-  // The diagram always spans a fixed number of column widths (at least
-  // 13, padded with straight columns), and every column is one cubic
-  // segment. So a wire's path keeps the same structure when a crossing
+  // The diagram always spans COLS column widths (padded with straight
+  // columns), and every column is one cubic segment. So a wire's path keeps the same structure when a crossing
   // is appended, and path interpolation only bends the new column —
   // existing crossings stay put mid-drag. Closed columns have zero
   // width; the last padding column stretches to the right edge.
-  const COLS = Math.max(13, word.length + 1); // at least one spare column
   const CW = (WIDTH - 110) / COLS; // column width
   const wireX0 = 0;
   const wireX1 = wireX0 + COLS * CW;
@@ -484,7 +492,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
     wireX0 +
     _.sum(_.range(Math.min(j, rawLen)).map(colW)) +
     Math.max(0, j - rawLen) * CW;
-  const padCols = Math.max(1, 13 - rawLen); // straight columns after the word
+  const padCols = Math.max(1, COLS - rawLen); // straight columns after the word
 
   const wirePath = (v: number) => {
     let r = v - 1;
@@ -794,19 +802,21 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
             transform={translate(ph.pos.get(permKey(perm))!.mul(PH_R))}
             dragologyZIndex={1}
             dragologyOnDrag={() =>
-              d
-                .closest(
-                  _.range(n - 1).map((i) =>
-                    d.between([
-                      state,
-                      { ...state, word: applyGenerator(word, i) },
-                    ]),
-                  ),
-                )
-                // targets are close together, so snap late
-                .withSnapRadius(3, { chain: true })
+              !canAppend(1)
+                ? d.fixed(state)
+                : d
+                    .closest(
+                      _.range(n - 1).map((i) =>
+                        d.between([
+                          state,
+                          { ...state, word: applyGenerator(word, i) },
+                        ]),
+                      ),
+                    )
+                    // targets are close together, so snap late
+                    .withSnapRadius(3, { chain: true })
             }
-            style={{ cursor: "grab" }}
+            style={{ cursor: canAppend(1) ? "grab" : "not-allowed" }}
           >
             <circle r={8} fill="#2563eb" stroke="white" strokeWidth={2} />
           </g>
@@ -824,7 +834,9 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
 
       {/* ## Wiring diagram */}
       {label(
-        "wiring diagram (drag crossings past each other, or a strand over its neighbor)",
+        !canAppend(1)
+          ? "wiring diagram is full — cancel a double crossing, or reset"
+          : "wiring diagram (drag crossings past each other, or a strand over its neighbor)",
         wiringOrigin.add(Vec2(-28, -22)),
       )}
       <g transform={translate(wiringOrigin)}>
@@ -848,6 +860,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               dragologyZIndex={1}
               dragologyOnDrag={() => {
                 const row = perm.indexOf(v);
+                if (!canAppend(1)) return d.fixed(state);
                 return (
                   d
                     .closest([
@@ -866,7 +879,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
                     .withSnapRadius(3, { chain: true })
                 );
               }}
-              style={{ cursor: "ns-resize" }}
+              style={{ cursor: canAppend(1) ? "ns-resize" : "not-allowed" }}
             >
               <circle
                 r={RS / 2 - 1}
@@ -1010,7 +1023,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               jMut += 2;
               continue;
             }
-            if (next === r) {
+            if (next === r && canAppend(2)) {
               // straight segment. The drag starts from a state with two
               // zero-width columns here (drawn identically to the current
               // state), so the double crossing widens from nothing and
