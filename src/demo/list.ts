@@ -22,6 +22,7 @@ export const demoList: DemoListEntry[] = [
   "canvas-of-lists",
   "lists-in-lists",
   "lists-in-lists-vanilla",
+  "layout-editor",
   "two-kinds-of-tree",
   "kanban",
   "ring-of-beads",
