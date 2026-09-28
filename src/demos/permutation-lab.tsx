@@ -16,10 +16,13 @@ import { translate } from "../svgx/helpers";
 // # Permutation Lab
 //
 // One permutation π ∈ S_n, shown five ways, all draggable and kept in
-// sync. The state is a *reduced word* in the adjacent transpositions
+// sync. The state is a *word* in the adjacent transpositions
 // s_0 … s_{n-2}; π is derived from it. This makes the wiring diagram
 // (which literally draws the word) the primary object, and lets braid
-// moves change the word without changing π.
+// moves change the word without changing π. Words written by
+// adjacent-mode drags are literal (every step appends a letter, so
+// they needn't be reduced); words recomputed after other drags are
+// reduced.
 //
 // Convention: letters act on *positions*. Applying s_i to a one-line
 // array swaps entries i and i+1. So `permFromWord` starts from the
@@ -74,20 +77,11 @@ function wordFromPerm(perm: number[]): number[] {
   return swaps.reverse();
 }
 
-/** Multiply the word on the right by s_i, keeping it reduced. If
- * s_i adds an inversion we just append it. Otherwise, by the exchange
- * property, some letter of the word can be deleted to get a reduced
- * word for w·s_i; we take the last such letter. */
-function applyGenerator(n: number, word: number[], i: number): number[] {
-  const perm = permFromWord(n, word);
-  if (perm[i] < perm[i + 1]) return [...word, i];
-  const target = permFromWord(n, [...word, i]);
-  for (let k = word.length - 1; k >= 0; k--) {
-    const shorter = [...word.slice(0, k), ...word.slice(k + 1)];
-    if (_.isEqual(permFromWord(n, shorter), target)) return shorter;
-  }
-  // Can't happen for a reduced word, but stay safe.
-  return wordFromPerm(target);
+/** Multiply the word on the right by s_i: literally append the letter,
+ * even if that makes the word non-reduced (e.g. dragging a tile right
+ * and then back left writes s_i s_i). */
+function applyGenerator(word: number[], i: number): number[] {
+  return [...word, i];
 }
 
 /** Cycles of π, each starting at its smallest element, sorted by that
@@ -230,12 +224,9 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       return d
         .closest([
           i > 0 &&
-            d.between([
-              state,
-              { ...state, word: applyGenerator(n, word, i - 1) },
-            ]),
+            d.between([state, { ...state, word: applyGenerator(word, i - 1) }]),
           i < n - 1 &&
-            d.between([state, { ...state, word: applyGenerator(n, word, i) }]),
+            d.between([state, { ...state, word: applyGenerator(word, i) }]),
         ])
         .withSnapRadius(10, { chain: true });
     } else {
@@ -271,6 +262,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
 
   // ### Word & inversion count
   const infoOrigin = Vec2(250, 32);
+  const letterW = Math.min(22, 350 / Math.max(state.word.length, 1));
   const wordLetters = (() => {
     const arr = _.range(1, n + 1);
     const seen = new Set<string>();
@@ -383,7 +375,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
 
       {/* ## Word & inversions */}
       {label(
-        mode === "adjacent" ? "reduced word (drag writes it)" : "reduced word",
+        mode === "adjacent" ? "word (drag writes it)" : "word",
         infoOrigin.add(Vec2(0, -12)),
       )}
       <g transform={translate(infoOrigin.add(Vec2(0, 22)))}>
@@ -408,7 +400,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
         {wordLetters.map(({ i, j, pairId }) => (
           <text
             id={`word-letter-${pairId}`}
-            transform={translate(34 + j * 22, 0)}
+            transform={translate(34 + j * letterW, 0)}
             fontSize={18}
             fontFamily="Georgia, serif"
             fontStyle="italic"
@@ -420,7 +412,8 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       </g>
       <g transform={translate(infoOrigin.add(Vec2(0, 52)))}>
         <text fontSize={13} fontFamily="system-ui, sans-serif" fill="#374151">
-          length ℓ(π) = inversions = {inv}
+          length {L} · inversions {inv} ·{" "}
+          {L === inv ? "reduced ✓" : `not reduced (${L - inv} to cancel)`}
         </text>
       </g>
 
@@ -703,12 +696,13 @@ export default demo(
         <DemoNotes>
           One permutation, five notations, all in sync. Drag tiles in the
           one-line / two-line notation to reorder; switch to{" "}
-          <i>adjacent only</i> and each step writes a generator into a reduced
-          word (the inversion count ticks). Drag a node in the cycle diagram
-          into any cycle at any position. Drag a dot in the matrix within its
-          column. Drag a crossing in the wiring diagram past its neighbor:
-          commutations slide it one column, braid moves jump it across the third
-          strand — the word changes, π doesn't.
+          <i>adjacent only</i> and each step literally appends a generator to
+          the word (the inversion count ticks; the word is reduced exactly when
+          its length equals the inversion count). Drag a node in the cycle
+          diagram into any cycle at any position. Drag a dot in the matrix
+          within its column. Drag a crossing in the wiring diagram past its
+          neighbor: commutations slide it one column, braid moves jump it across
+          the third strand — the word changes, π doesn't.
         </DemoNotes>
         <div className="flex flex-wrap items-start gap-6 bg-gray-50 rounded p-3 mb-3 text-xs">
           <ConfigSelect
