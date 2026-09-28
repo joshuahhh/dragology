@@ -873,6 +873,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
         <g transform={translate(DIAG_W + 8, 12)}>
           <rect
             id="goal-frame"
+            dragologyZIndex={-2}
             width={GOAL_W - 16}
             height={goalH + 44}
             rx={8}
