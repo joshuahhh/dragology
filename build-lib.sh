@@ -3,7 +3,7 @@ set -e
 
 # Bundle JS, then strip comments via esbuild
 vite build -c vite.config.lib.ts
-npx esbuild dist-lib/index.js --outfile=dist-lib/index.js --allow-overwrite --minify-syntax --minify-whitespace
+esbuild dist-lib/index.js --outfile=dist-lib/index.js --allow-overwrite --minify-syntax --minify-whitespace
 
 # Bundle .d.ts
 dts-bundle-generator --project tsconfig.app.json -o dist-lib/index.d.ts src/lib.ts
