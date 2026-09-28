@@ -32,9 +32,17 @@ import { makeId } from "../utils";
 
 type Orientation = "h" | "v";
 
-/** (x, y) is the lower-left cell (in y-up math coordinates). "h"
- * covers (x, y) and (x+1, y); "v" covers (x, y) and (x, y+1). */
-type Domino = { x: number; y: number; o: Orientation };
+/** (x, y) is the lower-left cell (in y-up math coordinates). `angle`
+ * is the domino's rotation in SVG degrees, always a multiple of 90
+ * and never normalized, so that consecutive flips interpolate as
+ * quarter turns in the direction they were made. Multiples of 180
+ * are horizontal ("h": covers (x, y) and (x+1, y)); the rest are
+ * vertical ("v": covers (x, y) and (x, y+1)). */
+type Domino = { x: number; y: number; angle: number };
+
+function orientation(dom: Domino): Orientation {
+  return dom.angle % 180 === 0 ? "h" : "v";
+}
 
 type State = {
   n: number;
@@ -72,8 +80,9 @@ function cells(n: number): [number, number][] {
   return result;
 }
 
-function cellsOf({ x, y, o }: Domino): [number, number][] {
-  return o === "h"
+function cellsOf(dom: Domino): [number, number][] {
+  const { x, y } = dom;
+  return orientation(dom) === "h"
     ? [
         [x, y],
         [x + 1, y],
@@ -100,7 +109,7 @@ function allHorizontal(n: number): State {
   for (const [x, y] of cells(n)) {
     // Each row's leftmost cell has x = -w; pair up cells left-to-right.
     const w = n - Math.abs(y + 0.5) + 0.5;
-    if ((x + w) % 2 === 0) dominoes[makeId()] = { x, y, o: "h" };
+    if ((x + w) % 2 === 0) dominoes[makeId()] = { x, y, angle: 0 };
   }
   return { n, dominoes };
 }
@@ -109,55 +118,78 @@ function allVertical(n: number): State {
   const dominoes: Record<string, Domino> = {};
   for (const [x, y] of cells(n)) {
     const w = n - Math.abs(x + 0.5) + 0.5;
-    if ((y + w) % 2 === 0) dominoes[makeId()] = { x, y, o: "v" };
+    if ((y + w) % 2 === 0) dominoes[makeId()] = { x, y, angle: 90 };
   }
   return { n, dominoes };
 }
 
 // # Flips
 
-/** States reachable by one flip involving the given domino. The
- * convention: the top/left domino of the block becomes the left/top
- * one, so the block rigidly rotates by a quarter turn. */
+/** States reachable by one flip involving the given domino: for each
+ * 2×2 block it forms with a parallel neighbor, the block can be
+ * rotated a quarter turn either way. Both ways give the same tiling,
+ * but the two dominoes end up in swapped places, so the dragged
+ * domino goes one way or the other. */
 function flipsInvolving(state: State, id: string): State[] {
   const cov = coverage(state);
   const dom = state.dominoes[id];
-  const partnerAt = (x: number, y: number, o: Orientation) => {
+  const o = orientation(dom);
+  const partnerAt = (x: number, y: number) => {
     const pid = cov.get(cellKey(x, y));
     if (pid === undefined || pid === id) return undefined;
     const p = state.dominoes[pid];
-    return p.x === x && p.y === y && p.o === o ? pid : undefined;
+    return p.x === x && p.y === y && orientation(p) === o ? pid : undefined;
   };
-  const flipTo = (pid: string, mine: Domino, theirs: Domino): State =>
-    produce(state, (draft) => {
-      draft.dominoes[id] = mine;
-      draft.dominoes[pid] = theirs;
-    });
 
+  // Candidate blocks, given by lower-left corner and partner id.
   const { x, y } = dom;
+  const blocks: [number, number, string | undefined][] =
+    o === "h"
+      ? [
+          [x, y, partnerAt(x, y + 1)],
+          [x, y - 1, partnerAt(x, y - 1)],
+        ]
+      : [
+          [x, y, partnerAt(x + 1, y)],
+          [x - 1, y, partnerAt(x - 1, y)],
+        ];
+
+  // Where a domino sits in its block, as an offset from the block's
+  // center in math coordinates.
+  const offsetInBlock = (d: Domino, bx: number, by: number): Vec2 =>
+    orientation(d) === "h"
+      ? Vec2(0, d.y === by ? -0.5 : 0.5)
+      : Vec2(d.x === bx ? -0.5 : 0.5, 0);
+  const placeAtOffset = (off: Vec2, bx: number, by: number, angle: number) =>
+    off.x === 0
+      ? { x: bx, y: off.y < 0 ? by : by + 1, angle }
+      : { x: off.x < 0 ? bx : bx + 1, y: by, angle };
+
   const result: State[] = [];
-  if (dom.o === "h") {
-    // partner above: I'm the bottom one → I become the right one
-    const above = partnerAt(x, y + 1, "h");
-    if (above)
-      result.push(flipTo(above, { x: x + 1, y, o: "v" }, { x, y, o: "v" }));
-    // partner below: I'm the top one → I become the left one
-    const below = partnerAt(x, y - 1, "h");
-    if (below)
+  for (const [bx, by, pid] of blocks) {
+    if (!pid) continue;
+    const partner = state.dominoes[pid];
+    // A math-counterclockwise quarter turn is clockwise on screen (y
+    // is flipped), i.e. SVG rotate(+90).
+    for (const dAngle of [90, -90]) {
+      const rot = (v: Vec2) => (dAngle > 0 ? Vec2(-v.y, v.x) : Vec2(v.y, -v.x));
       result.push(
-        flipTo(below, { x, y: y - 1, o: "v" }, { x: x + 1, y: y - 1, o: "v" }),
+        produce(state, (draft) => {
+          draft.dominoes[id] = placeAtOffset(
+            rot(offsetInBlock(dom, bx, by)),
+            bx,
+            by,
+            dom.angle + dAngle,
+          );
+          draft.dominoes[pid] = placeAtOffset(
+            rot(offsetInBlock(partner, bx, by)),
+            bx,
+            by,
+            partner.angle + dAngle,
+          );
+        }),
       );
-  } else {
-    // partner to the right: I'm the left one → I become the top one
-    const right = partnerAt(x + 1, y, "v");
-    if (right)
-      result.push(flipTo(right, { x, y: y + 1, o: "h" }, { x, y, o: "h" }));
-    // partner to the left: I'm the right one → I become the bottom one
-    const left = partnerAt(x - 1, y, "v");
-    if (left)
-      result.push(
-        flipTo(left, { x: x - 1, y, o: "h" }, { x: x - 1, y: y + 1, o: "h" }),
-      );
+    }
   }
   return result;
 }
@@ -256,8 +288,11 @@ function screen(x: number, y: number): Vec2 {
   return Vec2(x * CELL, -y * CELL);
 }
 
-function dominoCenter({ x, y, o }: Domino): Vec2 {
-  return o === "h" ? screen(x + 1, y + 0.5) : screen(x + 0.5, y + 1);
+function dominoCenter(dom: Domino): Vec2 {
+  const { x, y } = dom;
+  return orientation(dom) === "h"
+    ? screen(x + 1, y + 0.5)
+    : screen(x + 0.5, y + 1);
 }
 
 function makeDraggable(config: Config): Draggable<State> {
@@ -299,16 +334,13 @@ function makeDraggable(config: Config): Draggable<State> {
           const elementId = `domino-${id}`;
           const flips = flipsInvolving(state, id);
           const flippable = flips.length > 0;
-          const colorKey = `${dom.o}-${
+          const colorKey = `${orientation(dom)}-${
             (dom.x + dom.y) % 2 === 0 ? "black" : "white"
           }` as keyof typeof DOMINO_COLORS;
           return (
             <g
               id={elementId}
-              transform={
-                translate(dominoCenter(dom)) +
-                rotateDeg(dom.o === "h" ? 0 : -90)
-              }
+              transform={translate(dominoCenter(dom)) + rotateDeg(dom.angle)}
               dragologyZIndex={draggedId === elementId ? "/1" : false}
               style={{ cursor: flippable ? "grab" : undefined }}
               dragologyOnDrag={
@@ -391,9 +423,11 @@ export default demo(
               Aztec diamond
             </DemoLink>
             . Two parallel dominoes side by side form a 2×2 block; drag one of
-            them to rotate the block. Keep dragging to chain flips. The numbers
-            are Thurston's height function – each flip changes it at exactly one
-            vertex.
+            them to rotate the block, either way round. Keep dragging to chain
+            flips. The numbers are Thurston's height function – each flip
+            changes it at exactly one vertex. See also{" "}
+            <DemoLink href="#/demos/plane-partition">plane-partition</DemoLink>,
+            the lozenge cousin of this demo.
           </DemoNotes>
           <DemoDraggable
             key={`${config.n}-${config.seed}`}

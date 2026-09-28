@@ -424,7 +424,9 @@ export default demo(
             is a stack of cubes in the corner of a box – and, seen flat, it is a
             lozenge tiling of a hexagon. Drag a corner cube to move it or to
             toss it in the spare pile; drag a spare cube into any inner corner.
-            Each move is one "flip" of the tiling.
+            Each move is one "flip" of the tiling. See also{" "}
+            <DemoLink href="#/demos/aztec-diamond">aztec-diamond</DemoLink>, the
+            domino cousin of this demo.
           </DemoNotes>
           <DemoDraggable
             key={`${config.a}-${config.b}-${config.c}-${config.seed}`}
