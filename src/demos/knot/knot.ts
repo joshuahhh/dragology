@@ -543,6 +543,128 @@ function deriveCode(
   return entries.map(({ id, over }) => ({ id, over }));
 }
 
+/**
+ * For moves that remove some crossings from the window (an R1 loop, an
+ * R2 bigon): any *other* crossing that touched the window must survive,
+ * sliding a little along the outside strand without passing anything.
+ * Returns assignments for the new crossings, or null.
+ */
+function matchSliding(
+  nw: NewInvolved[],
+  old: OldInvolved[],
+  ctx: { samples: Pt[]; old: Analysis },
+  removedIds: string[],
+  why?: (s: string) => void,
+): Assignment[] | null {
+  const survivors = old.filter((o) => !removedIds.includes(o.id));
+  const removed = old.filter((o) => removedIds.includes(o.id));
+  if (removed.length !== removedIds.length) {
+    why?.(
+      "expected to remove " +
+        removedIds.join() +
+        " but window has " +
+        old.map((o) => o.id).join(),
+    );
+    return null;
+  }
+  if (nw.length !== survivors.length) {
+    why?.(`${nw.length} new crossings vs ${survivors.length} survivors`);
+    return null;
+  }
+  const Ms = ctx.samples.length;
+  const total = ctx.old.cum[ctx.old.cum.length - 1];
+  const used = new Set<number>();
+  const out: (Assignment | null)[] = nw.map(() => null);
+  const newOrder: { uIn: number; id: string }[] = [];
+  for (let k = 0; k < nw.length; k++) {
+    const x = nw[k];
+    if (x.changed1 && x.changed2) {
+      // a self-crossing of the window strand: match by position
+      let best = -1;
+      let bestD = 30;
+      survivors.forEach((o, j) => {
+        if (used.has(j) || !(o.changed1 && o.changed2)) return;
+        const d = dist(o.cr.p, x.cr.p);
+        if (d < bestD) {
+          bestD = d;
+          best = j;
+        }
+      });
+      if (best < 0) {
+        why?.("new self-crossing in window");
+        return null;
+      }
+      used.add(best);
+      const o = survivors[best];
+      out[k] = { id: o.id, over1: o.overFirst, over2: !o.overFirst };
+      newOrder.push({ uIn: x.cr.u1, id: o.id });
+      continue;
+    }
+    const uOut = x.changed1 ? x.cr.u2 : x.cr.u1;
+    const uIn = x.changed1 ? x.cr.u1 : x.cr.u2;
+    const Lnew = paramToArc(cumLen(ctx.samples), uOut);
+    let best = -1;
+    let bestD = 45; // px along the outside strand
+    survivors.forEach((o, j) => {
+      if (used.has(j)) return;
+      if (o.changed1 === o.changed2) return;
+      const uOldOut = o.changed1 ? o.cr.u2 : o.cr.u1;
+      const Lold = paramToArc(ctx.old.cum, uOldOut);
+      const dd = Math.abs(Lnew - Lold);
+      const d = Math.min(dd, total - dd);
+      if (d < bestD) {
+        bestD = d;
+        best = j;
+      }
+    });
+    if (best < 0) {
+      why?.(
+        "crossing at outside u " + uOut.toFixed(1) + " has no nearby survivor",
+      );
+      return null;
+    }
+    used.add(best);
+    const o = survivors[best];
+    const uOldOut = o.changed1 ? o.cr.u2 : o.cr.u1;
+    // nothing else may sit between the old and new outside positions
+    const lo = Math.min(uOut, uOldOut);
+    const hi = Math.max(uOut, uOldOut);
+    if (
+      hi - lo < Ms / 2 &&
+      ctx.old.visits.some(
+        (v) =>
+          v.u > lo &&
+          v.u < hi &&
+          ctx.old.visitInfo[ctx.old.visits.indexOf(v)].id !== o.id,
+      )
+    ) {
+      why?.("crossing " + o.id + " would slide past another visit");
+      return null;
+    }
+    const wOver = o.changed1 ? o.overFirst : !o.overFirst;
+    out[k] = {
+      id: o.id,
+      over1: x.changed1 ? wOver : !wOver,
+      over2: x.changed2 ? wOver : !wOver,
+    };
+    newOrder.push({ uIn, id: o.id });
+  }
+  // order along the window strand must be preserved
+  newOrder.sort((a, b) => a.uIn - b.uIn);
+  const oldOrder = survivors
+    .map((o) => ({ uIn: o.changed1 ? o.cr.u1 : o.cr.u2, id: o.id }))
+    .sort((a, b) => a.uIn - b.uIn);
+  if (oldOrder.length !== newOrder.length) {
+    why?.("survivor count mismatch");
+    return null;
+  }
+  if (newOrder.map((x) => x.id).join() !== oldOrder.map((x) => x.id).join()) {
+    why?.("survivors changed order along the strand");
+    return null;
+  }
+  return out as Assignment[];
+}
+
 // # Windows and relaying
 
 type Window = { a: number; b: number }; // interior a+1..b-1 (cyclic) moves
@@ -920,7 +1042,11 @@ function otherVisit(an: Analysis, k: number): number {
   return info.overK === k ? info.underK : info.overK;
 }
 
-function r1Untwist(an: Analysis, i: number): Move | null {
+export function r1Untwist(
+  an: Analysis,
+  i: number,
+  why?: (s: string) => void,
+): Move | null {
   const knot = an.knot;
   const N = knot.pts.length;
   const nb = neighborVisits(an, i);
@@ -928,25 +1054,64 @@ function r1Untwist(an: Analysis, i: number): Move | null {
   const { kp, kn } = nb;
   if (kp === kn || knot.code[kp].id !== knot.code[kn].id) return null;
   const id = knot.code[kp].id;
-  const w = windowByParams(N, an.cum, an.visits[kp].u, an.visits[kn].u, i);
-  if (!windowOk(w, N, i)) return null;
-  const A = knot.pts[w.a];
-  const B = knot.pts[w.b];
-  const mid = lerpPt(A, B, 0.5);
-  const prep = prepareWindow(an, w, i, 0);
-  if (!prep) return null;
-  return finishMove(
-    "R1-",
-    prep,
-    [A, mid],
-    [mid, B],
-    (nw, old) => {
-      if (nw.length !== 0) return null;
-      if (old.length !== 1 || old[0].id !== id) return null;
-      return [];
-    },
-    0,
-  );
+  // Try increasingly wide margins: right at the neck the strands may
+  // bend sharply, and a replacement arc that starts further out has an
+  // easier time staying clear of them.
+  for (const margin of [MARGIN, 35, 50, 70]) {
+    const w = windowByParams(
+      N,
+      an.cum,
+      an.visits[kp].u,
+      an.visits[kn].u,
+      i,
+      margin,
+    );
+    if (!windowOk(w, N, i)) {
+      why?.("window bad " + JSON.stringify({ w, N, i }));
+      continue;
+    }
+    const A = knot.pts[w.a];
+    const B = knot.pts[w.b];
+    // Hermite arc from A to B following the strands' directions
+    const tA = frame(knot.pts[cyc(w.a - 1, N)], A).T;
+    const tB = frame(B, knot.pts[cyc(w.b + 1, N)]).T;
+    for (const scale of [0.6, 0.15]) {
+      const L = dist(A, B) * scale;
+      const hermite = (t: number): Pt => {
+        const h00 = 2 * t ** 3 - 3 * t ** 2 + 1;
+        const h10 = t ** 3 - 2 * t ** 2 + t;
+        const h01 = -2 * t ** 3 + 3 * t ** 2;
+        const h11 = t ** 3 - t ** 2;
+        return {
+          x: h00 * A.x + h10 * L * tA.x + h01 * B.x + h11 * L * tB.x,
+          y: h00 * A.y + h10 * L * tA.y + h01 * B.y + h11 * L * tB.y,
+        };
+      };
+      const curveA: Pt[] = [];
+      const curveB: Pt[] = [];
+      for (let k = 0; k <= 10; k++) curveA.push(hermite(k / 20));
+      for (let k = 10; k <= 20; k++) curveB.push(hermite(k / 20));
+      const prep = prepareWindow(an, w, i, 0);
+      if (!prep) {
+        why?.("prepare null");
+        continue;
+      }
+      const move = finishMove(
+        "R1-",
+        prep,
+        curveA,
+        curveB,
+        (nw, old, ctx) =>
+          matchSliding(nw, old, ctx, [id], (r) =>
+            why?.("margin " + margin + " scale " + scale + ": " + r),
+          ),
+        0,
+        why,
+      );
+      if (move) return move;
+    }
+  }
+  return null;
 }
 
 export function r2Pull(
@@ -1043,18 +1208,7 @@ export function r2Pull(
     prep,
     curveA,
     curveB,
-    (nw, old) => {
-      if (nw.length !== 0) {
-        why?.("new crossings " + nw.length);
-        return null;
-      }
-      const ids = old.map((o) => o.id).sort();
-      if (ids.length !== 2 || ids.join() !== [e1.id, e2.id].sort().join()) {
-        why?.("old involved " + ids.join() + " vs " + [e1.id, e2.id].join());
-        return null;
-      }
-      return [];
-    },
+    (nw, old, ctx) => matchSliding(nw, old, ctx, [e1.id, e2.id], why),
     0,
     why,
   );
