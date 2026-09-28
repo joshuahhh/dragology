@@ -940,13 +940,15 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
             // later mutations
             const j = jMut;
             const r = rMut;
+            // index of this column in the logical word; handle ids use it
+            // so they line up across states with and without closed columns
+            const jl = cols.slice(0, j).filter((c) => c !== "closed").length;
+            const id = `strand-${v}-${jl}`;
             if (j < rawLen && cols[j] === "closed") {
               jMut += 1; // zero width, nothing to grab
               continue;
             }
             const letter: Letter = j < rawLen ? (cols[j] as Letter) : null;
-            // index of this column in the logical word
-            const jl = cols.slice(0, j).filter((c) => c !== "closed").length;
             const next =
               letter === null
                 ? r
@@ -955,8 +957,17 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
                   : r === letter + 1
                     ? letter
                     : r;
-            const id = `strand-${v}-${j}`;
-            if (letter !== null && next !== r && word[jl + 1] === letter) {
+            // Pair up runs of identical letters from the right, so that a
+            // pair inserted next to an existing identical crossing is the
+            // pair (the apex id must match the one the drag started from).
+            let runLen = 0;
+            while (word[jl + runLen] === letter) runLen++;
+            if (
+              letter !== null &&
+              next !== r &&
+              word[jl + 1] === letter &&
+              runLen % 2 === 0
+            ) {
               // apex of a double crossing at columns j, j+1
               const gapped: State = {
                 ...state,
@@ -1000,26 +1011,42 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               continue;
             }
             if (next === r) {
-              // straight segment
+              // straight segment. The drag starts from a state with two
+              // zero-width columns here (drawn identically to the current
+              // state), so the double crossing widens from nothing and
+              // everything to the right slides over, instead of columns
+              // morphing in place.
+              const withClosed: State = {
+                ...state,
+                word: [
+                  ...word.slice(0, jl),
+                  "closed",
+                  "closed",
+                  ...word.slice(jl),
+                ],
+              };
               const insert = (i: number): State => ({
                 ...state,
                 word: [...word.slice(0, jl), i, i, ...word.slice(jl)],
               });
+              // The handle sits at the column's right edge, which is where
+              // the apex of the new double crossing ends up, so the drag
+              // is purely vertical; the hit rect covers the column.
               handles.push(
                 <g
                   id={id}
-                  transform={translate(colX(j) + CW / 2, rowY(r))}
+                  transform={translate(colX(j + 1), rowY(r))}
                   dragologyZIndex={1}
                   dragologyOnDrag={() =>
                     d.closest([
-                      r > 0 && d.between([state, insert(r - 1)]),
-                      r < n - 1 && d.between([state, insert(r)]),
+                      r > 0 && d.between([withClosed, insert(r - 1)]),
+                      r < n - 1 && d.between([withClosed, insert(r)]),
                     ])
                   }
                   style={{ cursor: "ns-resize" }}
                 >
                   <rect
-                    transform={translate(-CW * 0.4, -RS * 0.3)}
+                    transform={translate(-CW * 0.9, -RS * 0.3)}
                     width={CW * 0.8}
                     height={RS * 0.6}
                     rx={4}
