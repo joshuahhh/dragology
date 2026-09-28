@@ -4,7 +4,7 @@ import { amb, produceAmb } from "../amb";
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { inOrder, lessThan, moreThan, param } from "../DragSpec";
+import { inOrder, param } from "../DragSpec";
 import { PathIn, getAtPath } from "../paths";
 import { translate } from "../svgx/helpers";
 
@@ -12,9 +12,7 @@ import { translate } from "../svgx/helpers";
 //
 // A tree of nodes. Leaves have fixed sizes. Boxes lay their children
 // out as a flex row, a flex column, or a grid with a fixed column
-// count, with configurable gap and padding. A box hugs its content,
-// unless it has been given an explicit minimum width/height by
-// dragging its edges.
+// count, with configurable gap and padding. A box hugs its content.
 //
 // The layout engine is just part of the render function, so any
 // change to any node (moving, resizing, changing gap...) reflows the
@@ -28,8 +26,6 @@ type Box = {
   cols: number; // only used for "grid"
   gap: number;
   padding: number;
-  w: number; // explicit min outer width (0 = hug)
-  h: number; // explicit min outer height (0 = hug)
   children: Node[];
 };
 type Node = Leaf | Box;
@@ -62,8 +58,6 @@ const initialState: State = {
     cols: 2,
     gap: 12,
     padding: 12,
-    w: 0,
-    h: 0,
     children: [
       {
         type: "box",
@@ -72,8 +66,6 @@ const initialState: State = {
         cols: 2,
         gap: 8,
         padding: 8,
-        w: 0,
-        h: 0,
         children: [
           { type: "leaf", id: "logo", w: 36, h: 36, color: leafColors.red },
           { type: "leaf", id: "nav-a", w: 60, h: 24, color: leafColors.orange },
@@ -88,8 +80,6 @@ const initialState: State = {
         cols: 2,
         gap: 12,
         padding: 8,
-        w: 0,
-        h: 0,
         children: [
           {
             type: "box",
@@ -98,8 +88,6 @@ const initialState: State = {
             cols: 1,
             gap: 6,
             padding: 6,
-            w: 0,
-            h: 0,
             children: [
               {
                 type: "leaf",
@@ -131,8 +119,6 @@ const initialState: State = {
             cols: 2,
             gap: 8,
             padding: 8,
-            w: 0,
-            h: 0,
             children: [
               {
                 type: "leaf",
@@ -225,8 +211,8 @@ function layout(node: Node): Layout {
   const contentW = n === 0 ? 0 : colXs[cols] - gap;
   const contentH = n === 0 ? 0 : rowYs[rows] - gap;
 
-  const w = Math.max(contentW + 2 * padding, node.w, MIN_EMPTY_BOX);
-  const h = Math.max(contentH + 2 * padding, node.h, MIN_EMPTY_BOX);
+  const w = Math.max(contentW + 2 * padding, MIN_EMPTY_BOX);
+  const h = Math.max(contentH + 2 * padding, MIN_EMPTY_BOX);
 
   const slots = kids.map((k, i) => ({
     x: padding + colXs[i % cols],
@@ -235,11 +221,6 @@ function layout(node: Node): Layout {
   }));
 
   return { w, h, slots, colWidths, rowHeights };
-}
-
-/** Natural (hugging) size of a box, ignoring its explicit w/h. */
-function naturalSize(box: Box): { w: number; h: number } {
-  return layout({ ...box, w: 0, h: 0 });
 }
 
 function getNode(state: State, path: Path): Node {
@@ -259,24 +240,8 @@ function getBox(state: State, path: Path): Box {
 
 // # Rendering
 
-/**
- * Split an edge of length `len` into hit segments, leaving a hole
- * around the axis handle at `avoid` (if any).
- */
-function edgeSegments(len: number, avoid: number | null): [number, number][] {
-  const HOLE = 12;
-  if (avoid === null) return [[0, len]];
-  return (
-    [
-      [0, avoid - HOLE],
-      [avoid + HOLE, len],
-    ] as [number, number][]
-  ).filter(([a, b]) => b - a > 0);
-}
-
 const draggable: Draggable<State> = ({ state, d, draggedId }) => {
   const HANDLE = 10;
-  const EDGE_HIT = 10;
 
   function renderNode(node: Node, path: Path, lay: Layout): React.JSX.Element {
     const isRoot = path.length === 1;
@@ -593,75 +558,6 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
             />
           )}
         </g>
-
-        {/* Right edge: vary explicit width. Split into segments so the
-            hit area skips the axis handle. */}
-        <g
-          id={`${box.id}-edge-r`}
-          dragologyZIndex={2}
-          transform={translate(w - EDGE_HIT / 2, 0)}
-          style={{ cursor: "ew-resize" }}
-          dragologyOnDrag={() =>
-            d.vary(
-              // Start from the rendered width, so the constraint is
-              // already satisfied.
-              produce<State>(state, (draft) => {
-                getBox(draft, boxPath).w = w;
-              }),
-              numParam(boxPath, "w"),
-              {
-                constraint: (s) => {
-                  const b = getBox(s, boxPath);
-                  return [moreThan(b.w, naturalSize(b).w), lessThan(b.w, 600)];
-                },
-              },
-            )
-          }
-        >
-          {edgeSegments(h, isRow ? h / 2 : isGrid ? h : null).map(
-            ([from, to]) => (
-              <rect
-                transform={translate(0, from)}
-                width={EDGE_HIT}
-                height={to - from}
-                fill="transparent"
-              />
-            ),
-          )}
-        </g>
-
-        {/* Bottom edge: vary explicit height */}
-        <g
-          id={`${box.id}-edge-b`}
-          dragologyZIndex={2}
-          transform={translate(0, h - EDGE_HIT / 2)}
-          style={{ cursor: "ns-resize" }}
-          dragologyOnDrag={() =>
-            d.vary(
-              produce<State>(state, (draft) => {
-                getBox(draft, boxPath).h = h;
-              }),
-              numParam(boxPath, "h"),
-              {
-                constraint: (s) => {
-                  const b = getBox(s, boxPath);
-                  return [moreThan(b.h, naturalSize(b).h), lessThan(b.h, 500)];
-                },
-              },
-            )
-          }
-        >
-          {edgeSegments(w, isColumn ? w / 2 : isGrid ? w : null).map(
-            ([from, to]) => (
-              <rect
-                transform={translate(from, 0)}
-                width={to - from}
-                height={EDGE_HIT}
-                fill="transparent"
-              />
-            ),
-          )}
-        </g>
       </g>
     );
   }
@@ -684,8 +580,7 @@ export default demo(
         its edge switches direction (right edge = row, bottom = column, corner =
         grid); the small tick in the first gap adjusts the gap; the corner
         bracket adjusts padding; grids have a dot after the first row to change
-        the column count. Drag a box's right or bottom edge to give it an
-        explicit size larger than its content.
+        the column count.
       </DemoNotes>
       <DemoDraggable
         draggable={draggable}
