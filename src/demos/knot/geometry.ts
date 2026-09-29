@@ -1,4 +1,4 @@
-// Geometry helpers for the knot demo: points, cubic Béziers, segment
+// Geometry helpers for the knot demo (on top of Vec2): cubic Béziers, segment
 // intersection, and least-squares cubic fitting.
 
 import { Vec2 } from "../../math/vec2";
