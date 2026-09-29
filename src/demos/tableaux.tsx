@@ -3,12 +3,7 @@ import _ from "lodash";
 import { ReactNode, useState } from "react";
 import { amb, produceAmb } from "../amb";
 import { demo } from "../demo";
-import {
-  ConfigCheckbox,
-  ConfigPanel,
-  DemoDraggable,
-  DemoWithConfig,
-} from "../demo/ui";
+import { DemoDraggable } from "../demo/ui";
 import { Draggable, OnDragCallback } from "../draggable";
 import { translate } from "../svgx/helpers";
 
@@ -16,8 +11,8 @@ import { translate } from "../svgx/helpers";
 // through the exposition:
 //   1. Shapes – a Young diagram you edit by dragging corner boxes.
 //   2. Fillings – swap entries of a tableau and see which rules break.
-//   3. Row insertion – drag a letter in; the bumping cascade is
-//      interpolation between "before" and "after".
+//   3. Row insertion – a step-by-step stepper (plain React, not a
+//      draggable: the point is to watch the rule one bump at a time).
 //   4. RSK – a permutation as a reorderable strip drives P and Q.
 //   5. Jeu de taquin – slide a hole through a skew tableau; the legal
 //      slides are exactly the ones that keep rows and columns ordered,
@@ -348,6 +343,7 @@ const FILL_GALLERY_PITCH = 3 * MINI + 12;
 const fillDraggable: Draggable<FillState> = ({ state, d, draggedId }) => {
   const violations = fillViolations(state);
   const currentKey = violations.length === 0 ? fillKey(state) : null;
+  const complete = state.found.length === FILL_COUNT;
   return (
     <g transform={translate(10, 10)}>
       {Object.entries(state.cells).map(([id, cl]) =>
@@ -420,8 +416,18 @@ const fillDraggable: Draggable<FillState> = ({ state, d, draggedId }) => {
                     <rect
                       width={MINI}
                       height={MINI}
-                      fill={key ? (isCurrent ? "#bfdbfe" : "#dbeafe") : "white"}
-                      stroke={key ? "#333" : "#d1d5db"}
+                      fill={
+                        key
+                          ? complete
+                            ? isCurrent
+                              ? "#fde68a"
+                              : "#fef3c7"
+                            : isCurrent
+                              ? "#bfdbfe"
+                              : "#dbeafe"
+                          : "white"
+                      }
+                      stroke={key ? (complete ? "#b45309" : "#333") : "#d1d5db"}
                       strokeWidth={0.8}
                       strokeDasharray={key ? undefined : "2 2"}
                     />
@@ -445,19 +451,40 @@ const fillDraggable: Draggable<FillState> = ({ state, d, draggedId }) => {
             </g>
           );
         })}
+        {complete &&
+          caption(
+            "fill-celebrate",
+            0,
+            Math.ceil(FILL_COUNT / FILL_GALLERY_COLS) * FILL_GALLERY_PITCH + 6,
+            `🎉 All ${FILL_COUNT} standard Young tableaux of shape (3, 2, 1)!`,
+            "#b45309",
+          )}
+        {!complete &&
+          caption(
+            "fill-progress",
+            0,
+            Math.ceil(FILL_COUNT / FILL_GALLERY_COLS) * FILL_GALLERY_PITCH + 6,
+            `${state.found.length} of ${FILL_COUNT} found`,
+          )}
       </g>
     </g>
   );
 };
 
-// # Interactive 3: Row insertion
+// # Interactive 3: Row insertion, step by step
+//
+// This one is deliberately *not* a Dragology draggable: the point is to
+// see the bumping rule happen one step at a time, so it's a small React
+// component with a "step" button and CSS transitions.
 
-type InsState = {
+type StepState = {
   rows: Rows;
-  strip: Entry[];
+  queue: Entry[];
+  held: { entry: Entry; row: number } | null; // the number waiting to go into `row`
+  message: string;
 };
 
-const insInitial: InsState = {
+const stepInitial: StepState = {
   rows: [
     [
       { id: "t1", value: 1 },
@@ -471,46 +498,190 @@ const insInitial: InsState = {
     ],
     [{ id: "t7", value: 6 }],
   ],
-  strip: [
-    { id: "w1", value: 2 },
-    { id: "w2", value: 1 },
-    { id: "w3", value: 4 },
-    { id: "w4", value: 3 },
-    { id: "w5", value: 6 },
+  queue: [
+    { id: "w1", value: 1 },
+    { id: "w2", value: 4 },
+    { id: "w3", value: 2 },
+    { id: "w4", value: 6 },
+    { id: "w5", value: 3 },
   ],
+  held: null,
+  message: "Press “insert next number” to begin.",
 };
 
-const INS_STRIP_Y = 5 * S + 30;
+/** Where the held number would go in its row: the leftmost bigger
+ * entry, or the end of the row. */
+function stepTarget(
+  state: StepState,
+): { c: number; bumps: Entry | null } | null {
+  if (!state.held) return null;
+  const row = state.rows[state.held.row] ?? [];
+  const c = row.findIndex((e) => e.value > state.held!.entry.value);
+  return c === -1 ? { c: row.length, bumps: null } : { c, bumps: row[c] };
+}
 
-function insDraggableFactory(config: {
-  floating: boolean;
-}): Draggable<InsState> {
-  return ({ state, d, draggedId }) => (
-    <g transform={translate(10, 10)}>
-      {caption("ins-label-t", 0, -2, "tableau")}
-      {state.rows.map((row, r) =>
-        row.map((e, c) => cell(e.id, r, c, e.value, { fill: "#dbeafe" })),
-      )}
+function stepStart(state: StepState): StepState {
+  const [next, ...rest] = state.queue;
+  return {
+    ...state,
+    queue: rest,
+    held: { entry: next, row: 0 },
+    message: `Insert ${next.value}. Start at row 1.`,
+  };
+}
 
-      {caption("ins-label-w", 0, INS_STRIP_Y - 8, "word – drag a letter in")}
-      {state.strip.map((e, i) => {
-        const inserted: InsState = {
-          rows: rowInsert(state.rows, e).rows,
-          strip: state.strip.filter((s) => s.id !== e.id),
-        };
-        return cellG({
-          id: e.id,
-          transform: translate(i * (S + 6), INS_STRIP_Y),
-          label: e.value,
-          fill: "#fef3c7",
-          dragologyZIndex: draggedId === e.id ? "/1" : false,
-          dragologyOnDrag: () => {
-            const spec = d.between([state, inserted]);
-            return config.floating ? spec.withFloating() : spec;
-          },
-        });
-      })}
-    </g>
+function stepOnce(state: StepState): StepState {
+  const held = state.held!;
+  const target = stepTarget(state)!;
+  const r = held.row;
+  const rows = state.rows.map((row) => [...row]);
+  if (target.bumps === null) {
+    if (r === rows.length) rows.push([]);
+    rows[r].push(held.entry);
+    return {
+      ...state,
+      rows,
+      held: null,
+      message:
+        rows[r].length === 1
+          ? `Row ${r + 1} didn’t exist, so ${held.entry.value} starts a new row. Done.`
+          : `Nothing in row ${r + 1} is bigger than ${held.entry.value}, so it goes at the end. Done.`,
+    };
+  }
+  rows[r][target.c] = held.entry;
+  return {
+    ...state,
+    rows,
+    held: { entry: target.bumps, row: r + 1 },
+    message: `${target.bumps.value} is the leftmost entry of row ${r + 1} bigger than ${held.entry.value}: ${held.entry.value} takes its place and bumps ${target.bumps.value} down to row ${r + 2}.`,
+  };
+}
+
+const STEP_HELD_X = -S - 16; // the held number sits just left of its row
+
+function RowInsertionStepper() {
+  const [state, setState] = useState<StepState>(stepInitial);
+  const target = stepTarget(state);
+  const numRows = Math.max(state.rows.length, (state.held?.row ?? -1) + 1);
+  const tableauH = numRows * S;
+  const queueY = tableauH + 44;
+
+  const box = (
+    e: Entry,
+    x: number,
+    y: number,
+    extra: { bg?: string; ring?: string; dim?: boolean } = {},
+  ) => (
+    <div
+      key={e.id}
+      className="absolute flex items-center justify-center text-[17px] border-2 rounded-sm"
+      style={{
+        width: S,
+        height: S,
+        transform: `translate(${x}px, ${y}px)`,
+        transition: "transform 450ms cubic-bezier(.2,.8,.2,1), opacity 300ms",
+        background: extra.bg ?? "#dbeafe",
+        borderColor: extra.ring ?? "#333",
+        opacity: extra.dim ? 0.45 : 1,
+        boxShadow: extra.ring ? `0 0 0 3px ${extra.ring}55` : undefined,
+      }}
+    >
+      {e.value}
+    </div>
+  );
+
+  const items: ReactNode[] = [];
+  state.rows.forEach((row, r) =>
+    row.forEach((e, c) => {
+      const isTarget = state.held !== null && target?.bumps?.id === e.id;
+      items.push(box(e, c * S, r * S, isTarget ? { ring: "#dc2626" } : {}));
+    }),
+  );
+  if (state.held) {
+    items.push(
+      box(state.held.entry, STEP_HELD_X, state.held.row * S, {
+        bg: "#fef3c7",
+        ring: "#b45309",
+      }),
+    );
+  }
+  state.queue.forEach((e, i) => {
+    items.push(box(e, i * (S + 6), queueY, { bg: "#fef3c7", dim: i > 0 }));
+  });
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2 items-center flex-wrap">
+        <button
+          className="px-3 py-1 text-sm rounded bg-amber-200 hover:bg-amber-300 disabled:opacity-40"
+          disabled={state.held !== null || state.queue.length === 0}
+          onClick={() => setState(stepStart(state))}
+        >
+          insert next number
+        </button>
+        <button
+          className="px-3 py-1 text-sm rounded bg-blue-200 hover:bg-blue-300 disabled:opacity-40"
+          disabled={state.held === null}
+          onClick={() => setState(stepOnce(state))}
+        >
+          do this step
+        </button>
+        <button
+          className="px-2 py-1 text-xs rounded bg-slate-200 hover:bg-slate-300"
+          onClick={() => setState(stepInitial)}
+        >
+          reset
+        </button>
+      </div>
+      <div
+        className="relative mt-5"
+        style={{
+          width: 6 * S + 40,
+          height: queueY + S + 4,
+          marginLeft: -STEP_HELD_X,
+        }}
+      >
+        <div
+          className="absolute text-xs text-gray-500"
+          style={{ transform: `translate(0px, ${-16}px)` }}
+        >
+          tableau
+        </div>
+        {/* the "slot" a held number is heading for, when it's the end of a row */}
+        {state.held && target && target.bumps === null && (
+          <div
+            className="absolute border-2 border-dashed rounded-sm"
+            style={{
+              width: S,
+              height: S,
+              borderColor: "#dc2626",
+              transform: `translate(${target.c * S}px, ${state.held.row * S}px)`,
+            }}
+          />
+        )}
+        {state.held && (
+          <div
+            className="absolute text-xs text-amber-800"
+            style={{
+              transform: `translate(${STEP_HELD_X}px, ${state.held.row * S - 14}px)`,
+              transition: "transform 450ms cubic-bezier(.2,.8,.2,1)",
+            }}
+          >
+            row {state.held.row + 1}
+          </div>
+        )}
+        {items}
+        <div
+          className="absolute text-xs text-gray-500"
+          style={{ transform: `translate(0px, ${queueY - 16}px)` }}
+        >
+          still to insert
+        </div>
+      </div>
+      <div className="text-[13px] text-gray-800 max-w-[65ch] min-h-[2.5em]">
+        {state.message}
+      </div>
+    </div>
   );
 }
 
@@ -518,7 +689,7 @@ function insDraggableFactory(config: {
 
 type RskState = {
   perm: number[];
-  k: number; // how many letters have been inserted so far
+  k: number; // how many numbers have been inserted so far
 };
 
 const rskInitial: RskState = {
@@ -560,7 +731,7 @@ const rskDraggable: Draggable<RskState> = ({ state, d, draggedId }) => {
         }),
       )}
 
-      {/* the cursor: letters left of it have been inserted */}
+      {/* the cursor: numbers left of it have been inserted */}
       <g
         id="cursor"
         transform={translate(state.k * RSK_TILE - 3, 0)}
@@ -864,10 +1035,8 @@ export default demo(
   () => {
     const [shapeKey, setShapeKey] = useState(0);
     const [fillKey, setFillKey] = useState(0);
-    const [insKey, setInsKey] = useState(0);
     const [rskKey, setRskKey] = useState(0);
     const [jdtKey, setJdtKey] = useState(0);
-    const [floating, setFloating] = useState(false);
 
     return (
       <div className="flex flex-col">
@@ -936,8 +1105,8 @@ export default demo(
                 up as red edges.
               </Try>{" "}
               Notice that 1 has to be in the top-left corner and <i>n</i> has to
-              be at a removable corner. How many valid fillings of this shape
-              can you find? (There are 16.)
+              be at a removable corner. Each valid filling you land on fills in
+              one of the blank templates on the right. Can you find all 16?
             </>
           }
         >
@@ -947,7 +1116,10 @@ export default demo(
             draggable={fillDraggable}
             initialState={fillInitial}
             width={FILL_GALLERY_X + FILL_GALLERY_COLS * FILL_GALLERY_PITCH + 10}
-            height={S * 3 + 36}
+            height={
+              Math.ceil(FILL_COUNT / FILL_GALLERY_COLS) * FILL_GALLERY_PITCH +
+              30
+            }
           />
         </Figure>
         <P>
@@ -978,41 +1150,24 @@ export default demo(
           Each bump moves an entry one row down, and the cascade ends when
           something lands at the end of a row (possibly a brand-new row). The
           tableau grows by exactly one box, at a corner, and stays a valid
-          tableau. In the interactive, the "before" and "after" tableaux are the
-          only two things computed; the cascade you see mid-drag is just the
-          picture morphing between them.
+          tableau.
         </P>
         <Figure
           caption={
             <>
               <Try>
-                drag the <b>1</b> in slowly. It bumps a 2, which bumps the 3,
-                which bumps the 6 into a new row: four boxes move for one
-                insertion.
+                press “insert next number”, then “do this step” repeatedly. The
+                number being inserted waits beside the row it is about to enter;
+                the entry it will bump is outlined in red.
               </Try>{" "}
-              Then try the 6: it just lands at the end of the top row. In
-              general, small numbers cause long cascades and big numbers cause
-              short ones.
+              The first number, 1, bumps a 2, which bumps the 3, which bumps the
+              6 into a brand-new row: four boxes move for one insertion. The 6
+              later on just lands at the end of the top row. In general, small
+              numbers cause long cascades and big numbers cause short ones.
             </>
           }
         >
-          <ResetButton onClick={() => setInsKey((k) => k + 1)} />
-          <DemoWithConfig>
-            <DemoDraggable
-              key={insKey}
-              draggable={insDraggableFactory({ floating })}
-              initialState={insInitial}
-              width={260}
-              height={INS_STRIP_Y + S + 20}
-            />
-            <ConfigPanel>
-              <ConfigCheckbox
-                label="letter follows the pointer"
-                value={floating}
-                onChange={setFloating}
-              />
-            </ConfigPanel>
-          </DemoWithConfig>
+          <RowInsertionStepper />
         </Figure>
 
         <H2>4. From a permutation to a pair of tableaux</H2>
