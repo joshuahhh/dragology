@@ -302,7 +302,7 @@ export function simplify(f: Formula): Formula {
     case "imp":
       if (r.kind === "top") return r;
       if (l.kind === "top") return r;
-      if (l.kind === "bot") return { id: f.id, kind: "top" };
+      if (l.kind === "bot") return top();
       break;
   }
   if (l === f.left && r === f.right) return f;
@@ -658,7 +658,37 @@ export function sequent(hyps: string[], goal: string): Goal {
   return { id: makeId(), hyps: hyps.map(parse), goal: parse(goal) };
 }
 
+// ## Display
+//
+// Parenthesization is a bit more generous than strictly necessary:
+// nested same-connective formulas and ∧ under ∨ get parens, so the
+// tree structure (which is what you drag) is visible.
+
+export function precOf(f: Formula): number {
+  switch (f.kind) {
+    case "imp":
+      return 1;
+    case "or":
+      return 2;
+    case "and":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+/** The precedence context a child of `f` is shown in. */
+export function childPrec(f: Binary, side: Side): number {
+  if (f.kind === "imp") return side === "left" ? 2 : 0;
+  return 3;
+}
+
+export function needsParens(f: Formula, prec: number): boolean {
+  return prec >= precOf(f);
+}
+
 export function show(f: Formula, prec = 0): string {
+  let s: string;
   switch (f.kind) {
     case "atom":
       return f.name;
@@ -666,17 +696,10 @@ export function show(f: Formula, prec = 0): string {
       return "⊤";
     case "bot":
       return "⊥";
-    case "and": {
-      const s = `${show(f.left, 3)} ∧ ${show(f.right, 3)}`;
-      return prec > 2 ? `(${s})` : s;
-    }
-    case "or": {
-      const s = `${show(f.left, 2)} ∨ ${show(f.right, 2)}`;
-      return prec > 1 ? `(${s})` : s;
-    }
-    case "imp": {
-      const s = `${show(f.left, 1)} → ${show(f.right, 0)}`;
-      return prec > 0 ? `(${s})` : s;
+    default: {
+      const op = { and: "∧", or: "∨", imp: "→" }[f.kind];
+      s = `${show(f.left, childPrec(f, "left"))} ${op} ${show(f.right, childPrec(f, "right"))}`;
     }
   }
+  return needsParens(f, prec) ? `(${s})` : s;
 }

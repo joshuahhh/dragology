@@ -13,6 +13,7 @@ import { Svgx } from "../../svgx";
 import { translate } from "../../svgx/helpers";
 import {
   casesHypOr,
+  childPrec,
   Formula,
   Goal,
   introGoalImp,
@@ -21,7 +22,9 @@ import {
   linkTargets,
   Loc,
   locFormula,
+  needsParens,
   sequent,
+  show,
   splitGoalAnd,
   splitHypAnd,
   State,
@@ -92,27 +95,6 @@ type Ctx = {
   setState: Parameters<Draggable<State>>[0]["setState"];
 };
 
-function precOf(f: Formula): number {
-  switch (f.kind) {
-    case "imp":
-      return 1;
-    case "or":
-      return 2;
-    case "and":
-      return 3;
-    default:
-      return 4;
-  }
-}
-
-function childPrec(f: Formula, side: "left" | "right"): number {
-  // Parenthesize nested same-connective children too, so the tree
-  // structure (which is what you're dragging) is always visible.
-  if (f.kind === "imp") return side === "left" ? 2 : 1;
-  if (f.kind === "or") return 3;
-  return 4;
-}
-
 /**
  * Render a formula node. Returns the element (positioned at the
  * origin; the caller translates it) and its width.
@@ -127,25 +109,29 @@ function renderFormula(
   const { state, goal, hypIndex, draggedId } = ctx;
   const loc: Loc = { goalId: goal.id, hypIndex, path };
   const isRoot = path.length === 0;
-  const parens = precOf(f) < prec;
+  const parens = needsParens(f, prec);
   const isDragged = draggedId === f.id;
   const highlighted = state.highlight?.includes(f.id) ?? false;
 
-  // Build children left-to-right.
+  // Build children left-to-right. The child structure must be the
+  // same across states for a given node (non-id elements are matched
+  // by index when interpolating), so parens are always emitted as a
+  // slot, empty when not needed.
   const parts: Svgx[] = [];
   let x = 2;
-  if (parens) {
+  const paren = (ch: string) => {
     parts.push(
-      <text
-        transform={translate(x + W_PAREN / 2, 0)}
-        {...textProps}
-        fill="#9a9a94"
-      >
-        (
-      </text>,
+      <g transform={translate(x + W_PAREN / 2, 0)}>
+        {parens && (
+          <text {...textProps} fill="#9a9a94">
+            {ch}
+          </text>
+        )}
+      </g>,
     );
-    x += W_PAREN;
-  }
+    if (parens) x += W_PAREN;
+  };
+  paren("(");
   if (isBinary(f)) {
     const left = renderFormula(
       f.left,
@@ -163,7 +149,7 @@ function renderFormula(
     const action = rootAction(f, ctx);
     parts.push(
       <g
-        id={action ? `${f.id}-op` : undefined}
+        id={`${f.id}-op`}
         transform={translate(x + opW / 2, 0)}
         onClick={
           action
@@ -175,18 +161,16 @@ function renderFormula(
         }
         style={action ? { cursor: "pointer" } : undefined}
       >
-        {action && (
-          <rect
-            x={-opW / 2 + 3}
-            y={-H / 2 + 5}
-            width={opW - 6}
-            height={H - 10}
-            rx={6}
-            fill="#e8e6ff"
-            stroke="#b9b4f5"
-            strokeWidth={1}
-          />
-        )}
+        <rect
+          x={-opW / 2 + 3}
+          y={-H / 2 + 5}
+          width={opW - 6}
+          height={H - 10}
+          rx={6}
+          fill={action ? "#e8e6ff" : "transparent"}
+          stroke={action ? "#b9b4f5" : "none"}
+          strokeWidth={1}
+        />
         <text
           {...textProps}
           fill={action ? "#4f46e5" : "#5c5b57"}
@@ -227,18 +211,7 @@ function renderFormula(
     );
     x += w;
   }
-  if (parens) {
-    parts.push(
-      <text
-        transform={translate(x + W_PAREN / 2, 0)}
-        {...textProps}
-        fill="#9a9a94"
-      >
-        )
-      </text>,
-    );
-    x += W_PAREN;
-  }
+  paren(")");
   const w = x + 2;
 
   const element = (
@@ -346,6 +319,7 @@ function renderSequent(goal: Goal, ctx: Omit<Ctx, "goal" | "hypIndex">) {
     if (i > 0) {
       parts.push(
         <text
+          id={`${h.id}-comma`}
           transform={translate(x + W_COMMA / 2, 4)}
           {...textProps}
           fill="#78716c"
@@ -361,6 +335,7 @@ function renderSequent(goal: Goal, ctx: Omit<Ctx, "goal" | "hypIndex">) {
   });
   parts.push(
     <text
+      id={`${goal.id}-turnstile`}
       transform={translate(x + W_TURNSTILE / 2, 0)}
       {...textProps}
       fill="#44403c"
@@ -492,6 +467,21 @@ export default demo(
     );
   },
   {
+    fuzz: problems.map((p) => ({
+      name: p.name,
+      draggable,
+      initialState: { goals: p.make(), history: [] } as State,
+      options: {
+        // ids and history are incidental; dedupe by what's displayed
+        stateKey: (s: State) =>
+          s.goals
+            .map(
+              (g) =>
+                `${g.hyps.map((h) => show(h)).join(", ")} ⊢ ${show(g.goal)}`,
+            )
+            .join(" | "),
+      },
+    })),
     tags: [
       "d.closest",
       "d.dropTarget",

@@ -44,7 +44,9 @@ const showState = (s: State) =>
 
 describe("parse/show", () => {
   it("round-trips with precedence", () => {
-    expect(show(parse("p & q | r -> s -> t"))).toBe("p ∧ q ∨ r → s → t");
+    expect(show(parse("p & q | r -> s -> t"))).toBe("((p ∧ q) ∨ r) → s → t");
+    expect(show(parse("(p | q) -> r"))).toBe("(p ∨ q) → r");
+    expect(show(parse("p & q -> r"))).toBe("p ∧ q → r");
     expect(show(parse("(p -> q) -> r"))).toBe("(p → q) → r");
     expect(show(parse("p & (q | r)"))).toBe("p ∧ (q ∨ r)");
   });
