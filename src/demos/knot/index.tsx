@@ -53,7 +53,48 @@ const presets: { label: string; make: () => Knot }[] = [
   { label: "unknot", make: memo(unknot) },
 ];
 
-const initialState: Knot = presets[0].make();
+/** The diagram, plus the diagrams before it (for undo). */
+type State = Knot & { past?: Knot[] };
+
+const HISTORY = 100;
+
+function core(s: Knot): Knot {
+  return { nodes: s.nodes, code: s.code, edges: s.edges, nextId: s.nextId };
+}
+
+/** Same diagram and geometry (ignoring the id counter and key order). */
+function sameKnot(a: Knot, b: Knot): boolean {
+  const sorted = (r: Record<string, unknown>) =>
+    JSON.stringify(
+      Object.keys(r)
+        .sort()
+        .map((key) => [key, r[key]]),
+    );
+  return (
+    JSON.stringify(a.code) === JSON.stringify(b.code) &&
+    sorted(a.nodes) === sorted(b.nodes) &&
+    sorted(a.edges) === sorted(b.edges)
+  );
+}
+
+/**
+ * On drop: merge away pass nodes, and remember the previous diagram.
+ * States set by the buttons (undo, presets) arrive with their own
+ * history already attached and pass straight through; dragged states
+ * either lost `past` (moves rebuild the diagram) or kept it unchanged
+ * (bending).
+ */
+function onDrop(dropped: State, previous: State): State {
+  const next = core(cleanup(dropped));
+  if (dropped.past !== undefined && dropped.past !== previous.past) {
+    return { ...next, past: dropped.past };
+  }
+  const past = previous.past ?? [];
+  if (sameKnot(next, previous)) return { ...next, past };
+  return { ...next, past: [...past, core(previous)].slice(-HISTORY) };
+}
+
+const initialState: State = { ...presets[0].make(), past: [] };
 
 const f1 = (n: number) => n.toFixed(2);
 const cubicD = (c: Cubic) =>
@@ -92,7 +133,8 @@ function clampValid(start: Knot) {
   };
 }
 
-const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
+const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
+  const past = state.past ?? [];
   const inv = invariants(state);
   const cubics = edgeCubics(state);
   const V = state.code.length;
@@ -104,7 +146,7 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
   const marker = bez(cubics[0], 0.5);
   const markerAngle = (angleOf(bezTan(cubics[0], 0.5)) * 180) / Math.PI;
 
-  const edgeSpec = (e: string, i: number): DragSpec<Knot> =>
+  const edgeSpec = (e: string, i: number): DragSpec<State> =>
     d.reactTo(altKey, (under) => {
       const moves = movesAt(state, e, under);
       // Free dragging bends this edge: its two handle lengths and the
@@ -118,7 +160,7 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
           [
             param("edges", e, "a"),
             param("edges", e, "b"),
-            ...rots.map((n) => param<Knot>("nodes", n, "rot")),
+            ...rots.map((n) => param<State>("nodes", n, "rot")),
           ],
           {
             // Keep bends tame: handles no longer than the chord plus a
@@ -154,7 +196,7 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
    * overshooting a target keeps the move rather than dropping out of
    * it (only sideways distance counts as being "far").
    */
-  const moveSpec = (m: Move, e: string): DragSpec<Knot> => {
+  const moveSpec = (m: Move, e: string): DragSpec<State> => {
     const A = edgeMid(m.from, e);
     const B = edgeMid(m.to, e);
     const AB = sub(B, A);
@@ -167,7 +209,7 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
     });
   };
 
-  const nodeSpec = (n: string): DragSpec<Knot> =>
+  const nodeSpec = (n: string): DragSpec<State> =>
     d
       .vary(state, [param("nodes", n, "x"), param("nodes", n, "y")])
       .during(clampValid(state));
@@ -288,6 +330,34 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
         </text>
       </g>
 
+      {/* undo */}
+      <g
+        id="undo"
+        className={past.length > 0 ? "knot-preset" : undefined}
+        transform={translate(12, 14)}
+        opacity={past.length > 0 ? 1 : 0.4}
+        style={{ cursor: past.length > 0 ? "pointer" : "default" }}
+        onClick={() => {
+          if (past.length === 0) return;
+          setState(
+            { ...past[past.length - 1], past: past.slice(0, -1) },
+            { transition: 300 },
+          );
+        }}
+      >
+        <rect width={64} height={24} rx={6} fill="#f1f5f9" stroke="#cbd5e1" />
+        <text
+          x={32}
+          y={16}
+          textAnchor="middle"
+          fontSize={12}
+          fill="#334155"
+          fontFamily="ui-sans-serif, system-ui"
+        >
+          ↶ undo
+        </text>
+      </g>
+
       {/* presets */}
       {presets.map((preset, k) => {
         const w = 16 + preset.label.length * 6.5;
@@ -301,7 +371,9 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
             className="knot-preset"
             transform={translate(x, 14)}
             style={{ cursor: "pointer" }}
-            onClick={() => setState(preset.make())}
+            onClick={() =>
+              setState({ ...preset.make(), past: [...past, core(state)] })
+            }
           >
             <rect
               width={w}
@@ -522,7 +594,7 @@ export default demo(
         initialState={initialState}
         width={WIDTH}
         height={HEIGHT}
-        transformDropState={cleanup}
+        transformDropState={onDrop}
       />
       <MoveLegend />
     </div>

@@ -476,8 +476,11 @@ export function DemoDraggable<T extends object>({
   height: number;
   stateRef?: React.RefObject<T | null>;
   stateOverride?: Partial<T>;
-  /** Applied to each dropped state before it becomes the new state. */
-  transformDropState?: (state: T) => T;
+  /**
+   * Applied to each dropped state (along with the state before it)
+   * before it becomes the new state.
+   */
+  transformDropState?: (state: T, previous: T) => T;
 }) {
   const collectedRef = useRef(false);
   if (collector && !collectedRef.current) {
@@ -506,7 +509,10 @@ export function DemoDraggable<T extends object>({
   } = useDemoSettings();
   const [status, setStatus] = useState<DragStatus<T> | null>(null);
   const handleDropState = useCallback(
-    (s: T) => setOwnState(transformDropState ? transformDropState(s) : s),
+    (s: T) =>
+      setOwnState((prev) =>
+        transformDropState ? transformDropState(s, prev) : s,
+      ),
     [transformDropState],
   );
   const [hoveredLayerBounds, setHoveredLayerBounds] = useState<Bounds | null>(

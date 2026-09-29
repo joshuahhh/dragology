@@ -59,7 +59,7 @@ export type KNode = {
    * Pass nodes created by splitting an edge remember that edge's
    * handles, so merging them back restores it exactly.
    */
-  hint?: { a: number; b: number };
+  hint?: { a: number; b: number; e: string };
 };
 export type Visit = { n: string; over: boolean; e: string };
 export type EdgeData = { a: number; b: number };
@@ -533,7 +533,7 @@ function handlesOf(c: Cubic): EdgeData {
   return { a: dist(c[0], c[1]), b: dist(c[3], c[2]) };
 }
 
-function passNode(p: Pt, dir: Pt, hint?: EdgeData): KNode {
+function passNode(p: Pt, dir: Pt, hint?: KNode["hint"]): KNode {
   return { kind: "p", x: p.x, y: p.y, rot: angleOf(dir), sign: 1, hint };
 }
 
@@ -656,7 +656,7 @@ function r1Twist(
   const c = `n${nextId++}`;
   const eL = `e${nextId++}`;
   const eR = `e${nextId++}`;
-  const hint = { ...k.edges[e] };
+  const hint = { ...k.edges[e], e };
 
   const from = clone(k);
   from.nextId = nextId;
@@ -835,8 +835,8 @@ function r2Push(
     // pre-split: pass nodes on E and F, exactly on the old curves
     const from = clone(k);
     from.nextId = nextId;
-    const eHint = { ...k.edges[e] };
-    const fHint = { ...k.edges[fe] };
+    const eHint = { ...k.edges[e], e };
+    const fHint = { ...k.edges[fe], e: fe };
     from.nodes[pe1] = passNode(E1[3], bezTan(E, 0.4), eHint);
     from.nodes[pe2] = passNode(E2[3], bezTan(E, 0.6), eHint);
     from.nodes[pf1] = passNode(F1[3], bezTan(F, f1), fHint);
@@ -1274,12 +1274,16 @@ function mergeRun(k: Knot, s: number, count: number): Knot | null {
   for (let q = 1; q <= count; q++) runIdx.push(cyc(s + q, V));
   const hints = runIdx.map((q) => k.nodes[k.code[q].n].hint);
   let data: EdgeData;
+  // the merged edge keeps the id of the edge leaving s, unless the run
+  // came from splitting an edge, which is then restored exactly
+  let keepId = k.code[s].e;
+  const h0 = hints[0];
   if (
-    hints.every(
-      (h) => h && hints[0] && h.a === hints[0].a && h.b === hints[0].b,
-    )
+    h0 &&
+    hints.every((h) => h && h.a === h0.a && h.b === h0.b && h.e === h0.e)
   ) {
-    data = { ...hints[0]! };
+    data = { a: h0.a, b: h0.b };
+    keepId = h0.e;
   } else {
     const cubics = edgeCubics(k);
     const pts: Pt[] = [];
@@ -1303,8 +1307,11 @@ function mergeRun(k: Knot, s: number, count: number): Knot | null {
     delete out.nodes[k.code[q].n];
     delete out.edges[k.code[q].e];
   }
-  out.edges[k.code[s].e] = data;
-  out.code = k.code.filter((_, q) => !drop.has(q)).map((v) => ({ ...v }));
+  delete out.edges[k.code[s].e];
+  out.edges[keepId] = data;
+  out.code = k.code
+    .map((v, q) => (q === s ? { ...v, e: keepId } : { ...v }))
+    .filter((_, q) => !drop.has(q));
   return out;
 }
 
