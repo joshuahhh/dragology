@@ -338,9 +338,15 @@ function makeDraggable(config: Config): Draggable<State> {
             (dom.x + dom.y) % 2 === 0 ? "black" : "white"
           }` as keyof typeof DOMINO_COLORS;
           return (
+            // The id'd (draggable) element only translates; the rotation
+            // lives on an inner group. Drag anchors are stored in the
+            // dragged element's local frame, so if this element rotated,
+            // the grab point would swing around the block's pivot and the
+            // drop targets would land wherever that point ends up rather
+            // than where the domino goes.
             <g
               id={elementId}
-              transform={translate(dominoCenter(dom)) + rotateDeg(dom.angle)}
+              transform={translate(dominoCenter(dom))}
               dragologyZIndex={draggedId === elementId ? "/1" : false}
               style={{ cursor: flippable ? "grab" : undefined }}
               dragologyOnDrag={
@@ -353,17 +359,19 @@ function makeDraggable(config: Config): Draggable<State> {
                     .withSnapRadius(8, { chain: true }))
               }
             >
-              <rect
-                x={-CELL + INSET}
-                y={-CELL / 2 + INSET}
-                width={2 * CELL - 2 * INSET}
-                height={CELL - 2 * INSET}
-                rx={4}
-                fill={DOMINO_COLORS[colorKey]}
-                stroke="#1f2937"
-                strokeWidth={1}
-                opacity={config.highlightFlippable && !flippable ? 0.45 : 1}
-              />
+              <g transform={rotateDeg(dom.angle)}>
+                <rect
+                  x={-CELL + INSET}
+                  y={-CELL / 2 + INSET}
+                  width={2 * CELL - 2 * INSET}
+                  height={CELL - 2 * INSET}
+                  rx={4}
+                  fill={DOMINO_COLORS[colorKey]}
+                  stroke="#1f2937"
+                  strokeWidth={1}
+                  opacity={config.highlightFlippable && !flippable ? 0.45 : 1}
+                />
+              </g>
             </g>
           );
         })}
