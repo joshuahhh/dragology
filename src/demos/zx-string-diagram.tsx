@@ -579,6 +579,60 @@ function labelSpec(
     .withBranchTransition(150);
 }
 
+/** Unit vector that positive `bow` pushes a wire along. */
+function wirePerp(
+  state: State,
+  wire: Wire,
+): { origin: Vec2; chord: Vec2; perp: Vec2 } {
+  const [p0, , , p3] = wireGeom(state, wire);
+  const chord = p3.sub(p0);
+  const perp = chord.len() < 1 ? Vec2(1, 0) : Vec2(-chord.y, chord.x).norm();
+  return { origin: p0, chord, perp };
+}
+
+/**
+ * The Hopf branch of a bead drag: fires when the bead's center has
+ * been pulled across the twin wire (past the twin's own bead, with a
+ * little margin) while still alongside the wire. Direction matters –
+ * pulling away from the twin, or sliding off the end, does nothing.
+ */
+function hopfSpec(
+  d: DragSpecBuilder<State>,
+  state: State,
+  wid: string,
+  twinId: string,
+): DragSpec<State> {
+  const result = hopf(state, wid, twinId);
+  const wire = state.wires[wid];
+  const twin = state.wires[twinId];
+  const { origin, chord, perp } = wirePerp(state, wire);
+  const myOff = bezierAt(wireGeom(state, wire), wire.beadT ?? 0.5)
+    .sub(origin)
+    .dot(perp);
+  const twinOff = bezierAt(wireGeom(state, twin), twin.beadT ?? 0.5)
+    .sub(origin)
+    .dot(perp);
+  const side = Math.sign(myOff - twinOff) || 1;
+  return d.custom((ctx) => {
+    const inner = dragSpecToBehavior<State>(
+      { type: "fixed", state: result },
+      ctx,
+    );
+    return (frame) => {
+      const v = frame.pointer.sub(ctx.anchorPos).sub(origin);
+      const along = v.dot(chord) / Math.max(chord.dot(chord), 1);
+      const off = v.dot(perp);
+      const crossed =
+        (twinOff - off) * side > 12 && along > -0.05 && along < 1.05;
+      return {
+        ...inner(frame),
+        gap: crossed ? 0 : Infinity,
+        activePath: "hopf",
+      };
+    };
+  });
+}
+
 function beadSpec(
   d: DragSpecBuilder<State>,
   state: State,
@@ -613,7 +667,7 @@ function beadSpec(
     },
   );
   const spec = twinId
-    ? move.whenFar(hopf(state, wid, twinId), { gapIn: 16, gapOut: 30 })
+    ? d.closest([hopfSpec(d, state, wid, twinId), move])
     : move;
   return spec.withBranchTransition(200);
 }
@@ -1095,8 +1149,9 @@ const PUZZLES: Record<PuzzleId, Puzzle> = {
   cnot2: {
     title: "CNOT · CNOT = 1",
     blurb:
-      "Two CNOTs in a row cancel. Fuse the Zs, fuse the Xs, pull one of the " +
-      "twin wires across the other (Hopf), then drop each bare spider on a neighbor.",
+      "Two CNOTs in a row cancel. Fuse the Zs, fuse the Xs, then grab the " +
+      "bead on one of the twin wires and pull it across the other wire " +
+      "(Hopf: they cancel). Finally drop each bare spider on a neighbor.",
     start: cnot2Start,
     goal: identity2,
   },
