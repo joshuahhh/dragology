@@ -218,7 +218,7 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
           path in the "before" and "after" SVG trees. I don't know how to
           interpolate between those, sorry.
         </p>
-        {a.props.id === b.props.id && (
+        {a.props.id !== undefined && a.props.id === b.props.id && (
           <p style={{ marginBottom: 8 }}>
             (FYI: These elements share the ID{" "}
             <span style={{ fontFamily: "monospace" }}>{a.props.id}</span>. I
