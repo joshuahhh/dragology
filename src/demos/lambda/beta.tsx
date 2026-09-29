@@ -1,17 +1,16 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { demo } from "../../demo";
 import {
   ConfigCheckbox,
   ConfigPanel,
-  ConfigRadio,
   DemoDraggable,
   DemoNotes,
-  DemoWithConfig,
 } from "../../demo/ui";
 import { Draggable } from "../../draggable";
 import { type DragSpecBuilder } from "../../DragSpec";
 import { Svgx } from "../../svgx";
 import { translate } from "../../svgx/helpers";
+import { ExampleName, examples } from "./examples";
 import {
   candidates,
   parseTerm,
@@ -24,31 +23,14 @@ import {
 
 type State = { term: Term };
 
-const examples = {
-  duplicate: "(λx. x x) y",
-  flip: "(λx y. y x) a b",
-  nested: "(λx. x) ((λy. y) z)",
-  "succ 2": "(λn f x. f (n f x)) (λf x. f (f x))",
-  Ω: "(λx. x x) (λx. x x)",
-  eta: "λx. f x",
-} as const;
-type ExampleName = keyof typeof examples;
+const exampleNames = Object.keys(examples) as ExampleName[];
 
 const initialStates: Record<ExampleName, State> = Object.fromEntries(
-  Object.entries(examples).map(([name, src]) => [
+  Object.entries(examples).map(([name, example]) => [
     name,
-    { term: parseTerm(src, `${name}-`) },
+    { term: parseTerm(example.src, `${name}-`) },
   ]),
 ) as Record<ExampleName, State>;
-
-const exampleOptions = Object.fromEntries(
-  Object.entries(examples).map(([name, src]) => [
-    name,
-    <span key={name}>
-      <b>{name}</b> <span className="font-mono text-gray-500">{src}</span>
-    </span>,
-  ]),
-) as Record<ExampleName, React.ReactNode>;
 
 // # Config
 
@@ -83,6 +65,9 @@ const FONT = 15;
 const CHAR_W = 8.4;
 const VAR_H = 24;
 const VAR_PAD_X = 7;
+/** Applications wider than this stack their argument under the function */
+const MAX_ROW_W = 460;
+const INDENT = 18;
 
 type Rendered = { element: Svgx; w: number; h: number };
 
@@ -192,9 +177,19 @@ function renderTerm(
     case "app": {
       const fn = renderTerm(state, term.fn, d, config, draggedId, bound);
       const arg = renderTerm(state, term.arg, d, config, draggedId, bound);
+      // Side by side if it fits, otherwise the argument goes under the
+      // function, indented.
+      const rowW = PAD + fn.w + GAP + arg.w + PAD;
+      const stacked = rowW > MAX_ROW_W;
       const innerH = Math.max(fn.h, arg.h);
-      w = PAD + fn.w + GAP + arg.w + PAD;
-      h = innerH + 2 * PAD;
+      w = stacked ? PAD + Math.max(fn.w, INDENT + arg.w) + PAD : rowW;
+      h = stacked ? PAD + fn.h + GAP + arg.h + PAD : innerH + 2 * PAD;
+      const fnPos = stacked
+        ? translate(PAD, PAD)
+        : translate(PAD, PAD + (innerH - fn.h) / 2);
+      const argPos = stacked
+        ? translate(PAD + INDENT, PAD + fn.h + GAP)
+        : translate(PAD + fn.w + GAP, PAD + (innerH - arg.h) / 2);
       contents = (
         <g>
           <rect
@@ -205,14 +200,8 @@ function renderTerm(
             stroke="rgba(120, 110, 100, 0.35)"
             strokeWidth={1}
           />
-          <g transform={translate(PAD, PAD + (innerH - fn.h) / 2)}>
-            {fn.element}
-          </g>
-          <g
-            transform={translate(PAD + fn.w + GAP, PAD + (innerH - arg.h) / 2)}
-          >
-            {arg.element}
-          </g>
+          <g transform={fnPos}>{fn.element}</g>
+          <g transform={argPos}>{arg.element}</g>
         </g>
       );
       break;
@@ -263,8 +252,8 @@ function dragSpec(
   return d.closest(branches).onDrop((s) => midToResult.get(s) ?? s);
 }
 
-const WIDTH = 720;
-const HEIGHT = 240;
+const WIDTH = 680;
+const HEIGHT = 420;
 
 function draggableFactory(config: Config): Draggable<State> {
   return ({ state, d, draggedId }) => {
@@ -278,15 +267,15 @@ function draggableFactory(config: Config): Draggable<State> {
     );
     return (
       <g>
-        <g transform={translate(20, 20)}>{rendered.element}</g>
         <text
-          transform={translate(20, HEIGHT - 16)}
+          transform={translate(20, 24)}
           fontSize={13}
           fontFamily="ui-monospace, Menlo, monospace"
           fill="#6b7280"
         >
           {printTerm(state.term)}
         </text>
+        <g transform={translate(20, 44)}>{rendered.element}</g>
       </g>
     );
   };
@@ -297,6 +286,7 @@ function draggableFactory(config: Config): Draggable<State> {
 export default demo(
   () => {
     const [example, setExample] = useState<ExampleName>("duplicate");
+    const [resets, setResets] = useState(0);
     const [config, setConfig] = useState(defaultConfig);
     const draggable = useMemo(() => draggableFactory(config), [config]);
     const set = (patch: Partial<Config>) =>
@@ -311,66 +301,82 @@ export default demo(
           Drag a subterm <b>rightward out</b> of an enclosing box to abstract
           over it (the reverse).
         </DemoNotes>
-        <DemoWithConfig>
+        <div className="flex flex-col gap-2 max-w-full">
+          <div className="flex flex-wrap gap-1.5">
+            {exampleNames.map((name) => (
+              <button
+                key={name}
+                title={examples[name].src}
+                onClick={() => {
+                  setExample(name);
+                  setResets((n) => n + 1);
+                }}
+                className={`text-xs px-2 py-1 rounded border ${
+                  name === example
+                    ? "bg-blue-50 border-blue-400 text-blue-800"
+                    : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          <div className="text-xs text-gray-600">
+            {examples[example].blurb}{" "}
+            <span className="text-gray-400">
+              (Click the button again to reset.)
+            </span>
+          </div>
           <DemoDraggable
-            key={example}
+            key={`${example}-${resets}`}
             draggable={draggable}
             initialState={initialStates[example]}
             width={WIDTH}
             height={HEIGHT}
           />
-          <div className="flex flex-col gap-4">
-            <ConfigPanel title="Term">
-              <ConfigRadio
-                value={example}
-                onChange={setExample}
-                options={exampleOptions}
-              />
-            </ConfigPanel>
-            <ConfigPanel title="Rewrites">
-              <ConfigCheckbox
-                value={config.beta}
-                onChange={(v) => set({ beta: v })}
-              >
-                <b>β-reduction</b>
-                <br />
-                drag an argument into its λ
-              </ConfigCheckbox>
-              <ConfigCheckbox
-                value={config.abstract}
-                onChange={(v) => set({ abstract: v })}
-              >
-                <b>Abstraction</b> (reverse β)
-                <br />
-                drag a subterm out of an enclosing box
-              </ConfigCheckbox>
-              <ConfigCheckbox
-                value={config.abstractAllOccurrences}
-                onChange={(v) => set({ abstractAllOccurrences: v })}
-              >
-                …abstracting over <i>all</i> identical occurrences
-                <br />
-                (copies merge back into the dragged one)
-              </ConfigCheckbox>
-              <ConfigCheckbox
-                value={config.etaReduce}
-                onChange={(v) => set({ etaReduce: v })}
-              >
-                <b>η-reduction</b>
-                <br />
-                drag <i>f</i> out of λx. f x
-              </ConfigCheckbox>
-              <ConfigCheckbox
-                value={config.etaExpand}
-                onChange={(v) => set({ etaExpand: v })}
-              >
-                <b>η-expansion</b>
-                <br />
-                drag any subterm slightly right
-              </ConfigCheckbox>
-            </ConfigPanel>
-          </div>
-        </DemoWithConfig>
+          <ConfigPanel title="Rewrites">
+            <ConfigCheckbox
+              value={config.beta}
+              onChange={(v) => set({ beta: v })}
+            >
+              <b>β-reduction</b>
+              <br />
+              drag an argument into its λ
+            </ConfigCheckbox>
+            <ConfigCheckbox
+              value={config.abstract}
+              onChange={(v) => set({ abstract: v })}
+            >
+              <b>Abstraction</b> (reverse β)
+              <br />
+              drag a subterm out of an enclosing box
+            </ConfigCheckbox>
+            <ConfigCheckbox
+              value={config.abstractAllOccurrences}
+              onChange={(v) => set({ abstractAllOccurrences: v })}
+            >
+              …abstracting over <i>all</i> identical occurrences
+              <br />
+              (copies merge back into the dragged one)
+            </ConfigCheckbox>
+            <ConfigCheckbox
+              value={config.etaReduce}
+              onChange={(v) => set({ etaReduce: v })}
+            >
+              <b>η-reduction</b>
+              <br />
+              drag <i>f</i> out of λx. f x
+            </ConfigCheckbox>
+            <ConfigCheckbox
+              value={config.etaExpand}
+              onChange={(v) => set({ etaExpand: v })}
+            >
+              <b>η-expansion</b>
+              <br />
+              drag any subterm slightly right
+            </ConfigCheckbox>
+          </ConfigPanel>
+        </div>
       </div>
     );
   },
