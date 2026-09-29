@@ -1,252 +1,263 @@
-// Planar-curve geometry for the knot demo: closed centripetal
-// Catmull-Rom sampling, crossing detection, and arc-length walking on
-// the sampled polyline.
+// Geometry helpers for the knot demo: points, cubic Béziers, segment
+// intersection, and least-squares cubic fitting.
 
 export type Pt = { x: number; y: number };
+export type Cubic = [Pt, Pt, Pt, Pt];
 
-/** Sub-samples per control-point span. */
-export const SUB = 4;
-
-export function dist(a: Pt, b: Pt): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-export function lerpPt(a: Pt, b: Pt, t: number): Pt {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
+export const pt = (x: number, y: number): Pt => ({ x, y });
+export const add = (a: Pt, b: Pt): Pt => pt(a.x + b.x, a.y + b.y);
+export const sub = (a: Pt, b: Pt): Pt => pt(a.x - b.x, a.y - b.y);
+export const mul = (a: Pt, s: number): Pt => pt(a.x * s, a.y * s);
+export const dot = (a: Pt, b: Pt): number => a.x * b.x + a.y * b.y;
+export const cross = (a: Pt, b: Pt): number => a.x * b.y - a.y * b.x;
+export const len = (a: Pt): number => Math.hypot(a.x, a.y);
+export const dist = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
+export const lerpPt = (a: Pt, b: Pt, t: number): Pt =>
+  pt(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+export const norm = (a: Pt): Pt => {
+  const l = len(a) || 1;
+  return pt(a.x / l, a.y / l);
+};
+/** Rotate by +90° (in screen coordinates, clockwise). */
+export const perp = (a: Pt): Pt => pt(-a.y, a.x);
+export const unit = (angle: number): Pt => pt(Math.cos(angle), Math.sin(angle));
+export const angleOf = (a: Pt): number => Math.atan2(a.y, a.x);
 
 export function cyc(i: number, n: number): number {
   return ((i % n) + n) % n;
 }
 
-/**
- * Sample a closed centripetal Catmull-Rom spline through `pts`. Span
- * `i` (from pts[i] to pts[i+1]) produces `sub` samples at indices
- * i*sub .. i*sub+sub-1; the first of them is exactly pts[i].
- */
-export function sampleClosed(pts: Pt[], sub = SUB): Pt[] {
-  const N = pts.length;
+// # Cubics
+
+export function bez(c: Cubic, t: number): Pt {
+  const mt = 1 - t;
+  const a = mt * mt * mt;
+  const b = 3 * mt * mt * t;
+  const d = 3 * mt * t * t;
+  const e = t * t * t;
+  return pt(
+    a * c[0].x + b * c[1].x + d * c[2].x + e * c[3].x,
+    a * c[0].y + b * c[1].y + d * c[2].y + e * c[3].y,
+  );
+}
+
+/** Derivative of the cubic at t. */
+export function bezD(c: Cubic, t: number): Pt {
+  const mt = 1 - t;
+  const a = 3 * mt * mt;
+  const b = 6 * mt * t;
+  const d = 3 * t * t;
+  return pt(
+    a * (c[1].x - c[0].x) + b * (c[2].x - c[1].x) + d * (c[3].x - c[2].x),
+    a * (c[1].y - c[0].y) + b * (c[2].y - c[1].y) + d * (c[3].y - c[2].y),
+  );
+}
+
+/** Unit tangent at t (falls back to the chord for degenerate cubics). */
+export function bezTan(c: Cubic, t: number): Pt {
+  const d = bezD(c, t);
+  if (len(d) > 1e-9) return norm(d);
+  return norm(sub(c[3], c[0]));
+}
+
+/** De Casteljau split at t. */
+export function split(c: Cubic, t: number): [Cubic, Cubic] {
+  const p01 = lerpPt(c[0], c[1], t);
+  const p12 = lerpPt(c[1], c[2], t);
+  const p23 = lerpPt(c[2], c[3], t);
+  const p012 = lerpPt(p01, p12, t);
+  const p123 = lerpPt(p12, p23, t);
+  const m = lerpPt(p012, p123, t);
+  return [
+    [c[0], p01, p012, m],
+    [m, p123, p23, c[3]],
+  ];
+}
+
+/** Sub-cubic between parameters t0 < t1. */
+export function subCubic(c: Cubic, t0: number, t1: number): Cubic {
+  const right = split(c, t0)[1];
+  if (t0 >= 1) return right;
+  return split(right, (t1 - t0) / (1 - t0))[0];
+}
+
+export function sampleCubic(c: Cubic, n: number): Pt[] {
   const out: Pt[] = [];
-  for (let i = 0; i < N; i++) {
-    const p0 = pts[cyc(i - 1, N)];
-    const p1 = pts[i];
-    const p2 = pts[cyc(i + 1, N)];
-    const p3 = pts[cyc(i + 2, N)];
-    const t0 = 0;
-    const t1 = t0 + Math.max(Math.sqrt(dist(p0, p1)), 1e-3);
-    const t2 = t1 + Math.max(Math.sqrt(dist(p1, p2)), 1e-3);
-    const t3 = t2 + Math.max(Math.sqrt(dist(p2, p3)), 1e-3);
-    for (let k = 0; k < sub; k++) {
-      if (k === 0) {
-        out.push({ x: p1.x, y: p1.y });
-        continue;
-      }
-      const t = t1 + ((t2 - t1) * k) / sub;
-      const A1 = lerpPt(p0, p1, (t - t0) / (t1 - t0));
-      const A2 = lerpPt(p1, p2, (t - t1) / (t2 - t1));
-      const A3 = lerpPt(p2, p3, (t - t2) / (t3 - t2));
-      const B1 = lerpPt(A1, A2, (t - t0) / (t2 - t0));
-      const B2 = lerpPt(A2, A3, (t - t1) / (t3 - t1));
-      out.push(lerpPt(B1, B2, (t - t1) / (t2 - t1)));
-    }
-  }
+  for (let i = 0; i <= n; i++) out.push(bez(c, i / n));
   return out;
 }
 
-/**
- * A crossing between sampled segments m1 < m2 (segment m runs from
- * sample m to sample m+1, cyclically). `u1 = m1 + t1` and `u2 = m2 +
- * t2` are curve parameters in sample units, so u1 < u2 always.
- */
-export type Crossing = {
-  m1: number;
-  t1: number;
-  m2: number;
-  t2: number;
-  u1: number;
-  u2: number;
-  p: Pt;
-};
-
-export function findCrossings(s: Pt[]): Crossing[] {
-  const M = s.length;
-  const out: Crossing[] = [];
-  // per-segment bounding boxes for a cheap prefilter
-  const minX = new Float64Array(M);
-  const maxX = new Float64Array(M);
-  const minY = new Float64Array(M);
-  const maxY = new Float64Array(M);
-  for (let m = 0; m < M; m++) {
-    const a = s[m];
-    const b = s[(m + 1) % M];
-    minX[m] = Math.min(a.x, b.x);
-    maxX[m] = Math.max(a.x, b.x);
-    minY[m] = Math.min(a.y, b.y);
-    maxY[m] = Math.max(a.y, b.y);
+export function cubicLen(c: Cubic, n = 24): number {
+  let L = 0;
+  let prev = c[0];
+  for (let i = 1; i <= n; i++) {
+    const q = bez(c, i / n);
+    L += dist(prev, q);
+    prev = q;
   }
+  return L;
+}
+
+/** Parameter at which the arc length from t=0 reaches L (approximate). */
+export function paramAtLen(c: Cubic, L: number, n = 48): number {
+  if (L <= 0) return 0;
+  let acc = 0;
+  let prev = c[0];
+  for (let i = 1; i <= n; i++) {
+    const q = bez(c, i / n);
+    const seg = dist(prev, q);
+    if (acc + seg >= L) {
+      const f = seg > 0 ? (L - acc) / seg : 0;
+      return (i - 1 + f) / n;
+    }
+    acc += seg;
+    prev = q;
+  }
+  return 1;
+}
+
+/** Closest point on the cubic to p, restricted to t ∈ [tMin, tMax]. */
+export function closestOnCubic(
+  c: Cubic,
+  p: Pt,
+  tMin = 0,
+  tMax = 1,
+  n = 64,
+): { t: number; p: Pt; d: number } {
+  let best = { t: tMin, p: bez(c, tMin), d: Infinity };
+  for (let i = 0; i <= n; i++) {
+    const t = tMin + ((tMax - tMin) * i) / n;
+    const q = bez(c, t);
+    const d = dist(p, q);
+    if (d < best.d) best = { t, p: q, d };
+  }
+  return best;
+}
+
+/**
+ * The cubic from P (leaving along unit dP) to Q (arriving along unit
+ * dQ) with handle lengths a, b.
+ */
+export function cubicFrom(
+  P: Pt,
+  dP: Pt,
+  Q: Pt,
+  dQ: Pt,
+  a: number,
+  b: number,
+): Cubic {
+  return [P, add(P, mul(dP, a)), sub(Q, mul(dQ, b)), Q];
+}
+
+/**
+ * Least-squares handle lengths (a, b) for a cubic from P (direction dP)
+ * to Q (direction dQ) passing near `pts` (ordered along the curve).
+ */
+export function fitHandles(
+  P: Pt,
+  dP: Pt,
+  Q: Pt,
+  dQ: Pt,
+  pts: Pt[],
+  minHandle = 4,
+): { a: number; b: number } {
+  if (pts.length === 0) {
+    const d = dist(P, Q) / 3;
+    return { a: Math.max(d, minHandle), b: Math.max(d, minHandle) };
+  }
+  // initial parameters by chord length (including the endpoints)
+  const chain = [P, ...pts, Q];
+  const cum = [0];
+  for (let i = 1; i < chain.length; i++) {
+    cum.push(cum[i - 1] + dist(chain[i - 1], chain[i]));
+  }
+  const total = cum[cum.length - 1] || 1;
+  let ts = pts.map((_, i) => cum[i + 1] / total);
+  let a = total / 3;
+  let b = total / 3;
+  for (let iter = 0; iter < 4; iter++) {
+    let A11 = 0;
+    let A12 = 0;
+    let A22 = 0;
+    let r1 = 0;
+    let r2 = 0;
+    const dd = dot(dP, dQ);
+    pts.forEach((p, i) => {
+      const t = ts[i];
+      const mt = 1 - t;
+      const al = 3 * mt * mt * t;
+      const be = 3 * mt * t * t;
+      const base = add(mul(P, mt * mt * mt + al), mul(Q, be + t * t * t));
+      const r = sub(p, base);
+      // model: base + al·a·dP − be·b·dQ
+      A11 += al * al;
+      A22 += be * be;
+      A12 += -al * be * dd;
+      r1 += al * dot(dP, r);
+      r2 += -be * dot(dQ, r);
+    });
+    const det = A11 * A22 - A12 * A12;
+    if (Math.abs(det) > 1e-9) {
+      a = (r1 * A22 - r2 * A12) / det;
+      b = (A11 * r2 - A12 * r1) / det;
+    }
+    a = Math.min(Math.max(a, minHandle), 4 * total);
+    b = Math.min(Math.max(b, minHandle), 4 * total);
+    // re-estimate parameters as closest points on the fitted curve
+    const c = cubicFrom(P, dP, Q, dQ, a, b);
+    ts = pts.map((p, i) => {
+      const lo = Math.max(0, ts[i] - 0.25);
+      const hi = Math.min(1, ts[i] + 0.25);
+      return closestOnCubic(c, p, lo, hi, 24).t;
+    });
+  }
+  return { a, b };
+}
+
+// # Segments
+
+/** Intersection parameters of segments p→p2 and q→q2, if they cross. */
+export function segHit(
+  p: Pt,
+  p2: Pt,
+  q: Pt,
+  q2: Pt,
+): { t: number; u: number } | null {
+  const rx = p2.x - p.x;
+  const ry = p2.y - p.y;
+  const sx = q2.x - q.x;
+  const sy = q2.y - q.y;
+  const denom = rx * sy - ry * sx;
+  if (Math.abs(denom) < 1e-12) return null;
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  const t = (dx * sy - dy * sx) / denom;
+  const u = (dx * ry - dy * rx) / denom;
+  if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return { t, u };
+  return null;
+}
+
+/**
+ * A self-crossing of a closed polyline between segments m1 < m2
+ * (segment m runs from sample m to m+1). u1 = m1 + t1 < u2 = m2 + t2.
+ */
+export type PolyCrossing = { u1: number; u2: number; p: Pt };
+
+export function polylineSelfCrossings(s: Pt[]): PolyCrossing[] {
+  const M = s.length;
+  const out: PolyCrossing[] = [];
   for (let m1 = 0; m1 < M; m1++) {
-    const p = s[m1];
-    const p2 = s[(m1 + 1) % M];
-    const rx = p2.x - p.x;
-    const ry = p2.y - p.y;
     for (let m2 = m1 + 2; m2 < M; m2++) {
-      if (m1 === 0 && m2 === M - 1) continue; // adjacent (cyclically)
-      if (
-        maxX[m1] < minX[m2] ||
-        maxX[m2] < minX[m1] ||
-        maxY[m1] < minY[m2] ||
-        maxY[m2] < minY[m1]
-      ) {
-        continue;
-      }
-      const q = s[m2];
-      const q2 = s[(m2 + 1) % M];
-      const sx = q2.x - q.x;
-      const sy = q2.y - q.y;
-      const denom = rx * sy - ry * sx;
-      if (Math.abs(denom) < 1e-12) continue;
-      const dx = q.x - p.x;
-      const dy = q.y - p.y;
-      const t = (dx * sy - dy * sx) / denom;
-      const u = (dx * ry - dy * rx) / denom;
-      if (t >= 0 && t < 1 && u >= 0 && u < 1) {
+      if (m1 === 0 && m2 === M - 1) continue;
+      const h = segHit(s[m1], s[(m1 + 1) % M], s[m2], s[(m2 + 1) % M]);
+      if (h && h.t < 1 && h.u < 1) {
         out.push({
-          m1,
-          t1: t,
-          m2,
-          t2: u,
-          u1: m1 + t,
-          u2: m2 + u,
-          p: { x: p.x + rx * t, y: p.y + ry * t },
+          u1: m1 + h.t,
+          u2: m2 + h.u,
+          p: lerpPt(s[m1], s[(m1 + 1) % M], h.t),
         });
       }
     }
   }
   return out;
-}
-
-/** Cumulative arc length of a closed polyline; length M+1. */
-export function cumLen(s: Pt[]): number[] {
-  const M = s.length;
-  const out = [0];
-  for (let m = 0; m < M; m++) {
-    out.push(out[m] + dist(s[m], s[(m + 1) % M]));
-  }
-  return out;
-}
-
-export function pointAt(s: Pt[], u: number): Pt {
-  const M = s.length;
-  const uu = cyc(u, M);
-  const m = Math.floor(uu);
-  return lerpPt(s[m], s[(m + 1) % M], uu - m);
-}
-
-/** Unit tangent of the segment containing parameter u. */
-export function tangentAt(s: Pt[], u: number): Pt {
-  const M = s.length;
-  const m = Math.floor(cyc(u, M));
-  const a = s[m];
-  const b = s[(m + 1) % M];
-  const len = dist(a, b) || 1;
-  return { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
-}
-
-export function paramToArc(cum: number[], u: number): number {
-  const M = cum.length - 1;
-  const uu = cyc(u, M);
-  const m = Math.floor(uu);
-  return cum[m] + (cum[m + 1] - cum[m]) * (uu - m);
-}
-
-export function arcToParam(cum: number[], L: number): number {
-  const M = cum.length - 1;
-  const total = cum[M];
-  let LL = ((L % total) + total) % total;
-  // binary search for m with cum[m] <= LL < cum[m+1]
-  let lo = 0;
-  let hi = M;
-  while (hi - lo > 1) {
-    const mid = (lo + hi) >> 1;
-    if (cum[mid] <= LL) lo = mid;
-    else hi = mid;
-  }
-  const segLen = cum[lo + 1] - cum[lo];
-  if (segLen <= 0) return lo;
-  LL = Math.min(LL, cum[lo + 1]);
-  return lo + (LL - cum[lo]) / segLen;
-}
-
-/** Walk `d` px of arc length (signed) from parameter u. */
-export function walk(cum: number[], u: number, d: number): number {
-  return arcToParam(cum, paramToArc(cum, u) + d);
-}
-
-/**
- * Sub-polyline of the closed sampled curve from parameter u0 forward
- * to u1, resampled to exactly `count` points evenly spaced in arc
- * length (including both endpoints).
- */
-export function subCurve(
-  s: Pt[],
-  cum: number[],
-  u0: number,
-  u1: number,
-  count: number,
-): Pt[] {
-  const M = s.length;
-  const total = cum[M];
-  const L0 = paramToArc(cum, u0);
-  let L1 = paramToArc(cum, u1);
-  if (L1 < L0) L1 += total;
-  const out: Pt[] = [];
-  for (let k = 0; k < count; k++) {
-    const L = L0 + ((L1 - L0) * k) / (count - 1);
-    out.push(pointAt(s, arcToParam(cum, L)));
-  }
-  return out;
-}
-
-/** Cyclic forward distance from u0 to u1 in a cycle of length M. */
-export function cycDist(u0: number, u1: number, M: number): number {
-  return cyc(u1 - u0, M);
-}
-
-/** Smallest absolute cyclic distance. */
-export function cycAbs(u0: number, u1: number, M: number): number {
-  const d = cycDist(u0, u1, M);
-  return Math.min(d, M - d);
-}
-
-/** Points along an open polyline, evenly spaced by arc length. */
-export function resamplePolyline(poly: Pt[], count: number): Pt[] {
-  const cum = [0];
-  for (let i = 1; i < poly.length; i++) {
-    cum.push(cum[i - 1] + dist(poly[i - 1], poly[i]));
-  }
-  const total = cum[cum.length - 1];
-  const out: Pt[] = [];
-  let j = 0;
-  for (let k = 0; k < count; k++) {
-    const L = count === 1 ? 0 : (total * k) / (count - 1);
-    while (j < poly.length - 2 && cum[j + 1] < L) j++;
-    const segLen = cum[j + 1] - cum[j];
-    const t = segLen > 0 ? Math.min(1, Math.max(0, (L - cum[j]) / segLen)) : 0;
-    out.push(lerpPt(poly[j], poly[j + 1], t));
-  }
-  return out;
-}
-
-/** Intersection of a ray (origin o, unit dir d) with a segment a→b. */
-export function raySegment(o: Pt, d: Pt, a: Pt, b: Pt): number | null {
-  const sx = b.x - a.x;
-  const sy = b.y - a.y;
-  const denom = d.x * sy - d.y * sx;
-  if (Math.abs(denom) < 1e-12) return null;
-  const dx = a.x - o.x;
-  const dy = a.y - o.y;
-  const t = (dx * sy - dy * sx) / denom;
-  const u = (dx * d.y - dy * d.x) / denom;
-  if (t > 0 && u >= 0 && u < 1) return t;
-  return null;
 }

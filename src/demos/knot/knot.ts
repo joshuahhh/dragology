@@ -1,225 +1,254 @@
 // Knot diagram model for the knot demo.
 //
-// A diagram is a closed curve (control points with stable ids, drawn
-// as a Catmull-Rom spline) plus a Gauss code: the crossing visits in
-// curve order, each tagged with a crossing id and over/under. The
-// geometry says *where* crossings are; the code says *which* crossing
-// each one is and who's on top. `analyze` pairs the two up.
+// A diagram is a cyclic sequence of *visits* (the Gauss code). Each
+// visit is a pass through a node and names the edge leaving it. Nodes
+// are either crossings (visited twice, once over and once under) or
+// invisible "pass" nodes (visited once). Every edge is a single cubic
+// from one visit to the next, leaving and arriving along the strand
+// directions at its end nodes; its two handle lengths are its only
+// free parameters. So the isotopy degrees of freedom are finite:
+// position + rotation per node, two handle lengths per edge.
+//
+// Crossings are always drawn with the strands at right angles. Pass
+// nodes show up only transiently: moves that create crossings start
+// from a "pre-split" state with pass nodes sitting exactly on the old
+// curve, and moves that remove crossings turn them into pass nodes.
+// `cleanup` merges pass nodes away again after a drop.
 
 import {
-  Crossing,
+  Cubic,
   Pt,
-  SUB,
-  arcToParam,
-  cumLen,
+  add,
+  angleOf,
+  bez,
+  bezTan,
+  closestOnCubic,
+  cross,
+  cubicFrom,
+  cubicLen,
   cyc,
-  cycAbs,
-  cycDist,
   dist,
-  findCrossings,
+  dot,
+  fitHandles,
+  len,
   lerpPt,
-  paramToArc,
-  pointAt,
-  raySegment,
-  resamplePolyline,
-  sampleClosed,
-  subCurve,
-  tangentAt,
-  walk,
+  mul,
+  norm,
+  paramAtLen,
+  perp,
+  polylineSelfCrossings,
+  pt,
+  sampleCubic,
+  segHit,
+  split,
+  sub,
+  subCubic,
+  unit,
 } from "./geometry";
 
-export type KPt = { id: string; x: number; y: number };
-export type CodeEntry = { id: string; over: boolean };
-export type Brush = { at: string | null; dx: number; dy: number };
-export type Knot = {
-  pts: KPt[];
-  code: CodeEntry[];
-  nextId: number;
-  brush: Brush;
-};
-
-export const SPACING = 15; // target control-point spacing (px)
-const BRUSH_R = 55; // cosmetic brush falloff radius (px along curve)
-
-// Reidemeister move geometry
-const W1 = 42; // R1 half-window
-const LOOP_R = 24;
-const LOOP_KX = 1.6;
-const LOOP_LEAN = 16;
-const W2 = 44; // R2 half-window
-const R2_CLEAR = 24;
-const R2_MAX = 110;
-const MARGIN = 20; // beyond crossings, for untwist / pull / R3
-const R3_CLEAR = 22;
-const PULL_MARGIN = 12; // window margin for R2 pull
-const R2_KEEP_CLEAR = 18; // new R2 crossings stay this far from old ones
-
-const ZERO_BRUSH: Brush = { at: null, dx: 0, dy: 0 };
-
-// # Analysis
-
-export type Visit = { u: number; ci: number; first: boolean };
-
-export type CrossingInfo = {
-  id: string;
-  cr: Crossing;
-  overFirst: boolean;
-  overU: number;
-  underU: number;
-  overK: number; // visit index of over visit
-  underK: number;
+export type NodeKind = "x" | "p";
+export type KNode = {
+  kind: NodeKind;
+  x: number;
+  y: number;
+  /** Direction of the over-strand (crossings) or the strand (pass). */
+  rot: number;
+  /** Crossing sign; the under-strand runs at rot − sign·90°. */
   sign: 1 | -1;
+  /**
+   * Pass nodes created by splitting an edge remember that edge's
+   * handles, so merging them back restores it exactly.
+   */
+  hint?: { a: number; b: number };
+};
+export type Visit = { n: string; over: boolean; e: string };
+export type EdgeData = { a: number; b: number };
+export type Knot = {
+  nodes: Record<string, KNode>;
+  code: Visit[];
+  edges: Record<string, EdgeData>;
+  nextId: number;
 };
 
-export type Analysis = {
-  knot: Knot;
-  pts: Pt[]; // effective (brushed) control points
-  samples: Pt[];
-  cum: number[];
-  crossings: Crossing[];
-  visits: Visit[];
-  consistent: boolean;
-  infos: CrossingInfo[]; // indexed like crossings
-  /** visit index → crossing info */
-  visitInfo: CrossingInfo[];
-};
+const MIN_HANDLE = 3;
 
-export function effectivePts(k: Knot): Pt[] {
-  const { at, dx, dy } = k.brush;
-  if (at === null || (dx === 0 && dy === 0)) return k.pts;
-  const i = k.pts.findIndex((p) => p.id === at);
-  if (i < 0) return k.pts;
-  const N = k.pts.length;
-  const out: Pt[] = k.pts.map((p) => ({ x: p.x, y: p.y }));
-  for (const dir of [1, -1]) {
-    let d = 0;
-    let j = i;
-    while (true) {
-      const w = d < BRUSH_R ? 0.5 * (1 + Math.cos((Math.PI * d) / BRUSH_R)) : 0;
-      if (w <= 0) break;
-      out[j] = { x: k.pts[j].x + dx * w, y: k.pts[j].y + dy * w };
-      const jn = cyc(j + dir, N);
-      d += dist(k.pts[j], k.pts[jn]);
-      j = jn;
-      if (j === i) break;
-    }
-  }
+// # Geometry of a diagram
+
+export function nodePos(k: Knot, i: number): Pt {
+  const nd = k.nodes[k.code[i].n];
+  return pt(nd.x, nd.y);
+}
+
+/** Direction of the strand at visit i. */
+export function dirAt(k: Knot, i: number): Pt {
+  const v = k.code[i];
+  const nd = k.nodes[v.n];
+  if (nd.kind === "p" || v.over) return unit(nd.rot);
+  return unit(nd.rot - (nd.sign * Math.PI) / 2);
+}
+
+const cubicsCache = new WeakMap<Knot, Cubic[]>();
+
+/** Cubic of the edge leaving visit i, for every i. */
+export function edgeCubics(k: Knot): Cubic[] {
+  const cached = cubicsCache.get(k);
+  if (cached) return cached;
+  const V = k.code.length;
+  const out = k.code.map((v, i) => {
+    const j = (i + 1) % V;
+    const ed = k.edges[v.e];
+    return cubicFrom(
+      nodePos(k, i),
+      dirAt(k, i),
+      nodePos(k, j),
+      dirAt(k, j),
+      ed.a,
+      ed.b,
+    );
+  });
+  cubicsCache.set(k, out);
   return out;
 }
 
-function sortedVisits(crossings: Crossing[]): Visit[] {
-  const visits: Visit[] = [];
-  crossings.forEach((c, ci) => {
-    visits.push({ u: c.u1, ci, first: true });
-    visits.push({ u: c.u2, ci, first: false });
-  });
-  visits.sort((a, b) => a.u - b.u);
-  return visits;
+export function edgeIndex(k: Knot, e: string): number {
+  return k.code.findIndex((v) => v.e === e);
 }
 
-function crossingSign(samples: Pt[], overU: number, underU: number): 1 | -1 {
-  const o = tangentAt(samples, overU);
-  const u = tangentAt(samples, underU);
-  // screen coords (y down): positive crossing iff cross(o, u) < 0
-  return o.x * u.y - o.y * u.x < 0 ? 1 : -1;
-}
+const SAMPLES = 16;
+const validCache = new WeakMap<Knot, boolean>();
 
-const analysisCache = new WeakMap<Knot, Analysis>();
-
-export function analyze(knot: Knot): Analysis {
-  const cached = analysisCache.get(knot);
-  if (cached) return cached;
-  const result = analyzeUncached(knot);
-  analysisCache.set(knot, result);
+/**
+ * A diagram is valid when its edges meet only at their shared nodes:
+ * no stray intersections, so the drawing is exactly the code.
+ */
+export function isValid(k: Knot): boolean {
+  const cached = validCache.get(k);
+  if (cached !== undefined) return cached;
+  const result = isValidUncached(k);
+  validCache.set(k, result);
   return result;
 }
 
-function analyzeUncached(knot: Knot): Analysis {
-  const pts = effectivePts(knot);
-  const samples = sampleClosed(pts, SUB);
-  const cum = cumLen(samples);
-  const crossings = findCrossings(samples);
-  const visits = sortedVisits(crossings);
-  const code = knot.code;
-
-  const kFirst: number[] = new Array(crossings.length);
-  const kSecond: number[] = new Array(crossings.length);
-  visits.forEach((v, k) => {
-    if (v.first) kFirst[v.ci] = k;
-    else kSecond[v.ci] = k;
-  });
-
-  let consistent = visits.length === code.length;
-  if (consistent) {
-    for (let ci = 0; ci < crossings.length; ci++) {
-      const a = code[kFirst[ci]];
-      const b = code[kSecond[ci]];
-      if (a.id !== b.id || a.over === b.over) {
-        consistent = false;
-        break;
-      }
+function isValidUncached(k: Knot): boolean {
+  const V = k.code.length;
+  if (V === 0) return false;
+  const cubics = edgeCubics(k);
+  const S = SAMPLES;
+  const n = V * S;
+  const px = new Float64Array(n);
+  const py = new Float64Array(n);
+  const qx = new Float64Array(n);
+  const qy = new Float64Array(n);
+  cubics.forEach((c, e) => {
+    const s = sampleCubic(c, S);
+    for (let i = 0; i < S; i++) {
+      px[e * S + i] = s[i].x;
+      py[e * S + i] = s[i].y;
+      qx[e * S + i] = s[i + 1].x;
+      qy[e * S + i] = s[i + 1].y;
     }
-  }
-
-  const infos: CrossingInfo[] = crossings.map((cr, ci) => {
-    const overFirst = consistent ? code[kFirst[ci]].over : true;
-    const id = consistent ? code[kFirst[ci]].id : `?${ci}`;
-    const overU = overFirst ? cr.u1 : cr.u2;
-    const underU = overFirst ? cr.u2 : cr.u1;
-    return {
-      id,
-      cr,
-      overFirst,
-      overU,
-      underU,
-      overK: overFirst ? kFirst[ci] : kSecond[ci],
-      underK: overFirst ? kSecond[ci] : kFirst[ci],
-      sign: crossingSign(samples, overU, underU),
-    };
   });
-  const visitInfo = visits.map((v) => infos[v.ci]);
-
-  return {
-    knot,
-    pts,
-    samples,
-    cum,
-    crossings,
-    visits,
-    consistent,
-    infos,
-    visitInfo,
+  const minX = new Float64Array(n);
+  const maxX = new Float64Array(n);
+  const minY = new Float64Array(n);
+  const maxY = new Float64Array(n);
+  for (let s = 0; s < n; s++) {
+    minX[s] = Math.min(px[s], qx[s]);
+    maxX[s] = Math.max(px[s], qx[s]);
+    minY[s] = Math.min(py[s], qy[s]);
+    maxY[s] = Math.max(py[s], qy[s]);
+  }
+  // node that a segment touches at its end (if it's an end segment)
+  const endNodes = (s: number): string[] => {
+    const e = Math.floor(s / S);
+    const i = s % S;
+    const out: string[] = [];
+    if (i === 0) out.push(k.code[e].n);
+    if (i === S - 1) out.push(k.code[(e + 1) % V].n);
+    return out;
   };
-}
-
-export function isConsistent(k: Knot): boolean {
-  return analyze(k).consistent;
-}
-
-// # Arcs and invariants
-
-/**
- * Arcs are the pieces of the curve between consecutive under-visits.
- * Each arc is named by the crossing id of the under-visit it starts
- * at (or "root" if the diagram has no crossings).
- */
-export function arcAt(an: Analysis, u: number): string {
-  let best: CrossingInfo | null = null;
-  let bestU = -Infinity;
-  let last: CrossingInfo | null = null;
-  let lastU = -Infinity;
-  for (const info of an.infos) {
-    if (info.underU <= u && info.underU > bestU) {
-      best = info;
-      bestU = info.underU;
-    }
-    if (info.underU > lastU) {
-      last = info;
-      lastU = info.underU;
+  for (let s1 = 0; s1 < n; s1++) {
+    const e1 = Math.floor(s1 / S);
+    for (let s2 = s1 + 1; s2 < n; s2++) {
+      const e2 = Math.floor(s2 / S);
+      if (e1 === e2 && s2 - s1 <= 1) continue;
+      if (
+        maxX[s1] < minX[s2] - 1e-6 ||
+        maxX[s2] < minX[s1] - 1e-6 ||
+        maxY[s1] < minY[s2] - 1e-6 ||
+        maxY[s2] < minY[s1] - 1e-6
+      ) {
+        continue;
+      }
+      const h = segHit(
+        pt(px[s1], py[s1]),
+        pt(qx[s1], qy[s1]),
+        pt(px[s2], py[s2]),
+        pt(qx[s2], qy[s2]),
+      );
+      if (!h) continue;
+      const X = pt(
+        px[s1] + (qx[s1] - px[s1]) * h.t,
+        py[s1] + (qy[s1] - py[s1]) * h.t,
+      );
+      const n1 = endNodes(s1);
+      const n2 = endNodes(s2);
+      const ok = n1.some(
+        (id) =>
+          n2.includes(id) && dist(X, pt(k.nodes[id].x, k.nodes[id].y)) < 1.5,
+      );
+      if (!ok) return false;
     }
   }
-  const info = best ?? last;
-  return info ? info.id : "root";
+  return true;
+}
+
+// # Invariants
+
+type CrossingVisit = { id: string; over: boolean };
+type Combo = {
+  cv: CrossingVisit[];
+  crossings: { id: string; overK: number; underK: number; sign: 1 | -1 }[];
+};
+
+function combo(k: Knot): Combo {
+  const cv: CrossingVisit[] = [];
+  for (const v of k.code) {
+    if (k.nodes[v.n].kind === "x") cv.push({ id: v.n, over: v.over });
+  }
+  const byId = new Map<string, { overK: number; underK: number }>();
+  cv.forEach((v, i) => {
+    const entry = byId.get(v.id) ?? { overK: -1, underK: -1 };
+    if (v.over) entry.overK = i;
+    else entry.underK = i;
+    byId.set(v.id, entry);
+  });
+  const crossings = [...byId.entries()].map(([id, e]) => ({
+    id,
+    ...e,
+    sign: k.nodes[id].sign,
+  }));
+  return { cv, crossings };
+}
+
+/** Arc containing crossing-visit index i: named by its starting under-visit. */
+function arcOfCv(cb: Combo, i: number): string {
+  const n = cb.cv.length;
+  for (let s = 0; s < n; s++) {
+    const v = cb.cv[cyc(i - s, n)];
+    if (!v.over) return v.id;
+  }
+  return "root";
+}
+
+/** Arc that the edge leaving visit i belongs to. */
+export function arcOfEdge(k: Knot, i: number): string {
+  const V = k.code.length;
+  for (let s = 0; s < V; s++) {
+    const v = k.code[cyc(i - s, V)];
+    if (k.nodes[v.n].kind === "x" && !v.over) return v.n;
+  }
+  return "root";
 }
 
 export type Invariants = {
@@ -234,18 +263,19 @@ function idNum(id: string): number {
   return parseInt(id.replace(/\D/g, ""), 10) || 0;
 }
 
-function tricolor(an: Analysis): { ok: boolean; colors: Map<string, number> } {
-  const arcIds = an.infos.length === 0 ? ["root"] : an.infos.map((i) => i.id);
+function tricolor(cb: Combo): { ok: boolean; colors: Map<string, number> } {
+  const arcIds =
+    cb.crossings.length === 0 ? ["root"] : cb.crossings.map((c) => c.id);
   arcIds.sort((a, b) => idNum(a) - idNum(b));
   const idx = new Map(arcIds.map((id, i) => [id, i]));
   const nv = arcIds.length;
+  const n = cb.cv.length;
   // rows: over + underIn + underOut ≡ 0 (mod 3)
-  const rows: number[][] = an.infos.map((info) => {
+  const rows: number[][] = cb.crossings.map((c) => {
     const row = new Array(nv).fill(0);
-    const over = arcAt(an, info.overU);
-    const underOut = info.id;
-    const underIn = arcAt(an, info.underU - 1e-6);
-    for (const a of [over, underIn, underOut]) {
+    const over = arcOfCv(cb, c.overK);
+    const underIn = arcOfCv(cb, cyc(c.underK - 1, n));
+    for (const a of [over, underIn, c.id]) {
       const j = idx.get(a)!;
       row[j] = (row[j] + 1) % 3;
     }
@@ -318,10 +348,10 @@ function tricolor(an: Analysis): { ok: boolean; colors: Map<string, number> } {
 // Laurent polynomials in A as Map<exponent, coeff>
 type Poly = Map<number, number>;
 
-function polyAdd(a: Poly, b: Poly, scale = 1): Poly {
+function polyAdd(a: Poly, b: Poly): Poly {
   const out = new Map(a);
   for (const [e, c] of b) {
-    const v = (out.get(e) ?? 0) + c * scale;
+    const v = (out.get(e) ?? 0) + c;
     if (v === 0) out.delete(e);
     else out.set(e, v);
   }
@@ -353,18 +383,18 @@ const D_LOOP: Poly = new Map([
 ]); // -A^2 - A^-2
 
 /** Kauffman bracket, normalized to the Jones polynomial (in A). */
-export function jonesPoly(an: Analysis): Poly | null {
-  const n = an.infos.length;
+function jonesPoly(cb: Combo): Poly | null {
+  const n = cb.crossings.length;
   if (n === 0) return new Map([[0, 1]]);
   if (n > 13) return null;
-  const E = 2 * n; // edges: edge k runs from visit k to visit k+1
+  const E = 2 * n; // edges: edge k runs from crossing-visit k to k+1
   // PD: X[a,b,c,d] with a = incoming under, then counterclockwise
-  const pd = an.infos.map((info) => {
-    const uIn = cyc(info.underK - 1, E);
-    const uOut = info.underK;
-    const oIn = cyc(info.overK - 1, E);
-    const oOut = info.overK;
-    return info.sign === 1 ? [uIn, oOut, uOut, oIn] : [uIn, oIn, uOut, oOut];
+  const pd = cb.crossings.map((c) => {
+    const uIn = cyc(c.underK - 1, E);
+    const uOut = c.underK;
+    const oIn = cyc(c.overK - 1, E);
+    const oOut = c.overK;
+    return c.sign === 1 ? [uIn, oOut, uOut, oIn] : [uIn, oIn, uOut, oOut];
   });
   let bracket: Poly = new Map();
   const parent = new Int32Array(E);
@@ -403,7 +433,7 @@ export function jonesPoly(an: Analysis): Poly | null {
     bracket = polyAdd(bracket, term);
   }
   // f = (-A^3)^(-w) <D>
-  const w = an.infos.reduce((acc, i) => acc + i.sign, 0);
+  const w = cb.crossings.reduce((acc, c) => acc + c.sign, 0);
   const factor: Poly = new Map([[-3 * w, w % 2 === 0 ? 1 : -1]]);
   return polyMul(factor, bracket);
 }
@@ -431,32 +461,28 @@ export function formatJones(p: Poly): string {
     .trim();
 }
 
-/**
- * The combinatorial content of a diagram: its code plus the crossing
- * signs (in visit order). Two consistent diagrams with the same key
- * are planar-isotopic; the key is what cosmetic dragging must keep.
- */
-export function diagramKey(an: Analysis): string | null {
-  if (!an.consistent) return null;
+/** The signed Gauss code, ignoring pass nodes. */
+export function diagramKey(k: Knot): string {
+  const cb = combo(k);
   return (
-    an.knot.code.map((e) => `${e.id}${e.over ? "o" : "u"}`).join(",") +
+    cb.cv.map((v) => `${v.id}${v.over ? "o" : "u"}`).join(",") +
     "|" +
-    an.visitInfo.map((i) => i.sign).join("")
+    cb.crossings.map((c) => `${c.id}${c.sign > 0 ? "+" : "-"}`).join(",")
   );
 }
 
 const invariantsCache = new Map<string, Invariants>();
 
-export function invariants(an: Analysis): Invariants {
-  // Everything here depends only on the code and the crossing signs.
-  const key = diagramKey(an) ?? "inconsistent";
+export function invariants(k: Knot): Invariants {
+  const key = diagramKey(k);
   const cached = invariantsCache.get(key);
   if (cached) return cached;
-  const tc = tricolor(an);
-  const jp = jonesPoly(an);
+  const cb = combo(k);
+  const tc = tricolor(cb);
+  const jp = jonesPoly(cb);
   const result: Invariants = {
-    n: an.infos.length,
-    writhe: an.infos.reduce((acc, i) => acc + i.sign, 0),
+    n: cb.crossings.length,
+    writhe: cb.crossings.reduce((acc, c) => acc + c.sign, 0),
     tricolorable: tc.ok,
     arcColor: tc.colors,
     jones: jp ? formatJones(jp) : null,
@@ -466,356 +492,37 @@ export function invariants(an: Analysis): Invariants {
   return result;
 }
 
-// # Code derivation
+// # Building blocks for moves
 
-type NewInvolved = {
-  cr: Crossing;
-  changed1: boolean;
-  changed2: boolean;
-};
-type OldInvolved = CrossingInfo & { changed1: boolean; changed2: boolean };
-type Assignment = { id: string; over1: boolean; over2: boolean };
-type Policy = (
-  newInvolved: NewInvolved[],
-  oldInvolved: OldInvolved[],
-  ctx: { samples: Pt[]; old: Analysis },
-) => Assignment[] | null;
-
-function spanOf(m: number): number {
-  return Math.floor(m / SUB);
+function clone(k: Knot): Knot {
+  return {
+    nodes: { ...k.nodes },
+    code: k.code.map((v) => ({ ...v })),
+    edges: { ...k.edges },
+    nextId: k.nextId,
+  };
 }
 
-/**
- * Build the code for `newPts`, which differs from `old` only in
- * spans in `changedSpans`. Unchanged crossings are matched by
- * segment indices; crossings touching changed spans go to `policy`.
- */
-function deriveCode(
-  old: Analysis,
-  newPts: Pt[],
-  changedSpans: Set<number>,
-  policy: Policy,
-  why?: (s: string) => void,
-): CodeEntry[] | null {
-  const samples = sampleClosed(newPts, SUB);
-  const crossings = findCrossings(samples);
-  const oldOutside = new Map<string, CrossingInfo>();
-  const oldInvolved: OldInvolved[] = [];
-  for (const info of old.infos) {
-    const changed1 = changedSpans.has(spanOf(info.cr.m1));
-    const changed2 = changedSpans.has(spanOf(info.cr.m2));
-    if (changed1 || changed2) oldInvolved.push({ ...info, changed1, changed2 });
-    else oldOutside.set(`${info.cr.m1}:${info.cr.m2}`, info);
-  }
-  const entries: { u: number; id: string; over: boolean }[] = [];
-  const newInvolved: NewInvolved[] = [];
-  let matched = 0;
-  for (const cr of crossings) {
-    const changed1 = changedSpans.has(spanOf(cr.m1));
-    const changed2 = changedSpans.has(spanOf(cr.m2));
-    if (changed1 || changed2) {
-      newInvolved.push({ cr, changed1, changed2 });
-    } else {
-      const info = oldOutside.get(`${cr.m1}:${cr.m2}`);
-      if (!info) {
-        why?.(
-          `unmatched new outside crossing ${cr.m1}:${cr.m2} spans ${spanOf(cr.m1)},${spanOf(cr.m2)} changed=${[...changedSpans].sort((a, b) => a - b).join(",")} old=${[...oldOutside.keys()].join(" ")}`,
-        );
-        return null;
-      }
-      matched++;
-      entries.push({ u: cr.u1, id: info.id, over: info.overFirst });
-      entries.push({ u: cr.u2, id: info.id, over: !info.overFirst });
-    }
-  }
-  if (matched !== oldOutside.size) {
-    why?.(`matched ${matched} of ${oldOutside.size} outside crossings`);
-    return null;
-  }
-  const assigned = policy(newInvolved, oldInvolved, { samples, old });
-  if (!assigned) return null;
-  assigned.forEach((a, i) => {
-    const cr = newInvolved[i].cr;
-    entries.push({ u: cr.u1, id: a.id, over: a.over1 });
-    entries.push({ u: cr.u2, id: a.id, over: a.over2 });
-  });
-  entries.sort((a, b) => a.u - b.u);
-  return entries.map(({ id, over }) => ({ id, over }));
+function handlesOf(c: Cubic): EdgeData {
+  return { a: dist(c[0], c[1]), b: dist(c[3], c[2]) };
 }
 
-/**
- * For moves that remove some crossings from the window (an R1 loop, an
- * R2 bigon): any *other* crossing that touched the window must survive,
- * sliding a little along the outside strand without passing anything.
- * Returns assignments for the new crossings, or null.
- */
-function matchSliding(
-  nw: NewInvolved[],
-  old: OldInvolved[],
-  ctx: { samples: Pt[]; old: Analysis },
-  removedIds: string[],
-  why?: (s: string) => void,
-): Assignment[] | null {
-  const survivors = old.filter((o) => !removedIds.includes(o.id));
-  const removed = old.filter((o) => removedIds.includes(o.id));
-  if (removed.length !== removedIds.length) {
-    why?.(
-      "expected to remove " +
-        removedIds.join() +
-        " but window has " +
-        old.map((o) => o.id).join(),
-    );
-    return null;
-  }
-  if (nw.length !== survivors.length) {
-    why?.(`${nw.length} new crossings vs ${survivors.length} survivors`);
-    return null;
-  }
-  const Ms = ctx.samples.length;
-  const total = ctx.old.cum[ctx.old.cum.length - 1];
-  const used = new Set<number>();
-  const out: (Assignment | null)[] = nw.map(() => null);
-  const newOrder: { uIn: number; id: string }[] = [];
-  for (let k = 0; k < nw.length; k++) {
-    const x = nw[k];
-    if (x.changed1 && x.changed2) {
-      // a self-crossing of the window strand: match by position
-      let best = -1;
-      let bestD = 30;
-      survivors.forEach((o, j) => {
-        if (used.has(j) || !(o.changed1 && o.changed2)) return;
-        const d = dist(o.cr.p, x.cr.p);
-        if (d < bestD) {
-          bestD = d;
-          best = j;
-        }
-      });
-      if (best < 0) {
-        why?.("new self-crossing in window");
-        return null;
-      }
-      used.add(best);
-      const o = survivors[best];
-      out[k] = { id: o.id, over1: o.overFirst, over2: !o.overFirst };
-      newOrder.push({ uIn: x.cr.u1, id: o.id });
-      continue;
-    }
-    const uOut = x.changed1 ? x.cr.u2 : x.cr.u1;
-    const uIn = x.changed1 ? x.cr.u1 : x.cr.u2;
-    const Lnew = paramToArc(cumLen(ctx.samples), uOut);
-    let best = -1;
-    let bestD = 45; // px along the outside strand
-    survivors.forEach((o, j) => {
-      if (used.has(j)) return;
-      if (o.changed1 === o.changed2) return;
-      const uOldOut = o.changed1 ? o.cr.u2 : o.cr.u1;
-      const Lold = paramToArc(ctx.old.cum, uOldOut);
-      const dd = Math.abs(Lnew - Lold);
-      const d = Math.min(dd, total - dd);
-      if (d < bestD) {
-        bestD = d;
-        best = j;
-      }
-    });
-    if (best < 0) {
-      why?.(
-        "crossing at outside u " + uOut.toFixed(1) + " has no nearby survivor",
-      );
-      return null;
-    }
-    used.add(best);
-    const o = survivors[best];
-    const uOldOut = o.changed1 ? o.cr.u2 : o.cr.u1;
-    // nothing else may sit between the old and new outside positions
-    const lo = Math.min(uOut, uOldOut);
-    const hi = Math.max(uOut, uOldOut);
-    if (
-      hi - lo < Ms / 2 &&
-      ctx.old.visits.some(
-        (v) =>
-          v.u > lo &&
-          v.u < hi &&
-          ctx.old.visitInfo[ctx.old.visits.indexOf(v)].id !== o.id,
-      )
-    ) {
-      why?.("crossing " + o.id + " would slide past another visit");
-      return null;
-    }
-    const wOver = o.changed1 ? o.overFirst : !o.overFirst;
-    out[k] = {
-      id: o.id,
-      over1: x.changed1 ? wOver : !wOver,
-      over2: x.changed2 ? wOver : !wOver,
-    };
-    newOrder.push({ uIn, id: o.id });
-  }
-  // order along the window strand must be preserved
-  newOrder.sort((a, b) => a.uIn - b.uIn);
-  const oldOrder = survivors
-    .map((o) => ({ uIn: o.changed1 ? o.cr.u1 : o.cr.u2, id: o.id }))
-    .sort((a, b) => a.uIn - b.uIn);
-  if (oldOrder.length !== newOrder.length) {
-    why?.("survivor count mismatch");
-    return null;
-  }
-  if (newOrder.map((x) => x.id).join() !== oldOrder.map((x) => x.id).join()) {
-    why?.("survivors changed order along the strand");
-    return null;
-  }
-  return out as Assignment[];
+function passNode(p: Pt, dir: Pt, hint?: EdgeData): KNode {
+  return { kind: "p", x: p.x, y: p.y, rot: angleOf(dir), sign: 1, hint };
 }
 
-// # Windows and relaying
-
-type Window = { a: number; b: number }; // interior a+1..b-1 (cyclic) moves
-
-function windowByArc(pts: Pt[], i: number, back: number, fwd: number): Window {
-  const N = pts.length;
-  let a = i;
-  let d = 0;
-  while (d < back) {
-    const an = cyc(a - 1, N);
-    d += dist(pts[a], pts[an]);
-    a = an;
-  }
-  let b = i;
-  d = 0;
-  while (d < fwd) {
-    const bn = cyc(b + 1, N);
-    d += dist(pts[b], pts[bn]);
-    b = bn;
-  }
-  return { a, b };
+function crossingNode(p: Pt, overDir: Pt, underDir: Pt): KNode {
+  const sign = cross(overDir, underDir) < 0 ? 1 : -1;
+  return { kind: "x", x: p.x, y: p.y, rot: angleOf(overDir), sign };
 }
 
-function windowByParams(
-  N: number,
-  cum: number[],
-  uStart: number,
-  uEnd: number,
-  i: number,
-  margin = MARGIN,
-): Window {
-  const us = walk(cum, uStart, -margin);
-  const ue = walk(cum, uEnd, margin);
-  let a = cyc(Math.floor(us / SUB), N);
-  let b = cyc(Math.ceil(ue / SUB), N);
-  if (a === i) a = cyc(a - 1, N);
-  if (b === i) b = cyc(b + 1, N);
-  return { a, b };
+function clampHandle(h: number): number {
+  return Math.max(MIN_HANDLE, h);
 }
 
-function windowOk(w: Window, N: number, i: number): boolean {
-  const size = cycDist(w.a, w.b, N);
-  if (size < 2 || size > N - 3) return false;
-  const di = cycDist(w.a, i, N);
-  return di > 0 && di < size;
-}
-
-function changedSpansOf(w: Window, N: number): Set<number> {
-  const out = new Set<number>();
-  const size = cycDist(w.a, w.b, N);
-  for (let k = -1; k <= size; k++) out.add(cyc(w.a + k, N));
-  return out;
-}
-
-/**
- * Prepare the window for a move: make sure it has at least
- * `targetInterior` interior points by resampling the interior along
- * the current curve (keeping point i where it is). Idempotent when
- * no points need adding.
- */
-function prepareWindow(
-  an: Analysis,
-  w: Window,
-  i: number,
-  targetInterior: number,
-): { knot: Knot; an: Analysis; w: Window; i: number } | null {
-  const knot = an.knot;
-  const N = knot.pts.length;
-  const size = cycDist(w.a, w.b, N);
-  const interior = size - 1;
-  if (interior >= targetInterior) return { knot, an, w, i };
-  const { samples, cum } = an;
-  const uA = w.a * SUB;
-  const uI = i * SUB;
-  const uB = w.b * SUB;
-  const LA = cycDist(
-    paramToArc(cum, uA),
-    paramToArc(cum, uI),
-    cum[cum.length - 1],
-  );
-  const LB = cycDist(
-    paramToArc(cum, uI),
-    paramToArc(cum, uB),
-    cum[cum.length - 1],
-  );
-  const others = targetInterior - 1;
-  const nA = Math.round((others * LA) / (LA + LB));
-  const nB = others - nA;
-  let nextId = knot.nextId;
-  const fresh = (p: Pt): KPt => ({ id: `p${nextId++}`, x: p.x, y: p.y });
-  const curveA = subCurve(samples, cum, uA, uI, nA + 2).slice(1, -1);
-  const curveB = subCurve(samples, cum, uI, uB, nB + 2).slice(1, -1);
-  const newPts: KPt[] = [];
-  // walk from a around to a (exclusive), rebuilding the interior
-  newPts.push(knot.pts[w.a]);
-  curveA.forEach((p) => newPts.push(fresh(p)));
-  newPts.push(knot.pts[i]);
-  curveB.forEach((p) => newPts.push(fresh(p)));
-  for (let k = w.b; k !== w.a; k = cyc(k + 1, N)) newPts.push(knot.pts[k]);
-  // rotate so that the original pts[0] id is first, to keep code order
-  const id0 = knot.pts[0].id;
-  const r = Math.max(
-    0,
-    newPts.findIndex((p) => p.id === id0),
-  );
-  const rotated = [...newPts.slice(r), ...newPts.slice(0, r)];
-  // The curve's shape is unchanged, so the code carries over as-is;
-  // verify that the crossings still pair up (and keep their signs).
-  const k2: Knot = { pts: rotated, code: knot.code, nextId, brush: ZERO_BRUSH };
-  const an2 = analyze(k2);
-  if (diagramKey(an2) !== diagramKey(an)) return null;
-  const a2 = rotated.findIndex((p) => p.id === knot.pts[w.a].id);
-  const b2 = rotated.findIndex((p) => p.id === knot.pts[w.b].id);
-  const i2 = rotated.findIndex((p) => p.id === knot.pts[i].id);
-  return { knot: k2, an: an2, w: { a: a2, b: b2 }, i: i2 };
-}
-
-/**
- * Relay the window's interior onto curveA (a → apex) and curveB
- * (apex → b), putting point i at the apex.
- */
-function relayWindow(
-  pts: KPt[],
-  w: Window,
-  i: number,
-  curveA: Pt[],
-  curveB: Pt[],
-): KPt[] {
-  const N = pts.length;
-  const nA = cycDist(w.a, i, N) - 1;
-  const nB = cycDist(i, w.b, N) - 1;
-  const A = resamplePolyline(curveA, nA + 2).slice(1, -1);
-  const B = resamplePolyline(curveB, nB + 2).slice(1, -1);
-  const out = pts.slice();
-  A.forEach((p, k) => {
-    const j = cyc(w.a + 1 + k, N);
-    out[j] = { ...pts[j], ...p };
-  });
-  const apex = curveA[curveA.length - 1];
-  out[i] = { ...pts[i], ...apex };
-  B.forEach((p, k) => {
-    const j = cyc(i + 1 + k, N);
-    out[j] = { ...pts[j], ...p };
-  });
-  return out;
-}
-
-function polyLen(poly: Pt[]): number {
-  let L = 0;
-  for (let k = 1; k < poly.length; k++) L += dist(poly[k - 1], poly[k]);
-  return L;
+/** Insert visits after index i (handles cyclic appends). */
+function insertAfter(code: Visit[], i: number, visits: Visit[]): void {
+  code.splice(i + 1, 0, ...visits);
 }
 
 // # Moves
@@ -823,591 +530,646 @@ function polyLen(poly: Pt[]): number {
 export type MoveKind = "R1" | "R1-" | "R2" | "R2-" | "R3";
 export type Move = { kind: MoveKind; from: Knot; to: Knot };
 
-function finishMove(
-  kind: MoveKind,
-  prep: { knot: Knot; an: Analysis; w: Window; i: number },
-  curveA: Pt[],
-  curveB: Pt[],
-  policy: Policy,
-  extraIds: number | ((count: number) => number),
-  why?: (s: string) => void,
-): Move | null {
-  const { knot, an, w, i } = prep;
-  const N = knot.pts.length;
-  const newPts = relayWindow(knot.pts, w, i, curveA, curveB);
-  const changed = changedSpansOf(w, N);
-  let assignedCount = 0;
-  const code = deriveCode(
-    an,
-    newPts,
-    changed,
-    (nw, old, ctx) => {
-      const r = policy(nw, old, ctx);
-      assignedCount = r ? r.length : 0;
-      return r;
-    },
-    why,
-  );
-  if (!code) {
-    why?.("deriveCode null");
-    return null;
-  }
-  const to: Knot = {
-    pts: newPts,
-    code,
-    nextId:
-      knot.nextId +
-      (typeof extraIds === "function" ? extraIds(assignedCount) : extraIds),
-    brush: ZERO_BRUSH,
-  };
-  if (!analyze(to).consistent) {
-    why?.("inconsistent result");
-    return null;
-  }
-  if (dist(knot.pts[i], newPts[i]) < 3) {
-    why?.("apex too close");
-    return null;
-  }
-  return { kind, from: knot, to };
-}
-
-function frame(A: Pt, B: Pt): { T: Pt; Nn: Pt; L: number } {
-  const L = dist(A, B) || 1;
-  const T = { x: (B.x - A.x) / L, y: (B.y - A.y) / L };
-  return { T, Nn: { x: -T.y, y: T.x }, L };
-}
-
-function r1Twist(an: Analysis, i: number, sigma: 1 | -1): Move | null {
-  const knot = an.knot;
-  const N = knot.pts.length;
-  const w = windowByArc(knot.pts, i, W1, W1);
-  if (!windowOk(w, N, i)) return null;
-  // window must be crossing-free
-  const changed = changedSpansOf(w, N);
-  if (
-    an.infos.some(
-      (info) =>
-        changed.has(spanOf(info.cr.m1)) || changed.has(spanOf(info.cr.m2)),
-    )
-  ) {
-    return null;
-  }
-  const A = knot.pts[w.a];
-  const B = knot.pts[w.b];
-  const { T, Nn } = frame(A, B);
-  const base = subCurve(an.samples, an.cum, w.a * SUB, w.b * SUB, 61);
-  const loop = (k: number): Pt => {
-    const v = k / 60;
-    const tx =
-      LOOP_KX * LOOP_R * Math.sin(2 * Math.PI * v) +
-      LOOP_LEAN * Math.sin(Math.PI * v) ** 2;
-    const ny = sigma * LOOP_R * (1 - Math.cos(2 * Math.PI * v));
-    return {
-      x: base[k].x + T.x * tx + Nn.x * ny,
-      y: base[k].y + T.y * tx + Nn.y * ny,
-    };
-  };
-  const curveA: Pt[] = [];
-  const curveB: Pt[] = [];
-  for (let k = 0; k <= 30; k++) curveA.push(loop(k));
-  for (let k = 30; k <= 60; k++) curveB.push(loop(k));
-  const target = Math.round((polyLen(curveA) + polyLen(curveB)) / SPACING) - 1;
-  const prep = prepareWindow(an, w, i, target);
-  if (!prep) return null;
-  const id = `c${prep.knot.nextId}`;
-  return finishMove(
-    "R1",
-    prep,
-    curveA,
-    curveB,
-    (nw, old) => {
-      if (old.length !== 0 || nw.length !== 1) return null;
-      if (!(nw[0].changed1 && nw[0].changed2)) return null;
-      return [{ id, over1: true, over2: false }];
-    },
-    1,
-  );
-}
-
-function r2Push(
-  an: Analysis,
+/**
+ * R1 twist on the edge leaving visit i: a loop on the given side.
+ * `from` is the pre-split state (two pass nodes at the edge midpoint,
+ * joined by a zero-length edge that becomes the loop).
+ */
+function r1Twist(
+  k: Knot,
   i: number,
-  sigma: 1 | -1,
+  side: 1 | -1,
+  overFirst: boolean,
+): Move | null {
+  const e = k.code[i].e;
+  const C = edgeCubics(k)[i];
+  const [L, R] = split(C, 0.5);
+  const m = L[3];
+  const T = bezTan(C, 0.5);
+  let nextId = k.nextId;
+  const q1 = `n${nextId++}`;
+  const q2 = `n${nextId++}`;
+  const c = `n${nextId++}`;
+  const eL = `e${nextId++}`;
+  const eR = `e${nextId++}`;
+  const hint = { ...k.edges[e] };
+
+  const from = clone(k);
+  from.nextId = nextId;
+  from.nodes[q1] = passNode(m, T, hint);
+  from.nodes[q2] = passNode(m, T, hint);
+  from.code[i].e = eL;
+  insertAfter(from.code, i, [
+    { n: q1, over: false, e },
+    { n: q2, over: false, e: eR },
+  ]);
+  from.edges[eL] = handlesOf(L);
+  from.edges[e] = { a: 0, b: 0 };
+  from.edges[eR] = handlesOf(R);
+
+  const N = mul(perp(T), side);
+  const d1 = norm(add(T, N));
+  const d2 = norm(sub(T, N));
+  for (const size of [58, 44, 74, 34]) {
+    const to = clone(from);
+    delete to.nodes[q1];
+    delete to.nodes[q2];
+    to.nodes[c] = overFirst ? crossingNode(m, d1, d2) : crossingNode(m, d2, d1);
+    to.code[i + 1] = { n: c, over: overFirst, e };
+    to.code[i + 2] = { n: c, over: !overFirst, e: eR };
+    to.edges[e] = { a: size, b: size };
+    if (isValid(to)) return { kind: "R1", from, to };
+  }
+  return null;
+}
+
+/** R1 untwist of the loop edge leaving visit i. */
+function r1Untwist(k: Knot, i: number): Move | null {
+  const V = k.code.length;
+  const j = (i + 1) % V;
+  const v = k.code[i];
+  const w = k.code[j];
+  if (v.n !== w.n || k.nodes[v.n].kind !== "x") return null;
+  const cn = k.nodes[v.n];
+  const cp = pt(cn.x, cn.y);
+  let nextId = k.nextId;
+  const p1 = `n${nextId++}`;
+  const p2 = `n${nextId++}`;
+
+  const make = (
+    pos1: Pt,
+    dir1: Pt,
+    pos2: Pt,
+    dir2: Pt,
+    loopEdge: EdgeData,
+    otherEdge?: EdgeData,
+  ): Knot => {
+    const to = clone(k);
+    to.nextId = nextId;
+    delete to.nodes[v.n];
+    to.nodes[p1] = passNode(pos1, dir1);
+    to.nodes[p2] = passNode(pos2, dir2);
+    to.code[i] = { ...to.code[i], n: p1, over: false };
+    to.code[j] = { ...to.code[j], n: p2, over: false };
+    to.edges[v.e] = loopEdge;
+    if (otherEdge) to.edges[w.e] = otherEdge;
+    return to;
+  };
+
+  if (V === 2) {
+    // The last crossing: the other loop becomes a circle.
+    const big = sampleCubic(edgeCubics(k)[j], 32);
+    const center = mul(
+      big.reduce((acc, p) => add(acc, p), pt(0, 0)),
+      1 / big.length,
+    );
+    const r = Math.max(
+      30,
+      big.reduce((acc, p) => acc + dist(p, center), 0) / big.length,
+    );
+    let turn = 0;
+    for (let s = 0; s < big.length - 1; s++) {
+      turn += cross(sub(big[s], center), sub(big[s + 1], big[s]));
+    }
+    const sgn = turn >= 0 ? 1 : -1;
+    const u0 = norm(sub(cp, center));
+    const h = (4 / 3) * r;
+    const to = make(
+      add(center, mul(u0, r)),
+      mul(perp(u0), sgn),
+      sub(center, mul(u0, r)),
+      mul(perp(u0), -sgn),
+      { a: h, b: h },
+      { a: h, b: h },
+    );
+    return isValid(to) ? { kind: "R1-", from: k, to } : null;
+  }
+
+  const T = norm(add(dirAt(k, i), dirAt(k, j)));
+  for (const half of [8, 5, 12]) {
+    const to = make(sub(cp, mul(T, half)), T, add(cp, mul(T, half)), T, {
+      a: (2 * half) / 3,
+      b: (2 * half) / 3,
+    });
+    if (isValid(to)) return { kind: "R1-", from: k, to };
+  }
+  return null;
+}
+
+const R2_MAX = 150; // how far away a strand can be pushed across
+const R2_MARGIN = 10; // keep new crossings this far from existing nodes
+
+function clearSight(k: Knot, a: Pt, b: Pt): boolean {
+  const d = norm(sub(b, a));
+  const a2 = add(a, mul(d, 3));
+  const b2 = sub(b, mul(d, 3));
+  if (dot(sub(b2, a2), d) <= 0) return true;
+  for (const c of edgeCubics(k)) {
+    const s = sampleCubic(c, SAMPLES);
+    for (let i = 0; i < SAMPLES; i++) {
+      if (segHit(a2, b2, s[i], s[i + 1])) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * R2: push the edge leaving visit i across the edge leaving visit j,
+ * near parameter tf of that edge.
+ */
+function r2Push(
+  k: Knot,
+  i: number,
+  j: number,
+  tf: number,
   under: boolean,
 ): Move | null {
-  const knot = an.knot;
-  const N = knot.pts.length;
-  const M = an.samples.length;
-  const P = knot.pts[i];
-  const tan = frame(knot.pts[cyc(i - 1, N)], knot.pts[cyc(i + 1, N)]);
-  const dir = { x: sigma * tan.Nn.x, y: sigma * tan.Nn.y };
-  // cast a ray from P along sigma * normal to find the neighbor strand
-  const rayHit = (exclude: Set<number>): number => {
-    let h = Infinity;
-    for (let m = 0; m < M; m++) {
-      if (exclude.has(spanOf(m))) continue;
-      const t = raySegment(P, dir, an.samples[m], an.samples[(m + 1) % M]);
-      if (t !== null && t < h) h = t;
+  const cubics = edgeCubics(k);
+  const E = cubics[i];
+  const F = cubics[j];
+  const m = bez(E, 0.5);
+  const TE = bezTan(E, 0.5);
+  const f = bez(F, tf);
+  const TF = bezTan(F, tf);
+  let NF = perp(TF);
+  if (dot(NF, sub(f, m)) < 0) NF = mul(NF, -1);
+  const parallel = dot(TE, TF) > 0;
+  const e = k.code[i].e;
+  const fe = k.code[j].e;
+
+  let nextId = k.nextId;
+  const pe1 = `n${nextId++}`;
+  const pe2 = `n${nextId++}`;
+  const pf1 = `n${nextId++}`;
+  const pf2 = `n${nextId++}`;
+  const x1 = `n${nextId++}`;
+  const x2 = `n${nextId++}`;
+  const eP = `e${nextId++}`;
+  const eQ = `e${nextId++}`;
+  const fM = `e${nextId++}`;
+  const fB = `e${nextId++}`;
+
+  const E1 = subCubic(E, 0, 0.4);
+  const E2 = subCubic(E, 0.4, 0.6);
+  const E3 = subCubic(E, 0.6, 1);
+  const LF = cubicLen(F, 48);
+  const Lf = cubicLen(subCubic(F, 0, tf), 32);
+  const P = E[0];
+  const Q = E[3];
+
+  for (const W of [18, 13, 26]) {
+    if (Lf - W < R2_MARGIN || LF - Lf - W < R2_MARGIN) continue;
+    const f1 = paramAtLen(F, Lf - W);
+    const f2 = paramAtLen(F, Lf + W);
+    const F1 = subCubic(F, 0, f1);
+    const F2 = subCubic(F, f1, f2);
+    const F3 = subCubic(F, f2, 1);
+
+    // pre-split: pass nodes on E and F, exactly on the old curves
+    const from = clone(k);
+    from.nextId = nextId;
+    const eHint = { ...k.edges[e] };
+    const fHint = { ...k.edges[fe] };
+    from.nodes[pe1] = passNode(E1[3], bezTan(E, 0.4), eHint);
+    from.nodes[pe2] = passNode(E2[3], bezTan(E, 0.6), eHint);
+    from.nodes[pf1] = passNode(F1[3], bezTan(F, f1), fHint);
+    from.nodes[pf2] = passNode(F2[3], bezTan(F, f2), fHint);
+    from.edges[eP] = handlesOf(E1);
+    from.edges[e] = handlesOf(E2);
+    from.edges[eQ] = handlesOf(E3);
+    from.edges[fe] = handlesOf(F1);
+    from.edges[fM] = handlesOf(F2);
+    from.edges[fB] = handlesOf(F3);
+    const eVisits: Visit[] = [
+      { n: pe1, over: false, e },
+      { n: pe2, over: false, e: eQ },
+    ];
+    const fVisits: Visit[] = [
+      { n: pf1, over: false, e: fM },
+      { n: pf2, over: false, e: fB },
+    ];
+    from.code[i].e = eP;
+    if (i > j) {
+      insertAfter(from.code, i, eVisits);
+      insertAfter(from.code, j, fVisits);
+    } else {
+      insertAfter(from.code, j, fVisits);
+      insertAfter(from.code, i, eVisits);
     }
-    return h;
-  };
-  let w = windowByArc(knot.pts, i, W2, W2);
-  if (!windowOk(w, N, i)) return null;
-  let h = rayHit(changedSpansOf(w, N));
-  if (!(h > 4 && h <= R2_MAX)) return null;
-  // widen the window for tall bumps, then re-check
-  const half = Math.max(W2, 0.5 * (h + R2_CLEAR));
-  w = windowByArc(knot.pts, i, half, half);
-  if (!windowOk(w, N, i)) return null;
-  const changed = changedSpansOf(w, N);
-  h = rayHit(changed);
-  if (!(h > 4 && h <= R2_MAX)) return null;
-  if (
-    an.infos.some(
-      (info) =>
-        changed.has(spanOf(info.cr.m1)) || changed.has(spanOf(info.cr.m2)),
-    )
-  ) {
-    return null;
-  }
-  const H = h + R2_CLEAR;
-  const A = knot.pts[w.a];
-  const B = knot.pts[w.b];
-  const fr = frame(A, B);
-  const side = fr.Nn.x * dir.x + fr.Nn.y * dir.y >= 0 ? 1 : -1;
-  const base = subCurve(an.samples, an.cum, w.a * SUB, w.b * SUB, 41);
-  const bump = (k: number): Pt => {
-    const v = k / 40;
-    const ny = side * H * Math.sin(Math.PI * v) ** 2;
-    return { x: base[k].x + fr.Nn.x * ny, y: base[k].y + fr.Nn.y * ny };
-  };
-  const curveA: Pt[] = [];
-  const curveB: Pt[] = [];
-  for (let k = 0; k <= 20; k++) curveA.push(bump(k));
-  for (let k = 20; k <= 40; k++) curveB.push(bump(k));
-  const target = Math.round((polyLen(curveA) + polyLen(curveB)) / SPACING) - 1;
-  const prep = prepareWindow(an, w, i, target);
-  if (!prep) return null;
-  return finishMove(
-    "R2",
-    prep,
-    curveA,
-    curveB,
-    (nw, old, ctx) => {
-      // The window strand passes entirely over (or under) whatever it
-      // now crosses, so this is an isotopy no matter how many
-      // crossings appear: a plain R2 makes two; a push across a
-      // crossing makes four (R2 + R2).
-      if (old.length !== 0 || nw.length < 2 || nw.length % 2 !== 0) return null;
-      if (!nw.every((x) => x.changed1 !== x.changed2)) return null;
-      // keep the new crossings clear of existing ones along the other
-      // strand, so the resulting bigon can be pulled back later
-      const cum2 = cumLen(ctx.samples);
-      for (const x of nw) {
-        const uOut = x.changed1 ? x.cr.u2 : x.cr.u1;
-        const L = paramToArc(cum2, uOut);
-        const total = cum2[cum2.length - 1];
-        for (const v of ctx.old.visits) {
-          const Lv = paramToArc(ctx.old.cum, v.u);
-          const dd = Math.abs(L - Lv);
-          if (Math.min(dd, total - dd) < R2_KEEP_CLEAR) return null;
-        }
-      }
-      return nw.map((x, k) => ({
-        id: `c${prep.knot.nextId + k}`,
-        over1: x.changed1 ? !under : under,
-        over2: x.changed2 ? !under : under,
-      }));
-    },
-    (count) => count,
-  );
-}
 
-/** Visits immediately before and after control point i. */
-function neighborVisits(
-  an: Analysis,
-  i: number,
-): { kp: number; kn: number } | null {
-  const V = an.visits.length;
-  if (V === 0) return null;
-  const u = i * SUB;
-  let kn = an.visits.findIndex((v) => v.u > u);
-  if (kn < 0) kn = 0;
-  const kp = cyc(kn - 1, V);
-  return { kp, kn };
-}
+    // E crosses F at F(f1) and F(f2); its first crossing is the one
+    // nearer its start
+    const eFirstAt = parallel ? f1 : f2;
+    const eSecondAt = parallel ? f2 : f1;
+    const outward = (t: number) => {
+      const n = perp(bezTan(F, t));
+      return dot(n, NF) >= 0 ? n : mul(n, -1);
+    };
+    const nodeAt = (t: number, eDir: Pt): KNode => {
+      const p = bez(F, t);
+      const fDir = bezTan(F, t);
+      return under ? crossingNode(p, fDir, eDir) : crossingNode(p, eDir, fDir);
+    };
+    // which crossing id goes where: x1 at F(f1), x2 at F(f2)
+    const idAt = (t: number) => (t === f1 ? x1 : x2);
+    const firstPos = bez(F, eFirstAt);
+    const secondPos = bez(F, eSecondAt);
 
-function otherVisit(an: Analysis, k: number): number {
-  const info = an.visitInfo[k];
-  return info.overK === k ? info.underK : info.overK;
-}
-
-export function r1Untwist(
-  an: Analysis,
-  i: number,
-  why?: (s: string) => void,
-): Move | null {
-  const knot = an.knot;
-  const N = knot.pts.length;
-  const nb = neighborVisits(an, i);
-  if (!nb) return null;
-  const { kp, kn } = nb;
-  if (kp === kn || knot.code[kp].id !== knot.code[kn].id) return null;
-  const id = knot.code[kp].id;
-  // Try increasingly wide margins: right at the neck the strands may
-  // bend sharply, and a replacement arc that starts further out has an
-  // easier time staying clear of them.
-  for (const margin of [MARGIN, 35, 50, 70]) {
-    const w = windowByParams(
-      N,
-      an.cum,
-      an.visits[kp].u,
-      an.visits[kn].u,
-      i,
-      margin,
-    );
-    if (!windowOk(w, N, i)) {
-      why?.("window bad " + JSON.stringify({ w, N, i }));
-      continue;
-    }
-    const A = knot.pts[w.a];
-    const B = knot.pts[w.b];
-    // Hermite arc from A to B following the strands' directions
-    const tA = frame(knot.pts[cyc(w.a - 1, N)], A).T;
-    const tB = frame(B, knot.pts[cyc(w.b + 1, N)]).T;
-    for (const scale of [0.6, 0.15]) {
-      const L = dist(A, B) * scale;
-      const hermite = (t: number): Pt => {
-        const h00 = 2 * t ** 3 - 3 * t ** 2 + 1;
-        const h10 = t ** 3 - 2 * t ** 2 + t;
-        const h01 = -2 * t ** 3 + 3 * t ** 2;
-        const h11 = t ** 3 - t ** 2;
-        return {
-          x: h00 * A.x + h10 * L * tA.x + h01 * B.x + h11 * L * tB.x,
-          y: h00 * A.y + h10 * L * tA.y + h01 * B.y + h11 * L * tB.y,
-        };
-      };
-      const curveA: Pt[] = [];
-      const curveB: Pt[] = [];
-      for (let k = 0; k <= 10; k++) curveA.push(hermite(k / 20));
-      for (let k = 10; k <= 20; k++) curveB.push(hermite(k / 20));
-      const prep = prepareWindow(an, w, i, 0);
-      if (!prep) {
-        why?.("prepare null");
-        continue;
-      }
-      const move = finishMove(
-        "R1-",
-        prep,
-        curveA,
-        curveB,
-        (nw, old, ctx) =>
-          matchSliding(nw, old, ctx, [id], (r) =>
-            why?.("margin " + margin + " scale " + scale + ": " + r),
-          ),
-        0,
-        why,
+    for (const H of [34, 24, 46]) {
+      const to = clone(from);
+      delete to.nodes[pe1];
+      delete to.nodes[pe2];
+      delete to.nodes[pf1];
+      delete to.nodes[pf2];
+      to.nodes[idAt(eFirstAt)] = nodeAt(eFirstAt, outward(eFirstAt));
+      to.nodes[idAt(eSecondAt)] = nodeAt(
+        eSecondAt,
+        mul(outward(eSecondAt), -1),
       );
-      if (move) return move;
+      for (const v of to.code) {
+        if (v.n === pe1) Object.assign(v, { n: idAt(eFirstAt), over: !under });
+        else if (v.n === pe2)
+          Object.assign(v, { n: idAt(eSecondAt), over: !under });
+        else if (v.n === pf1) Object.assign(v, { n: x1, over: under });
+        else if (v.n === pf2) Object.assign(v, { n: x2, over: under });
+      }
+      const dP = dist(P, firstPos);
+      const dQ = dist(secondPos, Q);
+      to.edges[eP] = {
+        a: clampHandle(Math.min(k.edges[e].a, dP * 0.6)),
+        b: clampHandle(dP / 3),
+      };
+      to.edges[e] = { a: H, b: H };
+      to.edges[eQ] = {
+        a: clampHandle(dQ / 3),
+        b: clampHandle(Math.min(k.edges[e].b, dQ * 0.6)),
+      };
+      if (isValid(to)) return { kind: "R2", from, to };
     }
   }
   return null;
 }
 
-export function r2Pull(
-  an: Analysis,
-  i: number,
-  why?: (s: string) => void,
-): Move | null {
-  const knot = an.knot;
-  const N = knot.pts.length;
-  const V = an.visits.length;
-  const nb = neighborVisits(an, i);
-  if (!nb) return null;
-  const { kp, kn } = nb;
-  const e1 = knot.code[kp];
-  const e2 = knot.code[kn];
-  if (kp === kn || e1.id === e2.id || e1.over !== e2.over) {
-    why?.("neighbors " + JSON.stringify([e1, e2]));
-    return null;
-  }
-  const o1 = otherVisit(an, kp);
-  const o2 = otherVisit(an, kn);
-  if (cycAbs(o1, o2, V) !== 1) {
-    why?.("not adjacent on other strand");
-    return null; // bigon: adjacent on the other strand
-  }
-  const w = windowByParams(
-    N,
-    an.cum,
-    an.visits[kp].u,
-    an.visits[kn].u,
-    i,
-    PULL_MARGIN,
-  );
-  if (!windowOk(w, N, i)) {
-    why?.("window bad " + JSON.stringify({ w, N, i }));
-    return null;
-  }
-  // The other strand's bigon arc, plus W's own arc, must end up on
-  // the far side of the new arc. Build a bump off the chord A→B,
-  // away from the bigon, tall enough to clear everything.
-  const uX1 = an.visits[o1].u;
-  const uX2 = an.visits[o2].u;
-  const forward = cycDist(o1, o2, V) === 1; // X runs o1 → o2
-  const xArc = forward
-    ? subCurve(an.samples, an.cum, uX1, uX2, 16)
-    : subCurve(an.samples, an.cum, uX2, uX1, 16);
-  const wArc = subCurve(
-    an.samples,
-    an.cum,
-    an.visits[kp].u,
-    an.visits[kn].u,
-    16,
-  );
-  const A = knot.pts[w.a];
-  const B = knot.pts[w.b];
-  const fr = frame(A, B);
-  const midW = wArc[8];
-  const sideW =
-    Math.sign((midW.x - A.x) * fr.Nn.x + (midW.y - A.y) * fr.Nn.y) || 1;
-  const n = { x: -sideW * fr.Nn.x, y: -sideW * fr.Nn.y }; // away from the bigon
-  // plateau profile: smooth rise over the first 30%, flat, smooth fall
-  const smooth = (t: number) => {
-    const c = Math.min(1, Math.max(0, t));
-    return c * c * (3 - 2 * c);
-  };
-  const profile = (v: number) =>
-    Math.min(smooth(v / 0.3), smooth((1 - v) / 0.3));
-  let H = R2_CLEAR;
-  for (const q of xArc) {
-    const rel = { x: q.x - A.x, y: q.y - A.y };
-    const v = Math.min(
-      0.9,
-      Math.max(0.1, (rel.x * fr.T.x + rel.y * fr.T.y) / fr.L),
-    );
-    const dd = rel.x * n.x + rel.y * n.y;
-    H = Math.max(H, (dd + R2_CLEAR) / profile(v));
-  }
-  const bump = (v: number): Pt => {
-    const base = lerpPt(A, B, v);
-    const ny = H * profile(v);
-    return { x: base.x + n.x * ny, y: base.y + n.y * ny };
-  };
-  const curveA: Pt[] = [];
-  const curveB: Pt[] = [];
-  for (let k = 0; k <= 20; k++) curveA.push(bump(k / 40));
-  for (let k = 20; k <= 40; k++) curveB.push(bump(k / 40));
-  const prep = prepareWindow(an, w, i, 0);
-  if (!prep) {
-    why?.("prepare null");
-    return null;
-  }
-  return finishMove(
-    "R2-",
-    prep,
-    curveA,
-    curveB,
-    (nw, old, ctx) => matchSliding(nw, old, ctx, [e1.id, e2.id], why),
-    0,
-    why,
-  );
+function r2PushAll(k: Knot, i: number, under: boolean): Move[] {
+  const cubics = edgeCubics(k);
+  const m = bez(cubics[i], 0.5);
+  const out: Move[] = [];
+  cubics.forEach((F, j) => {
+    if (j === i) return;
+    const LF = cubicLen(F, 48);
+    const lo = paramAtLen(F, 30);
+    const hi = paramAtLen(F, LF - 30);
+    if (hi <= lo) return;
+    const cl = closestOnCubic(F, m, lo, hi);
+    if (cl.d > R2_MAX || cl.d < 4) return;
+    if (!clearSight(k, m, cl.p)) return;
+    const mv = r2Push(k, i, j, cl.t, under);
+    if (mv) out.push(mv);
+  });
+  return out;
 }
 
-function r3(an: Analysis, i: number): Move | null {
-  const knot = an.knot;
-  const N = knot.pts.length;
-  const V = an.visits.length;
-  const nb = neighborVisits(an, i);
-  if (!nb) return null;
-  const { kp, kn } = nb;
-  const e1 = knot.code[kp];
-  const e2 = knot.code[kn];
-  if (kp === kn || e1.id === e2.id || e1.over !== e2.over) return null;
-  const o1 = otherVisit(an, kp);
-  const o2 = otherVisit(an, kn);
-  // find the third crossing c adjacent to o1 (on X) and o2 (on Y)
-  let cX = -1;
-  for (const d1 of [-1, 1]) {
-    for (const d2 of [-1, 1]) {
-      const k1 = cyc(o1 + d1, V);
-      const k2 = cyc(o2 + d2, V);
-      if (k1 === k2) continue;
-      const id = knot.code[k1].id;
-      if (id === knot.code[k2].id && id !== e1.id && id !== e2.id) {
-        cX = k1;
+function otherVisit(k: Knot, i: number): number {
+  const n = k.code[i].n;
+  return k.code.findIndex((v, q) => q !== i && v.n === n);
+}
+
+/**
+ * R2 pull: the edge leaving visit i is one side of a bigon (both its
+ * ends are crossings it passes over, or both under, and the other
+ * strand runs directly between the same two crossings). Pull it back.
+ */
+function r2Pull(k: Knot, i: number): Move | null {
+  const V = k.code.length;
+  const j = (i + 1) % V;
+  const vX = k.code[i];
+  const vY = k.code[j];
+  const X = k.nodes[vX.n];
+  const Y = k.nodes[vY.n];
+  if (X.kind !== "x" || Y.kind !== "x" || vX.n === vY.n) return null;
+  if (vX.over !== vY.over) return null;
+  const oX = otherVisit(k, i);
+  const oY = otherVisit(k, j);
+  if (cyc(oX + 1, V) !== oY && cyc(oY + 1, V) !== oX) return null;
+
+  const Xp = pt(X.x, X.y);
+  const Yp = pt(Y.x, Y.y);
+  const sMid = edgeCubics(k)[i];
+  const Ldir = norm(sub(Yp, Xp));
+  const bulge = sub(bez(sMid, 0.5), lerpPt(Xp, Yp, 0.5));
+  let far = sub(bulge, mul(Ldir, dot(bulge, Ldir)));
+  if (len(far) < 1) {
+    const d = dirAt(k, i);
+    far = sub(d, mul(Ldir, dot(d, Ldir)));
+  }
+  const home = mul(norm(far), -1);
+
+  let nextId = k.nextId;
+  const xs = `n${nextId++}`;
+  const ys = `n${nextId++}`;
+  const xt = `n${nextId++}`;
+  const yt = `n${nextId++}`;
+  const tDirX = dirAt(k, oX);
+  const tDirY = dirAt(k, oY);
+
+  for (const c of [18, 12, 26]) {
+    const to = clone(k);
+    to.nextId = nextId;
+    delete to.nodes[vX.n];
+    delete to.nodes[vY.n];
+    const xsPos = add(Xp, mul(home, c));
+    const ysPos = add(Yp, mul(home, c));
+    const sDir = norm(sub(ysPos, xsPos));
+    to.nodes[xs] = passNode(xsPos, sDir);
+    to.nodes[ys] = passNode(ysPos, sDir);
+    to.nodes[xt] = passNode(Xp, tDirX);
+    to.nodes[yt] = passNode(Yp, tDirY);
+    to.code[i] = { ...to.code[i], n: xs, over: false };
+    to.code[j] = { ...to.code[j], n: ys, over: false };
+    to.code[oX] = { ...to.code[oX], n: xt, over: false };
+    to.code[oY] = { ...to.code[oY], n: yt, over: false };
+    const h = clampHandle(dist(xsPos, ysPos) / 3);
+    to.edges[vX.e] = { a: h, b: h };
+    if (isValid(to)) return { kind: "R2-", from: k, to };
+  }
+  return null;
+}
+
+/**
+ * R3: the edge leaving visit i runs between crossings A and B, passing
+ * over both (or under both), and a third crossing C sits next to A and
+ * B on their other strands. Slide the edge across C.
+ */
+function r3(k: Knot, i: number): Move | null {
+  const V = k.code.length;
+  const j = (i + 1) % V;
+  const vA = k.code[i];
+  const vB = k.code[j];
+  const A = k.nodes[vA.n];
+  const B = k.nodes[vB.n];
+  if (A.kind !== "x" || B.kind !== "x" || vA.n === vB.n) return null;
+  if (vA.over !== vB.over) return null;
+  const oA = otherVisit(k, i);
+  const oB = otherVisit(k, j);
+  let a2 = -1;
+  let b2 = -1;
+  for (const dA of [-1, 1]) {
+    for (const dB of [-1, 1]) {
+      const qa = cyc(oA + dA, V);
+      const qb = cyc(oB + dB, V);
+      if (qa === qb || [i, j].includes(qa) || [i, j].includes(qb)) continue;
+      const cId = k.code[qa].n;
+      if (
+        cId === k.code[qb].n &&
+        k.nodes[cId].kind === "x" &&
+        cId !== vA.n &&
+        cId !== vB.n
+      ) {
+        a2 = qa;
+        b2 = qb;
       }
     }
   }
-  if (cX < 0) return null;
-  const c = an.visitInfo[cX];
-  const w = windowByParams(N, an.cum, an.visits[kp].u, an.visits[kn].u, i);
-  if (!windowOk(w, N, i)) return null;
-  const A = knot.pts[w.a];
-  const B = knot.pts[w.b];
-  const fr = frame(A, B);
-  const cp = c.cr.p;
-  const rel = { x: cp.x - A.x, y: cp.y - A.y };
-  const vc = (rel.x * fr.T.x + rel.y * fr.T.y) / fr.L;
-  const hc = rel.x * fr.Nn.x + rel.y * fr.Nn.y;
-  if (vc <= 0.05 || vc >= 0.95) return null;
-  const H = hc + Math.sign(hc) * R3_CLEAR;
-  const hat = (v: number): number => {
-    const d = Math.abs(v - vc);
-    const wv = Math.max(vc, 1 - vc);
-    return d < wv ? 0.5 * (1 + Math.cos((Math.PI * d) / wv)) : 0;
+  if (a2 < 0) return null;
+  const cId = k.code[a2].n;
+  const C = k.nodes[cId];
+  const Cp = pt(C.x, C.y);
+
+  const swap = (code: Visit[], p: number, q: number) => {
+    const tmp = { n: code[p].n, over: code[p].over };
+    code[p] = { ...code[p], n: code[q].n, over: code[q].over };
+    code[q] = { ...code[q], ...tmp };
   };
-  const base = subCurve(an.samples, an.cum, w.a * SUB, w.b * SUB, 81);
-  const bump = (v: number): Pt => {
-    const b = base[Math.round(v * 80)];
-    const ny = H * hat(v);
-    return { x: b.x + fr.Nn.x * ny, y: b.y + fr.Nn.y * ny };
-  };
-  const curveA: Pt[] = [];
-  const curveB: Pt[] = [];
-  for (let k = 0; k <= 20; k++) curveA.push(bump((vc * k) / 20));
-  for (let k = 0; k <= 20; k++) curveB.push(bump(vc + ((1 - vc) * k) / 20));
-  const target = Math.round((polyLen(curveA) + polyLen(curveB)) / SPACING) - 1;
-  const prep = prepareWindow(an, w, i, target);
-  if (!prep) return null;
-  // re-find things in the prepared knot (visit indices may have shifted)
-  const pan = prep.an;
-  const pV = pan.visits.length;
-  const kOf = (id: string, over: boolean) =>
-    prep.knot.code.findIndex((e) => e.id === id && e.over === over);
-  const p_o1 = kOf(e1.id, !e1.over);
-  const p_o2 = kOf(e2.id, !e2.over);
-  const p_cX = [cyc(p_o1 - 1, pV), cyc(p_o1 + 1, pV)].find(
-    (k) => prep.knot.code[k].id === c.id,
-  );
-  const p_cY = [cyc(p_o2 - 1, pV), cyc(p_o2 + 1, pV)].find(
-    (k) => prep.knot.code[k].id === c.id,
-  );
-  if (p_cX === undefined || p_cY === undefined || p_o1 < 0 || p_o2 < 0) {
-    return null;
+  const moved = new Set([vA.n, vB.n, cId]);
+
+  for (const f of [1, 0.8, 1.25]) {
+    const to = clone(k);
+    swap(to.code, i, j);
+    swap(to.code, oA, a2);
+    swap(to.code, oB, b2);
+    to.nodes[vA.n] = {
+      ...A,
+      x: Cp.x + (Cp.x - A.x) * f,
+      y: Cp.y + (Cp.y - A.y) * f,
+    };
+    to.nodes[vB.n] = {
+      ...B,
+      x: Cp.x + (Cp.x - B.x) * f,
+      y: Cp.y + (Cp.y - B.y) * f,
+    };
+    // re-fit handles at the ends of edges touching the triangle
+    to.code.forEach((v, q) => {
+      const r = (q + 1) % V;
+      const n1 = v.n;
+      const n2 = to.code[r].n;
+      if (!moved.has(n1) && !moved.has(n2)) return;
+      const d = dist(
+        pt(to.nodes[n1].x, to.nodes[n1].y),
+        pt(to.nodes[n2].x, to.nodes[n2].y),
+      );
+      const ed = { ...to.edges[v.e] };
+      if (moved.has(n1)) ed.a = clampHandle(d / 3);
+      if (moved.has(n2)) ed.b = clampHandle(d / 3);
+      to.edges[v.e] = ed;
+    });
+    if (isValid(to)) return { kind: "R3", from: k, to };
   }
-  const uXc = pan.visits[p_cX].u;
-  const uYc = pan.visits[p_cY].u;
-  const sideOld1 = Math.sign(
-    cycDist(uXc, pan.visits[p_o1].u, pan.samples.length) -
-      pan.samples.length / 2,
-  );
-  const sideOld2 = Math.sign(
-    cycDist(uYc, pan.visits[p_o2].u, pan.samples.length) -
-      pan.samples.length / 2,
-  );
-  return finishMove(
-    "R3",
-    prep,
-    curveA,
-    curveB,
-    (nw, old, ctx) => {
-      if (nw.length !== 2) return null;
-      if (!nw.every((x) => x.changed1 !== x.changed2)) return null;
-      const ids = old.map((o) => o.id).sort();
-      if (ids.length !== 2 || ids.join() !== [e1.id, e2.id].sort().join())
-        return null;
-      const Ms = ctx.samples.length;
-      const out: Assignment[] = [];
-      const usedIds = new Set<string>();
-      for (const x of nw) {
-        const uOut = x.changed1 ? x.cr.u2 : x.cr.u1;
-        const onX = cycAbs(uOut, uXc, Ms) < cycAbs(uOut, uYc, Ms);
-        const e = onX ? e1 : e2;
-        const sideNew = Math.sign(cycDist(onX ? uXc : uYc, uOut, Ms) - Ms / 2);
-        if (sideNew === (onX ? sideOld1 : sideOld2)) return null; // didn't cross c
-        if (usedIds.has(e.id)) return null;
-        usedIds.add(e.id);
-        out.push({
-          id: e.id,
-          over1: x.changed1 ? e.over : !e.over,
-          over2: x.changed2 ? e.over : !e.over,
-        });
-      }
-      return out;
-    },
-    0,
-  );
+  return null;
 }
 
-export function movesAt(knot: Knot, ptId: string, under: boolean): Move[] {
-  const an = analyze(knot);
-  if (!an.consistent) return [];
-  const i = knot.pts.findIndex((p) => p.id === ptId);
+/** All Reidemeister moves available by dragging edge `e`. */
+export function movesAt(k: Knot, e: string, under: boolean): Move[] {
+  const i = edgeIndex(k, e);
   if (i < 0) return [];
   const candidates: (Move | null)[] = [
-    r1Twist(an, i, 1),
-    r1Twist(an, i, -1),
-    r2Push(an, i, 1, under),
-    r2Push(an, i, -1, under),
-    r1Untwist(an, i),
-    r2Pull(an, i),
-    r3(an, i),
+    r1Twist(k, i, 1, !under),
+    r1Twist(k, i, -1, !under),
+    r1Untwist(k, i),
+    ...r2PushAll(k, i, under),
+    r2Pull(k, i),
+    r3(k, i),
   ];
   return candidates.filter((m): m is Move => m !== null);
 }
 
-// # Resampling and presets
+// # Cleanup
 
-export function bakeBrush(k: Knot): Knot {
-  if (k.brush.at === null || (k.brush.dx === 0 && k.brush.dy === 0)) return k;
-  const eff = effectivePts(k);
-  return {
-    ...k,
-    pts: k.pts.map((p, j) => ({ ...p, x: eff[j].x, y: eff[j].y })),
-    brush: ZERO_BRUSH,
-  };
-}
-
-/** Re-space control points evenly (keeping pts[0]); keeps the code. */
-export function resampleKnot(k0: Knot): Knot {
-  const k = bakeBrush(k0);
-  const an = analyze(k);
-  if (!an.consistent) return k;
-  const total = an.cum[an.cum.length - 1];
-  const count = Math.max(8, Math.round(total / SPACING));
-  let nextId = k.nextId;
-  const pts: KPt[] = [];
-  for (let j = 0; j < count; j++) {
-    const p = pointAt(an.samples, arcToParam(an.cum, (total * j) / count));
-    pts.push(
-      j === 0 ? { ...k.pts[0] } : { id: `p${nextId++}`, x: p.x, y: p.y },
+/**
+ * Remove the `count` visits after visit s (which must all be pass
+ * nodes), merging their edges into the edge leaving s.
+ */
+function mergeRun(k: Knot, s: number, count: number): Knot | null {
+  const V = k.code.length;
+  if (count <= 0 || count >= V) return null;
+  const end = cyc(s + count + 1, V);
+  const runIdx: number[] = [];
+  for (let q = 1; q <= count; q++) runIdx.push(cyc(s + q, V));
+  const hints = runIdx.map((q) => k.nodes[k.code[q].n].hint);
+  let data: EdgeData;
+  if (
+    hints.every(
+      (h) => h && hints[0] && h.a === hints[0].a && h.b === hints[0].b,
+    )
+  ) {
+    data = { ...hints[0]! };
+  } else {
+    const cubics = edgeCubics(k);
+    const pts: Pt[] = [];
+    for (let q = 0; q <= count; q++) {
+      const c = cubics[cyc(s + q, V)];
+      const smp = sampleCubic(c, 8);
+      pts.push(...smp.slice(q === 0 ? 1 : 0, 8));
+    }
+    data = fitHandles(
+      nodePos(k, s),
+      dirAt(k, s),
+      nodePos(k, end),
+      dirAt(k, end),
+      pts,
+      MIN_HANDLE,
     );
   }
-  const k2: Knot = { pts, code: k.code, nextId, brush: ZERO_BRUSH };
-  return diagramKey(analyze(k2)) === diagramKey(an) ? k2 : k;
+  const out = clone(k);
+  const drop = new Set(runIdx);
+  for (const q of runIdx) {
+    delete out.nodes[k.code[q].n];
+    delete out.edges[k.code[q].e];
+  }
+  out.edges[k.code[s].e] = data;
+  out.code = k.code.filter((_, q) => !drop.has(q)).map((v) => ({ ...v }));
+  return out;
+}
+
+function isPassAt(k: Knot, q: number): boolean {
+  return k.nodes[k.code[q].n].kind === "p";
 }
 
 /**
- * Build a knot from a 3D parametric curve: the xy projection gives
- * the diagram, z decides over/under.
+ * Merge pass nodes away: first runs that came from splitting an edge
+ * (restored exactly), then any others (refit), as long as the result
+ * stays valid. A diagram with no crossings keeps two pass nodes.
+ */
+export function cleanup(k0: Knot): Knot {
+  let k = k0;
+  const failed = new Set<string>();
+  for (let guard = 0; guard < 100; guard++) {
+    const V = k.code.length;
+    const nCross = k.code.filter((_, q) => !isPassAt(k, q)).length;
+    let progressed = false;
+    for (const hintedOnly of [true, false]) {
+      for (let s = 0; s < V && !progressed; s++) {
+        const next = cyc(s + 1, V);
+        if (!isPassAt(k, next)) continue;
+        // runs start right after a non-pass node, or (with no
+        // crossings) anywhere
+        if (nCross > 0 && isPassAt(k, s)) continue;
+        let count = 0;
+        while (count < V - 1 && isPassAt(k, cyc(s + 1 + count, V))) {
+          const nd = k.nodes[k.code[cyc(s + 1 + count, V)].n];
+          if (hintedOnly && !nd.hint) break;
+          count++;
+        }
+        if (nCross === 0) {
+          // keep at least two nodes on an unknot
+          count = Math.min(count, V - 2);
+        }
+        if (count === 0) continue;
+        const key = `${k.code[s].n}:${count}:${hintedOnly}`;
+        if (failed.has(key)) continue;
+        const merged = mergeRun(k, s, count);
+        if (merged && isValid(merged)) {
+          k = merged;
+          progressed = true;
+        } else {
+          failed.add(key);
+        }
+      }
+      if (progressed) break;
+    }
+    if (!progressed) break;
+  }
+  return k;
+}
+
+// # Construction
+
+/**
+ * Build a diagram from a closed 3D curve: the xy projection gives the
+ * diagram, z decides over/under.
  */
 export function knotFromParametric(
   f: (t: number) => { x: number; y: number; z: number },
-  steps: number,
+  steps = 720,
 ): Knot {
-  const raw = [];
-  for (let j = 0; j < steps; j++) raw.push(f((2 * Math.PI * j) / steps));
-  const pts: KPt[] = raw.map((p, j) => ({ id: `p${j}`, x: p.x, y: p.y }));
-  const zs = raw.map((p) => p.z);
-  const samples = sampleClosed(pts, SUB);
-  const crossings = findCrossings(samples);
-  const visits = sortedVisits(crossings);
-  const zAt = (u: number) => {
-    const c = u / SUB;
-    const j = Math.floor(c);
-    return zs[j % steps] + (zs[(j + 1) % steps] - zs[j % steps]) * (c - j);
+  const raw: { x: number; y: number; z: number }[] = [];
+  for (let s = 0; s < steps; s++) raw.push(f((2 * Math.PI * s) / steps));
+  const poly = raw.map((p) => pt(p.x, p.y));
+  const M = poly.length;
+  const tangentAt = (u: number): Pt => {
+    const s = Math.floor(u);
+    return norm(sub(poly[cyc(s + 2, M)], poly[cyc(s - 1, M)]));
   };
-  const code: CodeEntry[] = visits.map((v) => {
-    const cr = crossings[v.ci];
-    const zThis = zAt(v.first ? cr.u1 : cr.u2);
-    const zOther = zAt(v.first ? cr.u2 : cr.u1);
-    return { id: `c${v.ci}`, over: zThis > zOther };
+  const zAt = (u: number) => {
+    const s = Math.floor(u);
+    return (
+      raw[cyc(s, M)].z + (raw[cyc(s + 1, M)].z - raw[cyc(s, M)].z) * (u - s)
+    );
+  };
+  const crossings = polylineSelfCrossings(poly);
+
+  if (crossings.length === 0) {
+    const half = Math.floor(M / 2);
+    const P = poly[0];
+    const Q = poly[half];
+    const dP = tangentAt(0);
+    const dQ = tangentAt(half);
+    const h1 = fitHandles(P, dP, Q, dQ, poly.slice(1, half));
+    const h2 = fitHandles(Q, dQ, P, dP, poly.slice(half + 1));
+    return {
+      nodes: { n0: passNode(P, dP), n1: passNode(Q, dQ) },
+      code: [
+        { n: "n0", over: false, e: "e2" },
+        { n: "n1", over: false, e: "e3" },
+      ],
+      edges: { e2: h1, e3: h2 },
+      nextId: 4,
+    };
+  }
+
+  const visits = crossings.flatMap((c, ci) => [
+    { u: c.u1, ci, other: c.u2 },
+    { u: c.u2, ci, other: c.u1 },
+  ]);
+  visits.sort((a, b) => a.u - b.u);
+  const nodes: Record<string, KNode> = {};
+  crossings.forEach((c, ci) => {
+    const overFirst = zAt(c.u1) > zAt(c.u2);
+    const o = tangentAt(overFirst ? c.u1 : c.u2);
+    const u = tangentAt(overFirst ? c.u2 : c.u1);
+    nodes[`n${ci}`] = crossingNode(c.p, o, u);
   });
-  return resampleKnot({
-    pts,
-    code,
-    nextId: Math.max(steps, crossings.length),
-    brush: ZERO_BRUSH,
+  let nextId = crossings.length;
+  const code: Visit[] = visits.map((v) => ({
+    n: `n${v.ci}`,
+    over: zAt(v.u) > zAt(v.other),
+    e: `e${nextId++}`,
+  }));
+  const k: Knot = { nodes, code, edges: {}, nextId };
+  const V = code.length;
+  code.forEach((v, q) => {
+    const r = (q + 1) % V;
+    const u0 = visits[q].u;
+    let u1 = visits[r].u;
+    if (u1 <= u0) u1 += M;
+    const pts: Pt[] = [];
+    for (let s = Math.ceil(u0 + 0.5); s < u1 - 0.5; s++) pts.push(poly[s % M]);
+    k.edges[v.e] = fitHandles(
+      nodePos(k, q),
+      dirAt(k, q),
+      nodePos(k, r),
+      dirAt(k, r),
+      pts,
+    );
   });
+  return k;
 }

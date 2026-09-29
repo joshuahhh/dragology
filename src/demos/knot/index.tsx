@@ -1,98 +1,226 @@
 import { demo } from "../../demo";
 import { DemoDraggable, DemoLink, DemoNotes } from "../../demo/ui";
 import { Draggable } from "../../draggable";
-import { param } from "../../DragSpec";
+import { DragSpec, lessThan, moreThan, param } from "../../DragSpec";
+import { Vec2 } from "../../math/vec2";
 import { altKey } from "../../modifierKeys";
 import { rotateDeg, translate } from "../../svgx/helpers";
-import { SUB, subCurve, tangentAt, walk } from "./geometry";
+import {
+  Cubic,
+  angleOf,
+  bez,
+  bezTan,
+  cubicLen,
+  dot,
+  paramAtLen,
+  sub,
+  subCubic,
+} from "./geometry";
 import {
   Knot,
-  analyze,
-  arcAt,
-  diagramKey,
+  Move,
+  arcOfEdge,
+  cleanup,
+  edgeCubics,
+  edgeIndex,
   invariants,
+  isValid,
   movesAt,
-  resampleKnot,
 } from "./knot";
 import { figureEight, scramble, trefoil, unknot } from "./presets";
+import tangles from "./tangles.json";
 
 const WIDTH = 560;
 const HEIGHT = 470;
 const STROKE = 5;
 const GAP = 4; // white gap on each side of an over-strand
-const BRIDGE_HALF = 14; // half-length of the over-strand bridge at a crossing
-const BRIDGE_PTS = 7;
+const BRIDGE = 13; // length of the over-strand bridge on each side of a crossing
+
+// read ?seedA=…&seedB=… for trying out other scrambles
+const params = new URLSearchParams(
+  typeof window !== "undefined" ? window.location.hash.split("?")[1] : "",
+);
+const seedA = params.get("seedA");
+const seedB = params.get("seedB");
 
 const PALETTE = ["#e11d48", "#2563eb", "#16a34a"];
 const MONO = "#334155";
 
+/** Build a preset once (scrambles take a moment to relax). */
+function memo(f: () => Knot): () => Knot {
+  let cached: Knot | undefined;
+  return () => (cached ??= f());
+}
+
 const presets: { label: string; make: () => Knot }[] = [
-  { label: "tangle A", make: () => scramble(unknot(), 2, 8) },
-  { label: "tangle B", make: () => scramble(trefoil(), 8, 5) },
-  { label: "trefoil", make: trefoil },
-  { label: "figure-eight", make: figureEight },
-  { label: "unknot", make: unknot },
+  {
+    label: "tangle A",
+    make: memo(() =>
+      seedA ? scramble(unknot(), Number(seedA), 8) : (tangles.A as Knot),
+    ),
+  },
+  {
+    label: "tangle B",
+    make: memo(() =>
+      seedB ? scramble(trefoil(), Number(seedB), 5) : (tangles.B as Knot),
+    ),
+  },
+  { label: "trefoil", make: memo(trefoil) },
+  { label: "figure-eight", make: memo(figureEight) },
+  { label: "unknot", make: memo(unknot) },
 ];
 
 const initialState: Knot = presets[0].make();
 
+const f1 = (n: number) => n.toFixed(2);
+const cubicD = (c: Cubic) =>
+  `M${f1(c[0].x)},${f1(c[0].y)} C${f1(c[1].x)},${f1(c[1].y)} ${f1(c[2].x)},${f1(c[2].y)} ${f1(c[3].x)},${f1(c[3].y)}`;
+
+/** The last `L` px of cubic c, then the first `L` px of cubic d. */
+function bridgeD(c: Cubic, d: Cubic): string {
+  const lc = cubicLen(c);
+  const ld = cubicLen(d);
+  const a = subCubic(
+    c,
+    lc > 0 ? paramAtLen(c, Math.max(0, lc - BRIDGE)) : 1,
+    1,
+  );
+  const b = subCubic(d, 0, ld > 0 ? paramAtLen(d, Math.min(ld, BRIDGE)) : 0);
+  return (
+    cubicD(a) +
+    ` C${f1(b[1].x)},${f1(b[1].y)} ${f1(b[2].x)},${f1(b[2].y)} ${f1(b[3].x)},${f1(b[3].y)}`
+  );
+}
+
+/** Midpoint of edge e, where its drag handle sits. */
+function edgeMid(k: Knot, e: string) {
+  return bez(edgeCubics(k)[edgeIndex(k, e)], 0.5);
+}
+
+/** Keep only states whose drawing is exactly their code. */
+function clampValid(start: Knot) {
+  let lastGood = start;
+  return (s: Knot) => {
+    if (isValid(s)) {
+      lastGood = s;
+      return s;
+    }
+    return lastGood;
+  };
+}
+
 const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
-  const an = analyze(state);
-  const inv = invariants(an);
-  const { samples, cum } = an;
-  const M = samples.length;
+  const inv = invariants(state);
+  const cubics = edgeCubics(state);
+  const V = state.code.length;
 
   const colorOfArc = (arc: string) =>
     inv.tricolorable ? PALETTE[inv.arcColor.get(arc) ?? 0] : MONO;
+  const edgeColor = state.code.map((_, i) => colorOfArc(arcOfEdge(state, i)));
 
-  // Precompute arc membership per sample segment (walk visits once).
-  const segColor: string[] = new Array(M);
-  for (let m = 0; m < M; m++) {
-    segColor[m] = colorOfArc(arcAt(an, m + 0.5));
-  }
+  const marker = bez(cubics[0], 0.5);
+  const markerAngle = (angleOf(bezTan(cubics[0], 0.5)) * 180) / Math.PI;
 
-  const startTangent = tangentAt(samples, 0);
-  const startAngle =
-    (Math.atan2(startTangent.y, startTangent.x) * 180) / Math.PI;
+  const edgeSpec = (e: string, i: number): DragSpec<Knot> =>
+    d.reactTo(altKey, (under) => {
+      const moves = movesAt(state, e, under);
+      // Free dragging bends this edge: its two handle lengths and the
+      // rotations of its end nodes.
+      const n1 = state.code[i].n;
+      const n2 = state.code[(i + 1) % V].n;
+      const rots = n1 === n2 ? [n1] : [n1, n2];
+      const cosmetic = d
+        .vary(
+          state,
+          [
+            param("edges", e, "a"),
+            param("edges", e, "b"),
+            ...rots.map((n) => param<Knot>("nodes", n, "rot")),
+          ],
+          {
+            // Keep bends tame: handles no longer than the chord plus a
+            // loop's worth, and end nodes turning at most 60°.
+            constraint: (s) => {
+              const p1 = s.nodes[n1];
+              const p2 = s.nodes[n2];
+              const maxH = Math.hypot(p1.x - p2.x, p1.y - p2.y) + 70;
+              return [
+                moreThan(s.edges[e].a, 3),
+                moreThan(s.edges[e].b, 3),
+                lessThan(s.edges[e].a, maxH),
+                lessThan(s.edges[e].b, maxH),
+                ...rots.map((n) =>
+                  lessThan(
+                    Math.abs(s.nodes[n].rot - state.nodes[n].rot),
+                    Math.PI / 3,
+                  ),
+                ),
+              ];
+            },
+          },
+        )
+        .during(clampValid(state));
+      return d
+        .closest(moves.map((m) => moveSpec(m, e)))
+        .whenFar(cosmetic, { gapIn: 12, gapOut: 28 });
+    });
+
+  /**
+   * A move interpolates from its start to its result. Past the result,
+   * the pointer is slid back along the move's direction, so
+   * overshooting a target keeps the move rather than dropping out of
+   * it (only sideways distance counts as being "far").
+   */
+  const moveSpec = (m: Move, e: string): DragSpec<Knot> => {
+    const A = edgeMid(m.from, e);
+    const B = edgeMid(m.to, e);
+    const AB = sub(B, A);
+    const L2 = dot(AB, AB) || 1;
+    return d.between([m.from, m.to]).changeFrame((frame) => {
+      const p = frame.pointer;
+      const t = ((p.x - A.x) * AB.x + (p.y - A.y) * AB.y) / L2;
+      if (t <= 1) return {};
+      return { pointer: p.sub(Vec2(AB.x * (t - 1), AB.y * (t - 1))) };
+    });
+  };
+
+  const nodeSpec = (n: string): DragSpec<Knot> =>
+    d
+      .vary(state, [param("nodes", n, "x"), param("nodes", n, "y")])
+      .during(clampValid(state));
 
   return (
     <g>
-      <style>{`.knot-preset:hover rect { fill: #e2e8f0; }`}</style>
+      <style>{`
+        .knot-preset:hover rect { fill: #e2e8f0; }
+        .knot-handle:hover { fill: rgba(15, 23, 42, 0.12); }
+      `}</style>
 
-      {/* the curve, one polyline per control span so arcs can carry
-          their own color (span count is constant within a move, so
-          these interpolate point-for-point) */}
-      <g style={{ pointerEvents: "none" }}>
-        {an.pts.map((_, j) => {
-          const pts = [];
-          for (let k = 0; k <= SUB; k++) {
-            const q = samples[(j * SUB + k) % M];
-            pts.push(`${q.x.toFixed(1)},${q.y.toFixed(1)}`);
-          }
-          return (
-            <polyline
-              points={pts.join(" ")}
-              fill="none"
-              stroke={segColor[j * SUB + Math.floor(SUB / 2)]}
-              strokeWidth={STROKE}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          );
-        })}
-      </g>
+      {/* edges: one cubic each */}
+      {state.code.map((v, i) => (
+        <path
+          id={`edge-${v.e}`}
+          d={cubicD(cubics[i])}
+          fill="none"
+          stroke={edgeColor[i]}
+          strokeWidth={STROKE}
+          strokeLinecap="round"
+          style={{ pointerEvents: "none" }}
+        />
+      ))}
 
-      {/* over-strand bridges at each crossing: a white halo cuts the
-          under-strand, then the over-strand is redrawn on top */}
-      {an.infos.map((info) => {
-        const u0 = walk(cum, info.overU, -BRIDGE_HALF);
-        const u1 = walk(cum, info.overU, BRIDGE_HALF);
-        const bridge = subCurve(samples, cum, u0, u1, BRIDGE_PTS);
-        const dPath =
-          "M" +
-          bridge.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join("L");
+      {/* over-strand bridges: a white halo cuts the under-strand, then
+          the over-strand is redrawn on top */}
+      {state.code.map((v, i) => {
+        if (!v.over || state.nodes[v.n].kind !== "x") return null;
+        const inIdx = (i - 1 + V) % V;
+        const dPath = bridgeD(cubics[inIdx], cubics[i]);
         return (
-          <g id={`x-${info.id}`} style={{ pointerEvents: "none" }}>
+          <g
+            id={`bridge-${v.n}`}
+            dragologyZIndex={1}
+            style={{ pointerEvents: "none" }}
+          >
             <path
               d={dPath}
               fill="none"
@@ -103,7 +231,7 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
             <path
               d={dPath}
               fill="none"
-              stroke={colorOfArc(arcAt(an, info.overU))}
+              stroke={edgeColor[i]}
               strokeWidth={STROKE}
               strokeLinecap="butt"
             />
@@ -113,51 +241,46 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
 
       {/* orientation marker */}
       <path
-        transform={translate(samples[0]) + rotateDeg(startAngle)}
+        id="orientation"
+        dragologyZIndex={1}
+        transform={translate(marker) + rotateDeg(markerAngle)}
         d="M-4,-5 L5,0 L-4,5 Z"
         fill="white"
-        stroke={segColor[0]}
+        stroke={edgeColor[0]}
         strokeWidth={1.5}
         style={{ pointerEvents: "none" }}
       />
 
-      {/* drag handles at every control point */}
-      {an.pts.map((p, j) => {
-        const kp = state.pts[j];
-        const id = `pt-${kp.id}`;
-        const isDragged = draggedId === id;
+      {/* edge handles, at each edge's midpoint */}
+      {state.code.map((v, i) => {
+        const id = `h-${v.e}`;
         return (
           <circle
             id={id}
-            transform={translate(p)}
-            r={isDragged ? 7 : 9}
-            fill={isDragged ? "rgba(15, 23, 42, 0.25)" : "transparent"}
+            className="knot-handle"
+            dragologyZIndex={2}
+            transform={translate(bez(cubics[i], 0.5))}
+            r={draggedId === id ? 7 : 10}
+            fill={draggedId === id ? "rgba(15, 23, 42, 0.25)" : "transparent"}
             style={{ cursor: "grab" }}
-            dragologyOnDrag={() =>
-              d.reactTo(altKey, (under) => {
-                const moves = movesAt(state, kp.id, under);
-                const start: Knot = {
-                  ...state,
-                  brush: { at: kp.id, dx: 0, dy: 0 },
-                };
-                // Free dragging may only move the curve around: the
-                // crossings' structure and signs must stay as they are.
-                const key = diagramKey(analyze(state));
-                let lastGood = start;
-                const cosmetic = d
-                  .vary(start, [param("brush", "dx"), param("brush", "dy")])
-                  .during((s) => {
-                    if (diagramKey(analyze(s)) === key) {
-                      lastGood = s;
-                      return s;
-                    }
-                    return lastGood;
-                  });
-                return d
-                  .closest(moves.map((m) => d.between([m.from, m.to])))
-                  .whenFar(cosmetic, { gapIn: 12, gapOut: 24 });
-              })
-            }
+            dragologyOnDrag={() => edgeSpec(v.e, i)}
+          />
+        );
+      })}
+
+      {/* node handles */}
+      {Object.entries(state.nodes).map(([n, nd]) => {
+        const id = `node-${n}`;
+        return (
+          <circle
+            id={id}
+            className="knot-handle"
+            dragologyZIndex={3}
+            transform={translate(nd.x, nd.y)}
+            r={draggedId === id ? 7 : 9}
+            fill={draggedId === id ? "rgba(15, 23, 42, 0.25)" : "transparent"}
+            style={{ cursor: "move" }}
+            dragologyOnDrag={() => nodeSpec(n)}
           />
         );
       })}
@@ -229,19 +352,21 @@ export default demo(
         <DemoLink href="https://en.wikipedia.org/wiki/Reidemeister_move">
           Reidemeister moves
         </DemoLink>
-        . Grab anywhere on the strand: pull sideways to twist out a loop (R1),
-        push it across a neighboring strand (R2; hold <kbd>Alt</kbd> to pass
-        under), or slide it across a crossing (R3). Drag a loop back into the
-        strand or a bigon back across its partner to undo. Drag in other
-        directions to reshape the curve without changing the diagram. The Jones
-        polynomial never changes; crossing number and writhe do.
+        . Each strand between two crossings is a single curve. Grab one by its
+        middle: pull it sideways to twist out a loop (R1), push it across a
+        neighboring strand (R2; hold <kbd>Alt</kbd> to pass under), or slide it
+        across a crossing (R3). Drag a loop back into the strand or a bigon back
+        across its partner to undo. Drag in other directions to bend the strand,
+        or drag a crossing to move it. The Jones polynomial never changes;
+        crossing number and writhe do. The two tangles are scrambled versions of
+        simpler knots: can you untangle them?
       </DemoNotes>
       <DemoDraggable
         draggable={draggable}
         initialState={initialState}
         width={WIDTH}
         height={HEIGHT}
-        transformDropState={resampleKnot}
+        transformDropState={cleanup}
       />
     </div>
   ),
@@ -252,7 +377,6 @@ export default demo(
       "d.vary",
       "d.reactTo",
       "spec.whenFar",
-      "spec.withSnapRadius [chain]",
       "spec.during",
       "math",
     ],
