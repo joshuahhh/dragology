@@ -64,7 +64,7 @@ const MIN_HANDLE = 3;
 
 export function nodePos(k: Knot, i: number): Vec2 {
   const nd = k.nodes[k.code[i].n];
-  return Vec2(nd.x, nd.y);
+  return Vec2(nd);
 }
 
 /** Direction of the strand at visit i. */
@@ -190,10 +190,7 @@ export function strayCrossings(k: Knot, limit = Infinity): number {
       );
       const n1 = endNodes(s1);
       const n2 = endNodes(s2);
-      const ok = n1.some(
-        (id) =>
-          n2.includes(id) && X.dist(Vec2(k.nodes[id].x, k.nodes[id].y)) < 1.5,
-      );
+      const ok = n1.some((id) => n2.includes(id) && X.dist(k.nodes[id]) < 1.5);
       if (!ok && ++stray >= limit) return stray;
     }
   }
@@ -522,12 +519,12 @@ function handlesOf(c: Cubic): EdgeData {
 }
 
 function passNode(p: Vec2, dir: Vec2, hint?: KNode["hint"]): KNode {
-  return { kind: "p", x: p.x, y: p.y, rot: dir.angleRad(), sign: 1, hint };
+  return { kind: "p", ...p.xy(), rot: dir.angleRad(), sign: 1, hint };
 }
 
 function crossingNode(p: Vec2, overDir: Vec2, underDir: Vec2): KNode {
   const sign = overDir.cross(underDir) < 0 ? 1 : -1;
-  return { kind: "x", x: p.x, y: p.y, rot: overDir.angleRad(), sign };
+  return { kind: "x", ...p.xy(), rot: overDir.angleRad(), sign };
 }
 
 function clampHandle(h: number): number {
@@ -683,7 +680,7 @@ function r1Untwist(k: Knot, i: number): Move | null {
   const w = k.code[j];
   if (v.n !== w.n || k.nodes[v.n].kind !== "x") return null;
   const cn = k.nodes[v.n];
-  const cp = Vec2(cn.x, cn.y);
+  const cp = Vec2(cn);
   let nextId = k.nextId;
   const p1 = `n${nextId++}`;
   const p2 = `n${nextId++}`;
@@ -711,9 +708,9 @@ function r1Untwist(k: Knot, i: number): Move | null {
   if (V === 2) {
     // The last crossing: the other loop becomes a circle.
     const big = sampleCubic(edgeCubics(k)[j], 32);
-    const center = big
-      .reduce((acc, p) => acc.add(p), Vec2(0, 0))
-      .mul(1 / big.length);
+    const center = Vec2(0)
+      .add(...big)
+      .div(big.length);
     const r = Math.max(
       30,
       big.reduce((acc, p) => acc + p.dist(center), 0) / big.length,
@@ -943,8 +940,8 @@ function r2Pull(k: Knot, i: number): Move | null {
   const oY = otherVisit(k, j);
   if (cyc(oX + 1, V) !== oY && cyc(oY + 1, V) !== oX) return null;
 
-  const Xp = Vec2(X.x, X.y);
-  const Yp = Vec2(Y.x, Y.y);
+  const Xp = Vec2(X);
+  const Yp = Vec2(Y);
   const sMid = edgeCubics(k)[i];
   const Ldir = safeNorm(Yp.sub(Xp));
   const bulge = bez(sMid, 0.5).sub(Xp.lerp(Yp, 0.5));
@@ -1091,7 +1088,7 @@ function r3With(
   const B = k.nodes[vB.n];
   const cId = k.code[a2].n;
   const C = k.nodes[cId];
-  const Cp = Vec2(C.x, C.y);
+  const Cp = Vec2(C);
 
   const swap = (code: Visit[], p: number, q: number) => {
     const tmp = { n: code[p].n, over: code[p].over };
@@ -1162,8 +1159,8 @@ function r3With(
   type Placement = { a: KNode; b: KNode; fixEdges?: (to: Knot) => void };
   const placements: (() => Placement | null)[] = [
     ...[1, 0.7, 0.45].map((f) => () => {
-      const a = slide(i, oA, a2, f * Vec2(A.x, A.y).dist(Cp));
-      const b = slide(j, oB, b2, f * Vec2(B.x, B.y).dist(Cp));
+      const a = slide(i, oA, a2, f * Cp.dist(A));
+      const b = slide(j, oB, b2, f * Cp.dist(B));
       if (!a || !b) return null;
       return {
         a: a.node,
@@ -1192,9 +1189,7 @@ function r3With(
       const n1 = v.n;
       const n2 = to.code[r].n;
       if (!moved.has(n1) && !moved.has(n2)) return;
-      const d = Vec2(to.nodes[n1].x, to.nodes[n1].y).dist(
-        Vec2(to.nodes[n2].x, to.nodes[n2].y),
-      );
+      const d = Vec2(to.nodes[n1]).dist(to.nodes[n2]);
       const ed = { ...to.edges[v.e] };
       if (moved.has(n1)) ed.a = clampHandle(d / 3);
       if (moved.has(n2)) ed.b = clampHandle(d / 3);
@@ -1387,7 +1382,7 @@ export function knotFromParametric(
     );
   };
   return knotFromPolyline(
-    raw.map((p) => Vec2(p.x, p.y)),
+    raw.map((p) => Vec2(p)),
     (u, other) => zAt(u) > zAt(other),
   );
 }

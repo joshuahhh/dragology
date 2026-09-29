@@ -1,3 +1,4 @@
+import { Vec2 } from "../../math/vec2";
 import { cubicLen, sampleCubic } from "./geometry";
 import { HardName, hardKnot } from "./hard";
 import {
@@ -106,13 +107,7 @@ export function energy(k: Knot): number {
           const dy = p.y - q.y;
           const d2 = dx * dx + dy * dy;
           if (d2 >= SPACE * SPACE) continue;
-          if (
-            shared.some(
-              (nd) =>
-                Math.hypot(p.x - nd.x, p.y - nd.y) < SPACE &&
-                Math.hypot(q.x - nd.x, q.y - nd.y) < SPACE,
-            )
-          ) {
+          if (shared.some((nd) => p.dist(nd) < SPACE && q.dist(nd) < SPACE)) {
             continue;
           }
           E += (SPACE - Math.sqrt(d2)) ** 2;
@@ -133,14 +128,12 @@ export function energy(k: Knot): number {
     const ed = k.edges[k.code[i].e];
     if (k.code[i].n === k.code[(i + 1) % V].n) {
       // loops: keep them big enough to see and grab
-      const size = Math.max(
-        ...ps.map((p) => Math.hypot(p.x - c[0].x, p.y - c[0].y)),
-      );
+      const size = Math.max(...ps.map((p) => p.dist(c[0])));
       if (size < LOOP_MIN) E += 8 * (LOOP_MIN - size) ** 2;
     } else {
       // handles near a third of the chord, so strands flow through
       // crossings instead of turning sharply right after them
-      const third = Math.hypot(c[3].x - c[0].x, c[3].y - c[0].y) / 3;
+      const third = c[3].dist(c[0]) / 3;
       E += W_HANDLE * ((ed.a - third) ** 2 + (ed.b - third) ** 2);
     }
   });
@@ -149,7 +142,7 @@ export function energy(k: Knot): number {
   const xs = Object.values(k.nodes).filter((nd) => nd.kind === "x");
   for (let i = 0; i < xs.length; i++) {
     for (let j = i + 1; j < xs.length; j++) {
-      const d = Math.hypot(xs[i].x - xs[j].x, xs[i].y - xs[j].y);
+      const d = Vec2(xs[i]).dist(xs[j]);
       if (d < NODE_SPACE) E += 20 * (NODE_SPACE - d) ** 2;
     }
   }

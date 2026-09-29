@@ -56,7 +56,7 @@ export function knotFromPlink(
   order.forEach((vi, k) => {
     const a = place(verts[vi]);
     const b = place(verts[order[(k + 1) % order.length]]);
-    const steps = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 6));
+    const steps = Math.max(2, Math.ceil(b.dist(a) / 6));
     for (let s = 0; s < steps; s++) {
       poly.push(
         Vec2(a.x + ((b.x - a.x) * s) / steps, a.y + ((b.y - a.y) * s) / steps),

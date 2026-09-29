@@ -158,7 +158,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
             constraint: (s) => {
               const p1 = s.nodes[n1];
               const p2 = s.nodes[n2];
-              const maxH = Math.hypot(p1.x - p2.x, p1.y - p2.y) + 70;
+              const maxH = Vec2(p1).dist(p2) + 70;
               return [
                 moreThan(s.edges[e].a, 3),
                 moreThan(s.edges[e].b, 3),
