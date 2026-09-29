@@ -4,6 +4,7 @@ import {
   Move,
   MoveKind,
   cleanup,
+  crossingMovesAt,
   diagramKey,
   edgeCubics,
   invariants,
@@ -140,6 +141,35 @@ describe("moves", () => {
             expect(isValid(r.to)).toBe(true);
             expect(inv(r.to).jones).toBe(j0);
             expect(inv(r.to).n).toBe(inv(k2).n);
+          }
+          if (found > 8) return;
+        }
+      }
+    }
+    expect(found).toBeGreaterThan(0);
+  });
+
+  it("R3 can also be done by dragging the triangle's third crossing", () => {
+    let found = 0;
+    for (const k of [trefoil(), figureEight()]) {
+      const j0 = inv(k).jones;
+      for (const v of k.code) {
+        for (const m of movesAt(k, v.e, false).filter((x) => x.kind === "R2")) {
+          const k2 = cleanup(m.to);
+          for (const id of Object.keys(k2.nodes)) {
+            for (const r of crossingMovesAt(k2, id)) {
+              found++;
+              expect(r.kind).toBe("R3");
+              expect(isValid(r.to)).toBe(true);
+              expect(inv(r.to).jones).toBe(j0);
+              expect(inv(r.to).n).toBe(inv(k2).n);
+              // the dragged crossing is what moves
+              const before = k2.nodes[id];
+              const after = r.to.nodes[id];
+              expect(
+                Math.hypot(after.x - before.x, after.y - before.y),
+              ).toBeGreaterThan(5);
+            }
           }
           if (found > 8) return;
         }

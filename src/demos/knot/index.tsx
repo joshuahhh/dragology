@@ -20,6 +20,7 @@ import {
   Move,
   arcOfEdge,
   cleanup,
+  crossingMovesAt,
   edgeCubics,
   edgeIndex,
   invariants,
@@ -170,7 +171,7 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId }) => {
       const others = moves.filter((m) => m.kind !== "R1");
       const spec = d
         .closest([
-          ...others.map((m) => moveSpec(m, e)),
+          ...others.map((m) => moveSpec(m, (k) => edgeMid(k, e))),
           ...twists.map((m) => d.fixed(m.to)),
         ])
         .whenFar(cosmetic, { gapIn: 12, gapOut: 28 });
@@ -198,9 +199,10 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId }) => {
    * past its result. Past the result, the pointer is slid back along
    * the move's direction, so overshooting keeps the move.
    */
-  const moveSpec = (m: Move, e: string): DragSpec<Knot> => {
-    const A = edgeMid(m.from, e);
-    const B = edgeMid(m.to, e);
+  const moveSpec = (m: Move, at: (k: Knot) => Vec2): DragSpec<Knot> => {
+    // where the dragged handle sits at the start and at the result
+    const A = at(m.from);
+    const B = at(m.to);
     const len = A.dist(B) || 1;
     const dir = B.sub(A).div(len);
     const start = m.meets ? m.meets.sub(dir.mul(PUSH_ENGAGE)) : A;
@@ -216,10 +218,20 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId }) => {
       .changeResult(() => ({ gap: distToSegment(pointer, start, end) }));
   };
 
-  const nodeSpec = (n: string): DragSpec<Knot> =>
-    d
+  // Dragging a crossing moves it, or, across the strand opposite it in
+  // a triangle, performs an R3.
+  const nodeSpec = (n: string): DragSpec<Knot> => {
+    const free = d
       .vary(state, [param("nodes", n, "x"), param("nodes", n, "y")])
       .during(clampValid(state));
+    return d
+      .closest(
+        crossingMovesAt(state, n).map((m) =>
+          moveSpec(m, (k) => Vec2(k.nodes[n])),
+        ),
+      )
+      .whenFar(free, { gapIn: 12, gapOut: 28 });
+  };
 
   return (
     <g>
@@ -499,7 +511,7 @@ const legendMoves: {
     caption: (
       <>
         A strand over (or under) both sides of a triangle slides across the
-        crossing opposite it.
+        crossing opposite it, or drag that crossing across the strand.
       </>
     ),
   },
@@ -596,10 +608,11 @@ export default demo(
         . Each strand between two crossings is a single curve. Grab one by its
         middle: drag it onto a ring beside it to twist a loop (R1), push it
         across a neighboring strand (R2; hold <kbd>Alt</kbd> to pass under), or
-        slide it across a crossing (R3). Drag a loop back into the strand or a
-        bigon back across its partner to undo. Drag in other directions to bend
-        the strand, or drag a crossing to move it. The Jones polynomial never
-        changes; crossing number and writhe do. Tangle A is the{" "}
+        slide it across a crossing (R3; or drag the crossing across the strand).
+        Drag a loop back into the strand or a bigon back across its partner to
+        undo. Drag in other directions to bend the strand, or drag a crossing to
+        move it. The Jones polynomial never changes; crossing number and writhe
+        do. Tangle A is the{" "}
         <DemoLink href="https://en.wikipedia.org/wiki/Hard_unknot">
           Culprit
         </DemoLink>

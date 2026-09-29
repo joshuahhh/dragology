@@ -21,6 +21,7 @@ import {
   Cubic,
   bez,
   bezTan,
+  closestOnCubic,
   cubicFrom,
   cubicLen,
   cyc,
@@ -1073,43 +1074,68 @@ function r2Pull(k: Knot, i: number): Move | null {
  * over both (or under both), and a third crossing C sits next to A and
  * B on their other strands. Slide the edge across C.
  */
-function r3All(k: Knot, i: number): Move[] {
+type Triangle = { i: number; oA: number; oB: number; a2: number; b2: number };
+
+/**
+ * Triangles with the edge leaving visit i as a side that can slide
+ * (it passes over both its crossings A and B, or under both): the third
+ * crossing C's visits a2 (next to A's other visit oA) and b2 (next to
+ * B's other visit oB). The edge can border a triangle on each side.
+ */
+function trianglesAt(k: Knot, i: number): Triangle[] {
   const V = k.code.length;
   const pair = sameLevelPair(k, i);
   if (!pair) return [];
   const { j, oA, oB } = pair;
-  const vA = k.code[i];
-  const vB = k.code[j];
-  // the edge can border a triangle on each side
-  const out: Move[] = [];
+  const out: Triangle[] = [];
   for (const dA of [-1, 1]) {
     for (const dB of [-1, 1]) {
-      const qa = cyc(oA + dA, V);
-      const qb = cyc(oB + dB, V);
-      if (qa === qb || [i, j].includes(qa) || [i, j].includes(qb)) continue;
-      const cId = k.code[qa].n;
+      const a2 = cyc(oA + dA, V);
+      const b2 = cyc(oB + dB, V);
+      if (a2 === b2 || [i, j].includes(a2) || [i, j].includes(b2)) continue;
+      const cId = k.code[a2].n;
       if (
-        cId === k.code[qb].n &&
+        cId === k.code[b2].n &&
         k.nodes[cId].kind === "x" &&
-        cId !== vA.n &&
-        cId !== vB.n
+        cId !== k.code[i].n &&
+        cId !== k.code[j].n
       ) {
-        const m = r3With(k, i, oA, oB, qa, qb);
-        if (m) out.push(m);
+        out.push({ i, oA, oB, a2, b2 });
       }
     }
   }
   return out;
 }
 
+/** R3s sliding the edge leaving visit i across a crossing. */
+function r3All(k: Knot, i: number): Move[] {
+  return trianglesAt(k, i)
+    .map((tri) => r3With(k, tri, "strand"))
+    .filter((m): m is Move => m !== null);
+}
+
+/**
+ * R3s moving crossing `id` across the strand opposite it in a triangle
+ * (the same move, seen from the other corner).
+ */
+export function crossingMovesAt(k: Knot, id: string): Move[] {
+  return k.code
+    .flatMap((_, i) => trianglesAt(k, i))
+    .filter((tri) => k.code[tri.a2].n === id)
+    .map((tri) => r3With(k, tri, "crossing"))
+    .filter((m): m is Move => m !== null);
+}
+
 /** R3 across the crossing C whose visits are a2 (next to oA) and b2 (next to oB). */
+/**
+ * R3 across the triangle's third crossing C. In "strand" mode the side
+ * AB slides past C; in "crossing" mode C moves past AB instead (A and B
+ * stay put). Either way the code changes the same way.
+ */
 function r3With(
   k: Knot,
-  i: number,
-  oA: number,
-  oB: number,
-  a2: number,
-  b2: number,
+  { i, oA, oB, a2, b2 }: Triangle,
+  mode: "strand" | "crossing",
 ): Move | null {
   const V = k.code.length;
   const j = (i + 1) % V;
@@ -1186,8 +1212,67 @@ function r3With(
     x: Cp.x + (Cp.x - nd.x) * f,
     y: Cp.y + (Cp.y - nd.y) * f,
   });
-  type Placement = { a: KNode; b: KNode; fixEdges?: (to: Knot) => void };
+  type Placement = {
+    a: KNode;
+    b: KNode;
+    c?: KNode;
+    fixEdges?: (to: Knot) => void;
+  };
   function* placements(): Generator<Placement> {
+    if (mode === "crossing") {
+      // C moves just past the strand through A and B, and A and B trade
+      // places on that strand's own curve, near where C projects onto
+      // it. The strand keeps its exact shape.
+      const sMid = cubics[i];
+      const L = cubicLen(sMid);
+      const tc = Math.min(0.8, Math.max(0.2, closestOnCubic(sMid, Cp).t));
+      const Lc = cubicLen(subCubic(sMid, 0, tc));
+      const w = Math.min(12, L / 5);
+      const tB = paramAtLen(sMid, Math.max(0, Lc - w));
+      const tA = paramAtLen(sMid, Math.min(L, Lc + w));
+      const m = bez(sMid, tc);
+      let n = bezTan(sMid, tc).perp();
+      if (n.dot(Cp.sub(m)) > 0) n = n.mul(-1); // toward the far side
+      // a crossing on s at parameter t, keeping its angle to s
+      const onS = (visit: number, other: number, t: number): KNode => {
+        const p = bez(sMid, t);
+        const sDir = bezTan(sMid, t);
+        const rel = dirAt(k, other).angleRad() - dirAt(k, visit).angleRad();
+        const oDir = Vec2.polarRad(1, sDir.angleRad() + rel);
+        return k.code[visit].over
+          ? crossingNode(p, sDir, oDir)
+          : crossingNode(p, oDir, sDir);
+      };
+      // s after the move: S0 → B → A → S1, pieces of its old curve
+      const fixS = (to: Knot) => {
+        const fit = (slot: number, pts: Vec2[]) => {
+          to.edges[to.code[slot].e] = fitHandles(
+            nodePos(to, slot),
+            dirAt(to, slot),
+            nodePos(to, cyc(slot + 1, V)),
+            dirAt(to, cyc(slot + 1, V)),
+            pts,
+            MIN_HANDLE,
+          );
+        };
+        const inner = (c: Cubic) => sampleCubic(c, 8).slice(1, 8);
+        fit(cyc(i - 1, V), [
+          ...inner(cubics[cyc(i - 1, V)]),
+          ...inner(subCubic(sMid, 0, tB)),
+        ]);
+        to.edges[to.code[i].e] = handlesOf(subCubic(sMid, tB, tA));
+        fit(j, [...inner(subCubic(sMid, tA, 1)), ...inner(cubics[j])]);
+      };
+      for (const dist of [22, 16, 30]) {
+        yield {
+          a: onS(i, oA, tA),
+          b: onS(j, oB, tB),
+          c: { ...C, ...m.add(n.mul(dist)).xy() },
+          fixEdges: fixS,
+        };
+      }
+      return;
+    }
     for (const f of [1, 0.7, 0.45]) {
       const a = slide(i, oA, a2, f * Cp.dist(A));
       const b = slide(j, oB, b2, f * Cp.dist(B));
@@ -1212,6 +1297,7 @@ function r3With(
       swap(to.code, oB, b2);
       to.nodes[vA.n] = placed.a;
       to.nodes[vB.n] = placed.b;
+      if (placed.c) to.nodes[cId] = placed.c;
       // re-fit handles at the ends of edges touching the triangle
       to.code.forEach((v, q) => {
         const n1 = v.n;
