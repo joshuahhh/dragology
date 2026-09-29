@@ -1,4 +1,5 @@
 import { Vec2 } from "../../math/vec2";
+import { XYWH, boundingXYWH, inXYWH, mm, overlapsXYWH } from "../../math/xywh";
 import { cubicLen, sampleCubic } from "./geometry";
 import { HardName, hardKnot } from "./hard";
 import {
@@ -7,6 +8,7 @@ import {
   flipCrossing,
   isValid,
   knotFromParametric,
+  seededRandom,
   strayCrossings,
 } from "./knot";
 
@@ -34,27 +36,13 @@ export const unknot = (): Knot =>
     z: 0,
   }));
 
-// # Scrambled starting positions
+// # Layout
 
-function lcg(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 2 ** 32;
-  };
-}
-
-const CANVAS = { x0: 30, y0: 50, x1: 530, y1: 400 };
+const CANVAS = XYWH(30, 50, 500, 350);
 
 export function inBounds(k: Knot): boolean {
   return edgeCubics(k).every((c) =>
-    sampleCubic(c, 8).every(
-      (p) =>
-        p.x > CANVAS.x0 &&
-        p.x < CANVAS.x1 &&
-        p.y > CANVAS.y0 &&
-        p.y < CANVAS.y1,
-    ),
+    sampleCubic(c, 8).every((p) => inXYWH(p, CANVAS)),
   );
 }
 
@@ -68,33 +56,12 @@ export function energy(k: Knot): number {
   const V = k.code.length;
   const N = 10;
   const pts = cubics.map((c) => sampleCubic(c, N));
-  const boxes = pts.map((ps) => {
-    let x0 = Infinity;
-    let y0 = Infinity;
-    let x1 = -Infinity;
-    let y1 = -Infinity;
-    for (const p of ps) {
-      x0 = Math.min(x0, p.x);
-      y0 = Math.min(y0, p.y);
-      x1 = Math.max(x1, p.x);
-      y1 = Math.max(y1, p.y);
-    }
-    return { x0, y0, x1, y1 };
-  });
+  const boxes = pts.map(boundingXYWH);
   const ends = (i: number) => [k.code[i].n, k.code[(i + 1) % V].n];
   let E = 0;
   for (let i = 0; i < V; i++) {
-    const bi = boxes[i];
     for (let j = i; j < V; j++) {
-      const bj = boxes[j];
-      if (
-        bi.x1 + SPACE < bj.x0 ||
-        bj.x1 + SPACE < bi.x0 ||
-        bi.y1 + SPACE < bj.y0 ||
-        bj.y1 + SPACE < bi.y0
-      ) {
-        continue;
-      }
+      if (!overlapsXYWH(boxes[i], boxes[j], SPACE)) continue;
       // nodes the two edges share: pairs of points near one don't count
       const shared = ends(i)
         .filter((n) => ends(j).includes(n))
@@ -216,16 +183,11 @@ export function relax(k0: Knot, iterations: number, rand: () => number): Knot {
 
 /** Translate a diagram so its drawing is centered on the canvas. */
 export function center(k: Knot): Knot {
-  const pts = edgeCubics(k).flatMap((c) => sampleCubic(c, 8));
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  const dx =
-    (CANVAS.x0 + CANVAS.x1) / 2 - (Math.min(...xs) + Math.max(...xs)) / 2;
-  const dy =
-    (CANVAS.y0 + CANVAS.y1) / 2 - (Math.min(...ys) + Math.max(...ys)) / 2;
+  const box = boundingXYWH(edgeCubics(k).flatMap((c) => sampleCubic(c, 8)));
+  const d = mm(CANVAS).sub(mm(box));
   const nodes: Knot["nodes"] = {};
   for (const [id, nd] of Object.entries(k.nodes)) {
-    nodes[id] = { ...nd, x: nd.x + dx, y: nd.y + dy };
+    nodes[id] = { ...nd, ...d.add(nd).xy() };
   }
   return { ...k, nodes };
 }
@@ -243,5 +205,5 @@ export const makeTangleB = () => flipCrossing(prettyHard("monster"), "n8");
 
 /** A classic hard diagram, relaxed into a readable layout. */
 export function prettyHard(name: HardName, seed = 1, iterations = 3000): Knot {
-  return center(relax(hardKnot(name), iterations, lcg(seed)));
+  return center(relax(hardKnot(name), iterations, seededRandom(seed)));
 }

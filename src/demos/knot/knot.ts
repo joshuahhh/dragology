@@ -1,4 +1,5 @@
 import { Vec2 } from "../../math/vec2";
+import { boundingXYWH, overlapsXYWH } from "../../math/xywh";
 // Knot diagram model for the knot demo.
 //
 // A diagram is a cyclic sequence of *visits* (the Gauss code). Each
@@ -131,9 +132,9 @@ export function strayCrossings(k: Knot, limit = Infinity): number {
   // each edge as a polyline; segment i of edge e runs pts[e][i] → pts[e][i+1]
   const pts = edgeCubics(k).map((c) => sampleCubic(c, SAMPLES));
   const segBoxes = pts.map((ps) =>
-    ps.slice(0, -1).map((p, i) => boxOf([p, ps[i + 1]])),
+    ps.slice(0, -1).map((p, i) => boundingXYWH([p, ps[i + 1]])),
   );
-  const edgeBoxes = pts.map(boxOf);
+  const edgeBoxes = pts.map(boundingXYWH);
   // the node a segment touches, if it's the first or last of its edge
   const endNodes = (e: number, i: number): string[] => [
     ...(i === 0 ? [k.code[e].n] : []),
@@ -142,11 +143,11 @@ export function strayCrossings(k: Knot, limit = Infinity): number {
   let stray = 0;
   for (let e1 = 0; e1 < V; e1++) {
     for (let e2 = e1; e2 < V; e2++) {
-      if (apart(edgeBoxes[e1], edgeBoxes[e2])) continue;
+      if (!overlapsXYWH(edgeBoxes[e1], edgeBoxes[e2], 1e-6)) continue;
       for (let i = 0; i < SAMPLES; i++) {
         // (neighboring segments of one edge share an end point)
         for (let j = e1 === e2 ? i + 2 : 0; j < SAMPLES; j++) {
-          if (apart(segBoxes[e1][i], segBoxes[e2][j])) continue;
+          if (!overlapsXYWH(segBoxes[e1][i], segBoxes[e2][j], 1e-6)) continue;
           const p = pts[e1][i];
           const q = pts[e1][i + 1];
           const h = segHit(p, q, pts[e2][j], pts[e2][j + 1]);
@@ -163,28 +164,6 @@ export function strayCrossings(k: Knot, limit = Infinity): number {
     }
   }
   return stray;
-}
-
-type Box = { x0: number; x1: number; y0: number; y1: number };
-
-function boxOf(ps: Vec2[]): Box {
-  const xs = ps.map((p) => p.x);
-  const ys = ps.map((p) => p.y);
-  return {
-    x0: Math.min(...xs),
-    x1: Math.max(...xs),
-    y0: Math.min(...ys),
-    y1: Math.max(...ys),
-  };
-}
-
-function apart(a: Box, b: Box): boolean {
-  return (
-    a.x1 < b.x0 - 1e-6 ||
-    b.x1 < a.x0 - 1e-6 ||
-    a.y1 < b.y0 - 1e-6 ||
-    b.y1 < a.y0 - 1e-6
-  );
 }
 
 // # Invariants
@@ -521,21 +500,32 @@ function clampHandle(h: number): number {
   return Math.max(MIN_HANDLE, h);
 }
 
-/** Insert visits after index i (handles cyclic appends). */
-function insertAfter(code: Visit[], i: number, visits: Visit[]): void {
-  code.splice(i + 1, 0, ...visits);
+/**
+ * Fresh ids: one per letter of `kinds` ("n" for a node, "e" for an
+ * edge), plus the id counter to store afterwards.
+ */
+function newIds(k: Knot, kinds: string): { ids: string[]; nextId: number } {
+  const ids = [...kinds].map((kind, i) => `${kind}${k.nextId + i}`);
+  return { ids, nextId: k.nextId + kinds.length };
 }
 
-/** A small deterministic random source seeded from a string. */
-function seeded(seed: string): () => number {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+/**
+ * A small deterministic random source (an LCG), seeded by a number or
+ * by a string (hashed).
+ */
+export function seededRandom(seed: number | string): () => number {
+  let st = seed;
+  if (typeof st === "string") {
+    let h = 2166136261;
+    for (let i = 0; i < st.length; i++) {
+      h = Math.imul(h ^ st.charCodeAt(i), 16777619);
+    }
+    st = h;
   }
-  let st = h >>> 0;
+  st = st >>> 0;
   return () => {
-    st = (Math.imul(st, 1664525) + 1013904223) >>> 0;
-    return st / 2 ** 32;
+    st = (Math.imul(st as number, 1664525) + 1013904223) >>> 0;
+    return (st as number) / 2 ** 32;
   };
 }
 
@@ -553,7 +543,7 @@ function repairLocal(
   let cur = k;
   let stray = strayCrossings(cur);
   if (stray === 0) return cur;
-  const rand = seeded(seed);
+  const rand = seededRandom(seed);
   const focusSet = new Set(focus);
   const edgesAt = k.code
     .map((v, i) => ({ e: v.e, i }))
@@ -604,6 +594,52 @@ function repairLocal(
   return null;
 }
 
+/** The given nodes, plus their neighbors along the strand. */
+function withNeighbors(k: Knot, ids: string[]): string[] {
+  const V = k.code.length;
+  const out = new Set(ids);
+  k.code.forEach((v, q) => {
+    if (!ids.includes(v.n)) return;
+    out.add(k.code[cyc(q - 1, V)].n);
+    out.add(k.code[cyc(q + 1, V)].n);
+  });
+  return [...out];
+}
+
+/**
+ * The first valid candidate result of a move; failing that, the first
+ * candidate repaired around the `near` nodes and their neighbors.
+ */
+function firstValid(
+  candidates: Iterable<Knot>,
+  near: string[],
+  seed: string,
+): Knot | null {
+  let first: Knot | null = null;
+  for (const c of candidates) {
+    if (isValid(c)) return c;
+    first ??= c;
+  }
+  return first && repairLocal(first, withNeighbors(first, near), seed, 300);
+}
+
+/**
+ * If visits i and i+1 are at two different crossings that the strand
+ * passes the same way (over both, or under both): i+1, and the other
+ * visits to those two crossings.
+ */
+function sameLevelPair(
+  k: Knot,
+  i: number,
+): { j: number; oA: number; oB: number } | null {
+  const j = (i + 1) % k.code.length;
+  const a = k.code[i];
+  const b = k.code[j];
+  if (a.n === b.n || a.over !== b.over) return null;
+  if (k.nodes[a.n].kind !== "x" || k.nodes[b.n].kind !== "x") return null;
+  return { j, oA: otherVisit(k, i), oB: otherVisit(k, j) };
+}
+
 // # Moves
 
 export type MoveKind = "R1" | "R1-" | "R2" | "R2-" | "R3";
@@ -625,12 +661,10 @@ function r1Twist(
   const [L, R] = split(C, 0.5);
   const m = L[3];
   const T = bezTan(C, 0.5);
-  let nextId = k.nextId;
-  const q1 = `n${nextId++}`;
-  const q2 = `n${nextId++}`;
-  const c = `n${nextId++}`;
-  const eL = `e${nextId++}`;
-  const eR = `e${nextId++}`;
+  const {
+    ids: [q1, q2, c, eL, eR],
+    nextId,
+  } = newIds(k, "nnnee");
   const hint = { ...k.edges[e], e };
 
   const from = clone(k);
@@ -638,10 +672,12 @@ function r1Twist(
   from.nodes[q1] = passNode(m, T, hint);
   from.nodes[q2] = passNode(m, T, hint);
   from.code[i].e = eL;
-  insertAfter(from.code, i, [
+  from.code.splice(
+    i + 1,
+    0,
     { n: q1, over: false, e },
     { n: q2, over: false, e: eR },
-  ]);
+  );
   from.edges[eL] = handlesOf(L);
   from.edges[e] = { a: 0, b: 0 };
   from.edges[eR] = handlesOf(R);
@@ -671,9 +707,10 @@ function r1Untwist(k: Knot, i: number): Move | null {
   if (v.n !== w.n || k.nodes[v.n].kind !== "x") return null;
   const cn = k.nodes[v.n];
   const cp = Vec2(cn);
-  let nextId = k.nextId;
-  const p1 = `n${nextId++}`;
-  const p2 = `n${nextId++}`;
+  const {
+    ids: [p1, p2],
+    nextId,
+  } = newIds(k, "nn");
 
   const make = (
     pos1: Vec2,
@@ -724,17 +761,17 @@ function r1Untwist(k: Knot, i: number): Move | null {
   }
 
   const T = safeNorm(dirAt(k, i).add(dirAt(k, j)));
-  let first: Knot | null = null;
-  for (const half of [8, 5, 12]) {
-    const to = make(cp.sub(T.mul(half)), T, cp.add(T.mul(half)), T, {
-      a: (2 * half) / 3,
-      b: (2 * half) / 3,
-    });
-    if (isValid(to)) return { kind: "R1-", from: k, to };
-    if (half === 8) first = to;
-  }
-  const fixed = first && repairLocal(first, [p1, p2], `R1-:${v.e}`);
-  return fixed ? { kind: "R1-", from: k, to: fixed } : null;
+  const to = firstValid(
+    [8, 5, 12].map((half) =>
+      make(cp.sub(T.mul(half)), T, cp.add(T.mul(half)), T, {
+        a: (2 * half) / 3,
+        b: (2 * half) / 3,
+      }),
+    ),
+    [p1, p2],
+    `R1-:${v.e}`,
+  );
+  return to && { kind: "R1-", from: k, to };
 }
 
 const R2_MAX = 150; // how far away a strand can be pushed across
@@ -778,17 +815,10 @@ function r2Push(
   const e = k.code[i].e;
   const fe = k.code[j].e;
 
-  let nextId = k.nextId;
-  const pe1 = `n${nextId++}`;
-  const pe2 = `n${nextId++}`;
-  const pf1 = `n${nextId++}`;
-  const pf2 = `n${nextId++}`;
-  const x1 = `n${nextId++}`;
-  const x2 = `n${nextId++}`;
-  const eP = `e${nextId++}`;
-  const eQ = `e${nextId++}`;
-  const fM = `e${nextId++}`;
-  const fB = `e${nextId++}`;
+  const {
+    ids: [pe1, pe2, pf1, pf2, x1, x2, eP, eQ, fM, fB],
+    nextId,
+  } = newIds(k, "nnnnnneeee");
 
   const E1 = subCubic(E, 0, 0.4);
   const E2 = subCubic(E, 0.4, 0.6);
@@ -830,12 +860,13 @@ function r2Push(
       { n: pf2, over: false, e: fB },
     ];
     from.code[i].e = eP;
+    // insert at the later index first, so the earlier one stays put
     if (i > j) {
-      insertAfter(from.code, i, eVisits);
-      insertAfter(from.code, j, fVisits);
+      from.code.splice(i + 1, 0, ...eVisits);
+      from.code.splice(j + 1, 0, ...fVisits);
     } else {
-      insertAfter(from.code, j, fVisits);
-      insertAfter(from.code, i, eVisits);
+      from.code.splice(j + 1, 0, ...fVisits);
+      from.code.splice(i + 1, 0, ...eVisits);
     }
 
     // E crosses F at F(f1) and F(f2); its first crossing is the one
@@ -919,16 +950,15 @@ function otherVisit(k: Knot, i: number): number {
  */
 function r2Pull(k: Knot, i: number): Move | null {
   const V = k.code.length;
-  const j = (i + 1) % V;
+  const pair = sameLevelPair(k, i);
+  if (!pair) return null;
+  const { j, oA: oX, oB: oY } = pair;
+  // the other strand must run directly between the two crossings
+  if (cyc(oX + 1, V) !== oY && cyc(oY + 1, V) !== oX) return null;
   const vX = k.code[i];
   const vY = k.code[j];
   const X = k.nodes[vX.n];
   const Y = k.nodes[vY.n];
-  if (X.kind !== "x" || Y.kind !== "x" || vX.n === vY.n) return null;
-  if (vX.over !== vY.over) return null;
-  const oX = otherVisit(k, i);
-  const oY = otherVisit(k, j);
-  if (cyc(oX + 1, V) !== oY && cyc(oY + 1, V) !== oX) return null;
 
   const Xp = Vec2(X);
   const Yp = Vec2(Y);
@@ -942,14 +972,12 @@ function r2Pull(k: Knot, i: number): Move | null {
   }
   const home = safeNorm(far).mul(-1);
 
-  let nextId = k.nextId;
-  const xs = `n${nextId++}`;
-  const ys = `n${nextId++}`;
-  const xt = `n${nextId++}`;
-  const yt = `n${nextId++}`;
+  const {
+    ids: [xs, ys, xt, yt],
+    nextId,
+  } = newIds(k, "nnnn");
   const tDirX = dirAt(k, oX);
   const tDirY = dirAt(k, oY);
-  let first: Knot | null = null;
 
   // The other strand's side of the bigon, ordered from X to Y.
   const cubics = edgeCubics(k);
@@ -992,7 +1020,7 @@ function r2Pull(k: Knot, i: number): Move | null {
     shapes.push({ xsPos, ysPos, d1: sDir, d2: sDir, mid: { a: h, b: h } });
   }
 
-  for (const sh of shapes) {
+  const candidates = shapes.map((sh) => {
     const to = clone(k);
     to.nextId = nextId;
     delete to.nodes[vX.n];
@@ -1006,21 +1034,10 @@ function r2Pull(k: Knot, i: number): Move | null {
     to.code[oX] = { ...to.code[oX], n: xt, over: false };
     to.code[oY] = { ...to.code[oY], n: yt, over: false };
     to.edges[vX.e] = sh.mid;
-    if (isValid(to)) return { kind: "R2-", from: k, to };
-    first ??= to;
-  }
-  // widen the repair to the pulled strand's neighbors
-  const near = new Set([xs, ys]);
-  if (first) {
-    const fc = first.code;
-    fc.forEach((v, q) => {
-      if (v.n !== xs && v.n !== ys) return;
-      near.add(fc[cyc(q - 1, V)].n);
-      near.add(fc[cyc(q + 1, V)].n);
-    });
-  }
-  const fixed = first && repairLocal(first, [...near], `R2-:${vX.e}`, 300);
-  return fixed ? { kind: "R2-", from: k, to: fixed } : null;
+    return to;
+  });
+  const to = firstValid(candidates, [xs, ys], `R2-:${vX.e}`);
+  return to && { kind: "R2-", from: k, to };
 }
 
 /**
@@ -1030,15 +1047,11 @@ function r2Pull(k: Knot, i: number): Move | null {
  */
 function r3All(k: Knot, i: number): Move[] {
   const V = k.code.length;
-  const j = (i + 1) % V;
+  const pair = sameLevelPair(k, i);
+  if (!pair) return [];
+  const { j, oA, oB } = pair;
   const vA = k.code[i];
   const vB = k.code[j];
-  const A = k.nodes[vA.n];
-  const B = k.nodes[vB.n];
-  if (A.kind !== "x" || B.kind !== "x" || vA.n === vB.n) return [];
-  if (vA.over !== vB.over) return [];
-  const oA = otherVisit(k, i);
-  const oB = otherVisit(k, j);
   // the edge can border a triangle on each side
   const out: Move[] = [];
   for (const dA of [-1, 1]) {
@@ -1086,7 +1099,6 @@ function r3With(
     code[q] = { ...code[q], ...tmp };
   };
   const moved = new Set([vA.n, vB.n, cId]);
-  let first: Knot | null = null;
 
   const cubics = edgeCubics(k);
   /**
@@ -1147,12 +1159,12 @@ function r3With(
     y: Cp.y + (Cp.y - nd.y) * f,
   });
   type Placement = { a: KNode; b: KNode; fixEdges?: (to: Knot) => void };
-  const placements: (() => Placement | null)[] = [
-    ...[1, 0.7, 0.45].map((f) => () => {
+  function* placements(): Generator<Placement> {
+    for (const f of [1, 0.7, 0.45]) {
       const a = slide(i, oA, a2, f * Cp.dist(A));
       const b = slide(j, oB, b2, f * Cp.dist(B));
-      if (!a || !b) return null;
-      return {
+      if (!a || !b) continue;
+      yield {
         a: a.node,
         b: b.node,
         fixEdges: (to: Knot) => {
@@ -1160,47 +1172,36 @@ function r3With(
           b.fixEdges(to);
         },
       };
-    }),
-    ...[1, 0.6, 0.4].map((f) => () => ({ a: reflect(A, f), b: reflect(B, f) })),
-  ];
+    }
+    for (const f of [1, 0.6, 0.4]) yield { a: reflect(A, f), b: reflect(B, f) };
+  }
 
-  for (const place of placements) {
-    const placed = place();
-    if (!placed) continue;
-    const to = clone(k);
-    swap(to.code, i, j);
-    swap(to.code, oA, a2);
-    swap(to.code, oB, b2);
-    to.nodes[vA.n] = placed.a;
-    to.nodes[vB.n] = placed.b;
-    // re-fit handles at the ends of edges touching the triangle
-    to.code.forEach((v, q) => {
-      const r = (q + 1) % V;
-      const n1 = v.n;
-      const n2 = to.code[r].n;
-      if (!moved.has(n1) && !moved.has(n2)) return;
-      const d = Vec2(to.nodes[n1]).dist(to.nodes[n2]);
-      const ed = { ...to.edges[v.e] };
-      if (moved.has(n1)) ed.a = clampHandle(d / 3);
-      if (moved.has(n2)) ed.b = clampHandle(d / 3);
-      to.edges[v.e] = ed;
-    });
-    placed.fixEdges?.(to);
-    if (isValid(to)) return { kind: "R3", from: k, to };
-    first ??= to;
+  function* candidates(): Generator<Knot> {
+    for (const placed of placements()) {
+      const to = clone(k);
+      swap(to.code, i, j);
+      swap(to.code, oA, a2);
+      swap(to.code, oB, b2);
+      to.nodes[vA.n] = placed.a;
+      to.nodes[vB.n] = placed.b;
+      // re-fit handles at the ends of edges touching the triangle
+      to.code.forEach((v, q) => {
+        const n1 = v.n;
+        const n2 = to.code[(q + 1) % V].n;
+        if (!moved.has(n1) && !moved.has(n2)) return;
+        const d = Vec2(to.nodes[n1]).dist(to.nodes[n2]);
+        const ed = { ...to.edges[v.e] };
+        if (moved.has(n1)) ed.a = clampHandle(d / 3);
+        if (moved.has(n2)) ed.b = clampHandle(d / 3);
+        to.edges[v.e] = ed;
+      });
+      placed.fixEdges?.(to);
+      yield to;
+    }
   }
-  // widen the repair to the triangle's neighbors along the strands
-  const near = new Set([vA.n, vB.n, cId]);
-  if (first) {
-    const fc = first.code;
-    fc.forEach((v, q) => {
-      if (!near.has(v.n)) return;
-      near.add(fc[cyc(q - 1, V)].n);
-      near.add(fc[cyc(q + 1, V)].n);
-    });
-  }
-  const fixed = first && repairLocal(first, [...near], `R3:${vA.e}`, 300);
-  return fixed ? { kind: "R3", from: k, to: fixed } : null;
+
+  const to = firstValid(candidates(), [vA.n, vB.n, cId], `R3:${vA.e}`);
+  return to && { kind: "R3", from: k, to };
 }
 
 /**
@@ -1323,17 +1324,10 @@ export function cleanup(k0: Knot): Knot {
         if (merged && !isValid(merged)) {
           // the refit curve hits something: nudge its end nodes and
           // their neighbors a little
-          const Vm = merged.code.length;
-          const at = merged.code.findIndex((v) => v.n === k.code[s].n);
-          const focus = [
-            merged.code[cyc(at - 1, Vm)].n,
-            merged.code[at].n,
-            merged.code[cyc(at + 1, Vm)].n,
-            merged.code[cyc(at + 2, Vm)].n,
-          ];
+          const ends = [k.code[s].n, k.code[cyc(s + count + 1, V)].n];
           merged = repairLocal(
             merged,
-            [...new Set(focus)],
+            withNeighbors(merged, ends),
             `merge:${key}`,
             200,
           );

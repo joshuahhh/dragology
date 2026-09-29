@@ -4,7 +4,7 @@ import { Draggable } from "../../draggable";
 import { DragSpec, lessThan, moreThan, param } from "../../DragSpec";
 import { Vec2 } from "../../math/vec2";
 import { altKey } from "../../modifierKeys";
-import { rotateDeg, translate } from "../../svgx/helpers";
+import { path, rotateDeg, translate } from "../../svgx/helpers";
 import { Cubic, bez, bezTan, cubicLen, paramAtLen, subCubic } from "./geometry";
 import {
   Knot,
@@ -86,11 +86,9 @@ function onDrop(dropped: State, previous: State): State {
 
 const initialState: State = { ...presets[0].make(), past: [] };
 
-const f1 = (n: number) => n.toFixed(2);
-const cubicD = (c: Cubic) =>
-  `M${f1(c[0].x)},${f1(c[0].y)} C${f1(c[1].x)},${f1(c[1].y)} ${f1(c[2].x)},${f1(c[2].y)} ${f1(c[3].x)},${f1(c[3].y)}`;
+const cubicD = (c: Cubic) => path("M", c[0], "C", c[1], c[2], c[3]);
 
-/** The last `L` px of cubic c, then the first `L` px of cubic d. */
+/** The last `BRIDGE` px of cubic c, then the first `BRIDGE` px of cubic d. */
 function bridgeD(c: Cubic, d: Cubic): string {
   const lc = cubicLen(c);
   const ld = cubicLen(d);
@@ -100,11 +98,51 @@ function bridgeD(c: Cubic, d: Cubic): string {
     1,
   );
   const b = subCubic(d, 0, ld > 0 ? paramAtLen(d, Math.min(ld, BRIDGE)) : 0);
+  return path("M", a[0], "C", a[1], a[2], a[3], "C", b[1], b[2], b[3]);
+}
+
+const buttonWidth = (label: string) => 16 + label.length * 6.5;
+
+/** A button in the row along the top. */
+function button(
+  id: string,
+  label: string,
+  x: number,
+  onClick: () => void,
+  enabled = true,
+) {
+  const w = buttonWidth(label);
   return (
-    cubicD(a) +
-    ` C${f1(b[1].x)},${f1(b[1].y)} ${f1(b[2].x)},${f1(b[2].y)} ${f1(b[3].x)},${f1(b[3].y)}`
+    <g
+      id={id}
+      className={enabled ? "knot-button" : undefined}
+      transform={translate(x, 14)}
+      opacity={enabled ? 1 : 0.4}
+      style={{ cursor: enabled ? "pointer" : "default" }}
+      onClick={enabled ? onClick : undefined}
+    >
+      <rect width={w} height={24} rx={6} fill="#f1f5f9" stroke="#cbd5e1" />
+      <text
+        x={w / 2}
+        y={16}
+        textAnchor="middle"
+        fontSize={12}
+        fill="#334155"
+        fontFamily="ui-sans-serif, system-ui"
+      >
+        {label}
+      </text>
+    </g>
   );
 }
+
+/** Preset buttons sit right-aligned, 6px apart. */
+const presetX = presets.map(
+  (_, k) =>
+    WIDTH -
+    12 -
+    presets.slice(k).reduce((acc, p) => acc + buttonWidth(p.label) + 6, 0),
+);
 
 /** Midpoint of edge e, where its drag handle sits. */
 function edgeMid(k: Knot, e: string) {
@@ -134,7 +172,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
   const edgeColor = state.code.map((_, i) => colorOfArc(arcOfEdge(state, i)));
 
   const marker = bez(cubics[0], 0.5);
-  const markerAngle = (bezTan(cubics[0], 0.5).angleRad() * 180) / Math.PI;
+  const markerAngle = bezTan(cubics[0], 0.5).angleDeg();
 
   const edgeSpec = (e: string, i: number): DragSpec<State> =>
     d.reactTo(altKey, (under) => {
@@ -207,7 +245,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
   return (
     <g>
       <style>{`
-        .knot-preset:hover rect { fill: #e2e8f0; }
+        .knot-button:hover rect { fill: #e2e8f0; }
         .knot-handle:hover { fill: rgba(15, 23, 42, 0.12); }
       `}</style>
 
@@ -320,71 +358,23 @@ const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
         </text>
       </g>
 
-      {/* undo */}
-      <g
-        id="undo"
-        className={past.length > 0 ? "knot-preset" : undefined}
-        transform={translate(12, 14)}
-        opacity={past.length > 0 ? 1 : 0.4}
-        style={{ cursor: past.length > 0 ? "pointer" : "default" }}
-        onClick={() => {
-          if (past.length === 0) return;
+      {/* buttons */}
+      {button(
+        "undo",
+        "↶ undo",
+        12,
+        () =>
           setState(
             { ...past[past.length - 1], past: past.slice(0, -1) },
             { transition: 300 },
-          );
-        }}
-      >
-        <rect width={64} height={24} rx={6} fill="#f1f5f9" stroke="#cbd5e1" />
-        <text
-          x={32}
-          y={16}
-          textAnchor="middle"
-          fontSize={12}
-          fill="#334155"
-          fontFamily="ui-sans-serif, system-ui"
-        >
-          ↶ undo
-        </text>
-      </g>
-
-      {/* presets */}
-      {presets.map((preset, k) => {
-        const w = 16 + preset.label.length * 6.5;
-        let x = WIDTH - 12;
-        for (let j = presets.length - 1; j >= k; j--) {
-          x -= 16 + presets[j].label.length * 6.5 + 6;
-        }
-        return (
-          <g
-            id={`preset-${preset.label}`}
-            className="knot-preset"
-            transform={translate(x, 14)}
-            style={{ cursor: "pointer" }}
-            onClick={() =>
-              setState({ ...preset.make(), past: [...past, core(state)] })
-            }
-          >
-            <rect
-              width={w}
-              height={24}
-              rx={6}
-              fill="#f1f5f9"
-              stroke="#cbd5e1"
-            />
-            <text
-              x={w / 2}
-              y={16}
-              textAnchor="middle"
-              fontSize={12}
-              fill="#334155"
-              fontFamily="ui-sans-serif, system-ui"
-            >
-              {preset.label}
-            </text>
-          </g>
-        );
-      })}
+          ),
+        past.length > 0,
+      )}
+      {presets.map((preset, k) =>
+        button(`preset-${preset.label}`, preset.label, presetX[k], () =>
+          setState({ ...preset.make(), past: [...past, core(state)] }),
+        ),
+      )}
     </g>
   );
 };

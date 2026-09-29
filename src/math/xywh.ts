@@ -14,6 +14,26 @@ export const XYWH = (x: number, y: number, w: number, h: number): XYWH => {
   return [x, y, w, h];
 };
 
+/** The smallest XYWH containing all the points. */
+export const boundingXYWH = (pts: Vec2[]): XYWH => {
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return XYWH(x, y, Math.max(...xs) - x, Math.max(...ys) - y);
+};
+
+/** Whether a and b overlap (or are within `margin` of each other). */
+export const overlapsXYWH = (
+  [ax, ay, aw, ah]: XYWH,
+  [bx, by, bw, bh]: XYWH,
+  margin = 0,
+): boolean =>
+  ax <= bx + bw + margin &&
+  bx <= ax + aw + margin &&
+  ay <= by + bh + margin &&
+  by <= ay + ah + margin;
+
 export const inXYWH = (t: Vec2, [x, y, w, h]: XYWH) => {
   return x <= t.x && t.x <= x + w && y <= t.y && t.y <= y + h;
 };

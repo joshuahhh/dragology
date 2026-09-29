@@ -9,6 +9,7 @@ import {
   invariants,
   isValid,
   movesAt,
+  seededRandom,
 } from "./knot";
 import {
   figureEight,
@@ -179,14 +180,7 @@ describe("baked tangles", () => {
 });
 
 describe("tangles are solvable", () => {
-  function lcg(seed: number) {
-    let s = seed >>> 0;
-    return () => {
-      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-      return s / 2 ** 32;
-    };
-  }
-  const rand = lcg(5);
+  const rand = seededRandom(5);
 
   /** Find a move of the given kinds, re-relaxing the layout (like a
    * player making room) if none is available at first. */
@@ -196,7 +190,7 @@ describe("tangles are solvable", () => {
     ok: (m: Move) => boolean,
   ): { k: Knot; m: Move } | null {
     for (let attempt = 0; attempt < 3; attempt++) {
-      const kk = attempt === 0 ? k : relax(k, 200, lcg(100 + attempt));
+      const kk = attempt === 0 ? k : relax(k, 200, seededRandom(100 + attempt));
       for (const v of kk.code) {
         const m = movesAt(kk, v.e, false, kinds).find(ok);
         if (m) return { k: kk, m };
