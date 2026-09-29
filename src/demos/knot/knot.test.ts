@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   Knot,
+  Move,
+  MoveKind,
   cleanup,
   diagramKey,
   edgeCubics,
@@ -13,7 +15,6 @@ import {
   makeTangleA,
   makeTangleB,
   relax,
-  scramble,
   trefoil,
   unknot,
 } from "./presets";
@@ -163,28 +164,14 @@ describe("moves", () => {
   });
 });
 
-describe("scramble", () => {
-  it("keeps the knot type", () => {
-    // (seeds whose results stay within the Jones computation's limit)
-    for (const seed of [1, 3]) {
-      const a = scramble(unknot(), seed, 8);
-      expect(isValid(a)).toBe(true);
-      expect(inv(a).jones).toBe("1");
-      expect(inv(a).n).toBeGreaterThan(4);
-    }
-    for (const seed of [1, 2]) {
-      const b = scramble(trefoil(), seed, 5);
-      expect(isValid(b)).toBe(true);
-      expect(inv(b).jones).toBe(inv(trefoil()).jones);
-      expect(inv(b).n).toBeGreaterThan(4);
-    }
-  });
-});
-
 describe("baked tangles", () => {
   // Rewrite with `npx vitest run -u` after changing the generator.
   it("tangles.json matches the generator", async () => {
     const fresh = { A: makeTangleA(), B: makeTangleB() };
+    for (const k of [fresh.A, fresh.B]) {
+      expect(isValid(k)).toBe(true);
+      expect(allMoves(k).length).toBeGreaterThan(0);
+    }
     expect(inv(fresh.A).jones).toBe("1");
     expect(TREFOIL_JONES).toContain(inv(fresh.B).jones);
     await expect(JSON.stringify(fresh)).toMatchFileSnapshot("./tangles.json");
@@ -199,36 +186,94 @@ describe("tangles are solvable", () => {
       return s / 2 ** 32;
     };
   }
+  const rand = lcg(5);
 
-  /** Greedy: undo moves first, else a fresh R3; relax in between. */
-  function solve(k0: Knot, target: number): number {
-    const rand = lcg(7);
-    let k = k0;
-    const seen = new Set<string>();
-    for (let step = 0; step < 60; step++) {
-      if (inv(k).n <= target) return step;
-      const all = k.code.flatMap((v) => [
-        ...movesAt(k, v.e, false),
-        ...movesAt(k, v.e, true),
-      ]);
-      let m = all.find((x) => x.kind === "R1-" || x.kind === "R2-");
-      if (!m) {
-        const r3s = all.filter(
-          (x) => x.kind === "R3" && !seen.has(diagramKey(x.to)),
-        );
-        m = r3s[Math.floor(rand() * r3s.length)];
+  /** Find a move of the given kinds, re-relaxing the layout (like a
+   * player making room) if none is available at first. */
+  function findMove(
+    k: Knot,
+    kinds: MoveKind[],
+    ok: (m: Move) => boolean,
+  ): { k: Knot; m: Move } | null {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const kk = attempt === 0 ? k : relax(k, 200, lcg(100 + attempt));
+      for (const v of kk.code) {
+        const m = movesAt(kk, v.e, false, kinds).find(ok);
+        if (m) return { k: kk, m };
       }
-      if (!m) return -1;
-      seen.add(diagramKey(m.to));
-      k = relax(cleanup(m.to), 150, rand);
     }
-    return -1;
+    return null;
   }
 
-  it("tangle A untangles to the unknot", () => {
-    expect(solve(tangles.A as Knot, 0)).toBeGreaterThan(0);
-  }, 60000);
+  /**
+   * Undo moves (R1-, R2-) while possible. When stuck, search R3
+   * sequences (breadth-first) for a state from which undo moves get
+   * below the stuck crossing count.
+   */
+  function solve(
+    k0: Knot,
+    target: number,
+    already: Knot[] = [],
+  ): string[] | null {
+    const seen = new Set([k0, ...already].map(diagramKey));
+    const fresh = (m: Move) => !seen.has(diagramKey(cleanup(m.to)));
+    const descend = (k1: Knot): { k: Knot; p: string[] } => {
+      let k = k1;
+      const p: string[] = [];
+      for (let s = 0; s < 30; s++) {
+        const r = findMove(k, ["R1-", "R2-"], fresh);
+        if (!r) break;
+        k = relax(cleanup(r.m.to), 80, rand);
+        seen.add(diagramKey(k));
+        p.push(r.m.kind);
+      }
+      return { k, p };
+    };
+    let { k, p: path } = descend(k0);
+    for (let guard = 0; guard < 10 && inv(k).n > target; guard++) {
+      const stuckAt = inv(k).n;
+      let layer = [{ k, p: [] as string[] }];
+      let found: { k: Knot; p: string[] } | null = null;
+      for (let depth = 0; depth < 6 && !found && layer.length; depth++) {
+        const next: typeof layer = [];
+        for (const st of layer) {
+          if (found) break;
+          const r = findMove(st.k, ["R3"], fresh);
+          if (!r) continue;
+          for (const v of r.k.code) {
+            for (const m of movesAt(r.k, v.e, false, ["R3"])) {
+              if (found || !fresh(m)) continue;
+              const kk = relax(cleanup(m.to), 80, rand);
+              seen.add(diagramKey(kk));
+              const d = descend(kk);
+              const p = [...st.p, "R3", ...d.p];
+              if (inv(d.k).n < stuckAt) found = { k: d.k, p };
+              else next.push({ k: kk, p: [...st.p, "R3"] });
+            }
+          }
+        }
+        layer = next.slice(0, 40);
+      }
+      if (!found) return null;
+      k = found.k;
+      path = [...path, ...found.p];
+    }
+    return inv(k).n <= target ? path : null;
+  }
+
+  it("tangle A (the Culprit) untangles after one twist", () => {
+    // The Culprit's known solution: add one kink first. Found with
+    // spherogram's Reidemeister moves; this checks that our geometry
+    // allows every step.
+    const A = tangles.A as Knot;
+    const twist = movesAt(A, "e21", true, ["R1"])[0];
+    expect(twist).toBeTruthy();
+    const path = solve(relax(cleanup(twist.to), 150, rand), 0, [A]);
+    expect(path).not.toBeNull();
+  }, 300000);
+
   it("tangle B untangles to a 3-crossing trefoil", () => {
-    expect(solve(tangles.B as Knot, 3)).toBeGreaterThan(0);
-  }, 60000);
+    const path = solve(tangles.B as Knot, 3);
+    expect(path).not.toBeNull();
+  }, 300000);
 });

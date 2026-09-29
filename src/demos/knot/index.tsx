@@ -27,7 +27,7 @@ import {
   isValid,
   movesAt,
 } from "./knot";
-import { figureEight, scramble, trefoil, unknot } from "./presets";
+import { figureEight, trefoil, unknot } from "./presets";
 import tangles from "./tangles.json";
 
 const WIDTH = 560;
@@ -36,35 +36,18 @@ const STROKE = 5;
 const GAP = 4; // white gap on each side of an over-strand
 const BRIDGE = 13; // length of the over-strand bridge on each side of a crossing
 
-// read ?seedA=…&seedB=… for trying out other scrambles
-const params = new URLSearchParams(
-  typeof window !== "undefined" ? window.location.hash.split("?")[1] : "",
-);
-const seedA = params.get("seedA");
-const seedB = params.get("seedB");
-
 const PALETTE = ["#e11d48", "#2563eb", "#16a34a"];
 const MONO = "#334155";
 
-/** Build a preset once (scrambles take a moment to relax). */
+/** Build a preset once. */
 function memo(f: () => Knot): () => Knot {
   let cached: Knot | undefined;
   return () => (cached ??= f());
 }
 
 const presets: { label: string; make: () => Knot }[] = [
-  {
-    label: "tangle A",
-    make: memo(() =>
-      seedA ? scramble(unknot(), Number(seedA), 8) : (tangles.A as Knot),
-    ),
-  },
-  {
-    label: "tangle B",
-    make: memo(() =>
-      seedB ? scramble(trefoil(), Number(seedB), 5) : (tangles.B as Knot),
-    ),
-  },
+  { label: "tangle A", make: () => tangles.A as Knot },
+  { label: "tangle B", make: () => tangles.B as Knot },
   { label: "trefoil", make: memo(trefoil) },
   { label: "figure-eight", make: memo(figureEight) },
   { label: "unknot", make: memo(unknot) },
@@ -358,8 +341,12 @@ export default demo(
         across a crossing (R3). Drag a loop back into the strand or a bigon back
         across its partner to undo. Drag in other directions to bend the strand,
         or drag a crossing to move it. The Jones polynomial never changes;
-        crossing number and writhe do. The two tangles are scrambled versions of
-        simpler knots: can you untangle them?
+        crossing number and writhe do. Tangle A is the{" "}
+        <DemoLink href="https://en.wikipedia.org/wiki/Hard_unknot">
+          Culprit
+        </DemoLink>
+        , an unknot that can't be simplified until you first make it worse.
+        Tangle B is a trefoil in disguise.
       </DemoNotes>
       <DemoDraggable
         draggable={draggable}

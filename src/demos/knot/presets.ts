@@ -1,11 +1,12 @@
 import { cubicLen, sampleCubic } from "./geometry";
+import { HardName, hardKnot } from "./hard";
 import {
   Knot,
-  cleanup,
   edgeCubics,
+  flipCrossing,
   isValid,
   knotFromParametric,
-  movesAt,
+  strayCrossings,
 } from "./knot";
 
 export const CX = 280;
@@ -120,8 +121,45 @@ export function energy(k: Knot): number {
     }
   }
   for (const c of cubics) E += 0.006 * cubicLen(c, 12) ** 2;
+
+  cubics.forEach((c, i) => {
+    const ps = pts[i];
+    // smooth flow: penalize bending (squared second differences)
+    for (let s = 1; s < N; s++) {
+      const bx = ps[s - 1].x - 2 * ps[s].x + ps[s + 1].x;
+      const by = ps[s - 1].y - 2 * ps[s].y + ps[s + 1].y;
+      E += W_BEND * (bx * bx + by * by);
+    }
+    const ed = k.edges[k.code[i].e];
+    if (k.code[i].n === k.code[(i + 1) % V].n) {
+      // loops: keep them big enough to see and grab
+      const size = Math.max(
+        ...ps.map((p) => Math.hypot(p.x - c[0].x, p.y - c[0].y)),
+      );
+      if (size < LOOP_MIN) E += 8 * (LOOP_MIN - size) ** 2;
+    } else {
+      // handles near a third of the chord, so strands flow through
+      // crossings instead of turning sharply right after them
+      const third = Math.hypot(c[3].x - c[0].x, c[3].y - c[0].y) / 3;
+      E += W_HANDLE * ((ed.a - third) ** 2 + (ed.b - third) ** 2);
+    }
+  });
+
+  // keep crossings apart
+  const xs = Object.values(k.nodes).filter((nd) => nd.kind === "x");
+  for (let i = 0; i < xs.length; i++) {
+    for (let j = i + 1; j < xs.length; j++) {
+      const d = Math.hypot(xs[i].x - xs[j].x, xs[i].y - xs[j].y);
+      if (d < NODE_SPACE) E += 20 * (NODE_SPACE - d) ** 2;
+    }
+  }
   return E;
 }
+
+const W_BEND = 4;
+const W_HANDLE = 0.4;
+const LOOP_MIN = 38;
+const NODE_SPACE = 34;
 
 /**
  * Hill-climb the spacing energy by random perturbations of nodes and
@@ -130,6 +168,7 @@ export function energy(k: Knot): number {
 export function relax(k0: Knot, iterations: number, rand: () => number): Knot {
   let k = k0;
   let E = energy(k);
+  let stray = strayCrossings(k);
   for (let it = 0; it < iterations; it++) {
     const scale = 1 - (0.7 * it) / iterations;
     let next: Knot;
@@ -163,6 +202,15 @@ export function relax(k0: Knot, iterations: number, rand: () => number): Knot {
         },
       };
     }
+    if (stray > 0) {
+      // repairing: accept anything with fewer stray crossings
+      const s2 = strayCrossings(next);
+      if (s2 > stray || (s2 === stray && energy(next) >= E)) continue;
+      k = next;
+      stray = s2;
+      E = energy(k);
+      continue;
+    }
     // energy first: it's cheaper than validity, and most proposals
     // are rejected on energy alone
     const E2 = energy(next);
@@ -171,43 +219,6 @@ export function relax(k0: Knot, iterations: number, rand: () => number): Knot {
     E = E2;
   }
   return k;
-}
-
-/**
- * Mess up a knot by applying random R1 twists and R2 pushes (both over
- * and under), relaxing the layout as it grows, so the result needs
- * simplifying to reveal what it is.
- */
-export function scramble(
-  knot: Knot,
-  seed: number,
-  steps: number,
-  onStep?: (kind: string, before: Knot, after: Knot) => void,
-): Knot {
-  const rand = lcg(seed);
-  let k = knot;
-  let tries = 0;
-  let done = 0;
-  while (done < steps && tries < 400) {
-    tries++;
-    const edges = k.code.map((v) => v.e);
-    const e = edges[Math.floor(rand() * edges.length)];
-    const under = rand() < 0.5;
-    const moves = movesAt(k, e, under).filter(
-      (m) => m.kind === "R1" || m.kind === "R2",
-    );
-    if (moves.length === 0) continue;
-    // prefer pushes once there's something to push across
-    const pushes = moves.filter((m) => m.kind === "R2");
-    const pool = pushes.length > 0 && rand() < 0.8 ? pushes : moves;
-    const m = pool[Math.floor(rand() * pool.length)];
-    const next = cleanup(m.to);
-    if (!inBounds(next)) continue;
-    onStep?.(m.kind, k, next);
-    k = relax(next, 60, rand);
-    done++;
-  }
-  return center(relax(k, 1500, rand));
 }
 
 /** Translate a diagram so its drawing is centered on the canvas. */
@@ -226,9 +237,18 @@ export function center(k: Knot): Knot {
   return { ...k, nodes };
 }
 
-// Seeds for the two puzzle presets. They're baked into tangles.json so
-// the demo doesn't spend a second relaxing them on load; knot.test.ts
-// checks the file is up to date (run with UPDATE_TANGLES=1 to rewrite).
-export const TANGLE_SEEDS = { A: 3, B: 2 };
-export const makeTangleA = () => scramble(unknot(), TANGLE_SEEDS.A, 8);
-export const makeTangleB = () => scramble(trefoil(), TANGLE_SEEDS.B, 5);
+// The two puzzle presets. They're baked into tangles.json so the demo
+// doesn't spend seconds relaxing them on load; knot.test.ts checks the
+// file is up to date (run `npx vitest run -u` to rewrite it).
+//
+// A: the Culprit, a famous hard unknot: no move simplifies it until
+// you first add crossings.
+// B: the "Monster" hard unknot with one crossing changed, which makes
+// it a trefoil.
+export const makeTangleA = () => prettyHard("culprit");
+export const makeTangleB = () => flipCrossing(prettyHard("monster"), "n8");
+
+/** A classic hard diagram, relaxed into a readable layout. */
+export function prettyHard(name: HardName, seed = 1, iterations = 3000): Knot {
+  return center(relax(hardKnot(name), iterations, lcg(seed)));
+}

@@ -5,3 +5,4 @@
 /src/math/cobyla.js
 pnpm-lock.yaml
 /src/demos/knot/tangles.json
+/src/demos/knot/hard-layouts.json
