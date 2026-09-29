@@ -264,7 +264,7 @@ const sub = (k: number) => SUBSCRIPTS[k];
 
 const TS = 34; // tile size
 const WIDTH = 680;
-const HEIGHT = 500;
+const HEIGHT = 560;
 
 function label(text: string, pos: Vec2) {
   return (
@@ -277,6 +277,24 @@ function label(text: string, pos: Vec2) {
     >
       {text.toUpperCase()}
     </text>
+  );
+}
+
+/** A section heading with a rule under it. */
+function section(title: string, pos: Vec2, width: number) {
+  return (
+    <g transform={translate(pos)}>
+      <text
+        fontSize={11}
+        fontWeight={600}
+        fill="#374151"
+        fontFamily="system-ui, sans-serif"
+        letterSpacing={1}
+      >
+        {title.toUpperCase()}
+      </text>
+      <line x1={0} y1={7} x2={width} y2={7} stroke="#e5e7eb" strokeWidth={1} />
+    </g>
   );
 }
 
@@ -372,11 +390,8 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
       );
     });
 
-  // ### One-line notation
-  const oneLineOrigin = Vec2(20, 32);
-
   // ### Word & inversion count
-  const infoOrigin = Vec2(250, 32);
+  const infoOrigin = Vec2(20, 310);
   const letterW = Math.min(22, 350 / Math.max(state.word.length, 1));
   // Letters of the word with their column index and a stable id: the
   // pair of wires that cross there (suffixed if a pair crosses twice).
@@ -403,11 +418,11 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
   const L = wordLetters.length;
 
   // ### Two-line notation
-  const twoLineOrigin = Vec2(38, 108);
+  const twoLineOrigin = Vec2(38, 56);
 
   // ### Cycle diagram
   const NODE_R = 12;
-  const cycleOrigin = Vec2(20, 260);
+  const cycleOrigin = Vec2(20, 216);
   const cycles = cyclesOf(perm);
   const cycleLayout = (() => {
     let x = 0;
@@ -449,7 +464,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
 
   // ### Permutation matrix
   const CS = 24;
-  const matrixOrigin = Vec2(330, 124);
+  const matrixOrigin = Vec2(330, 72);
 
   const matrixDragSpec = (v: number) => {
     const row = perm.indexOf(v);
@@ -463,7 +478,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
 
   // ### Permutohedron
   const PH_R = 88;
-  const phOrigin = Vec2(WIDTH - PH_R - 12, 218);
+  const phOrigin = Vec2(WIDTH - PH_R - 12, 160);
   const ph: PermutohedronLayout =
     n <= 4 ? permutohedronLayout(n) : { pos: new Map(), edges: [] };
   // the walk from the identity along the word (a path on the map)
@@ -476,7 +491,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
 
   // ### Wiring diagram
   const RS = 24; // row spacing
-  const wiringOrigin = Vec2(48, 356);
+  const wiringOrigin = Vec2(48, 420);
   const rawLen = cols.length; // layout columns (incl. blank and closed)
   // The diagram always spans COLS column widths (padded with straight
   // columns), and every column is one cubic segment. So a wire's path keeps the same structure when a crossing
@@ -516,16 +531,11 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
       <style>{`
         .plab-hit:hover { opacity: 0.35 !important; }
       `}</style>
-
-      {/* ## One-line notation */}
-      {label("one-line notation", oneLineOrigin.add(Vec2(0, -12)))}
-      {tileRow("ol-tile", oneLineOrigin)}
-
-      {/* ## Word & inversions */}
-      {label(
-        mode === "adjacent" ? "word (drag writes it)" : "word",
-        infoOrigin.add(Vec2(0, -12)),
-      )}
+      {/* ## Section headings */}
+      {section("the permutation π", Vec2(20, 16), 440)}
+      {section("permutohedron", Vec2(WIDTH - 2 * PH_R - 20, 16), 2 * PH_R + 20)}
+      {section("a word for π", Vec2(20, 290), WIDTH - 40)}
+      {/* ## Word & inversions */}{" "}
       <g transform={translate(infoOrigin.add(Vec2(0, 22)))}>
         <text
           id="word-pi"
@@ -569,9 +579,9 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
           {L === inv ? "reduced ✓" : `not reduced (${L - inv} to cancel)`}
         </text>
       </g>
-
       {/* ## Two-line notation */}
       {label("two-line notation", twoLineOrigin.add(Vec2(-18, -12)))}
+      {/* (the bottom row is the one-line notation) */}
       <g transform={translate(twoLineOrigin)}>
         <path
           d={`M -6 -4 Q -18 ${TS + 4} -6 ${2 * TS + 12}`}
@@ -592,7 +602,6 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
         ))}
       </g>
       {tileRow("tl-tile", twoLineOrigin.add(Vec2(0, TS + 8)))}
-
       {/* ## Cycle diagram */}
       {label("cycle diagram", cycleOrigin.add(Vec2(0, -54)))}
       <g transform={translate(cycleOrigin)}>
@@ -690,9 +699,8 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
           );
         })}
       </g>
-
       {/* ## Permutation matrix */}
-      {label("permutation matrix", matrixOrigin.add(Vec2(0, -12)))}
+      {label("permutation matrix", matrixOrigin.add(Vec2(0, -28)))}
       <g transform={translate(matrixOrigin)}>
         <rect
           width={n * CS}
@@ -750,9 +758,8 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
         })}
       </g>
       {label("row i, column π(i)", matrixOrigin.add(Vec2(0, n * CS + 14)))}
-
       {/* ## Permutohedron */}
-      {label("permutohedron", phOrigin.add(Vec2(-PH_R, -PH_R - 14)))}
+      {label("vertex = π, walk = word", Vec2(WIDTH - 2 * PH_R - 20, 44))}
       {n <= 4 ? (
         <g transform={translate(phOrigin)}>
           {ph.edges.map(([a, b]) => (
@@ -831,7 +838,6 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
           (drawn for n ≤ 4 only)
         </text>
       )}
-
       {/* ## Wiring diagram */}
       {label(
         !canAppend(1)
@@ -1095,8 +1101,8 @@ export default demo(
     return (
       <div>
         <DemoNotes>
-          One permutation, five notations, all in sync. Drag tiles in the
-          one-line / two-line notation to reorder; switch to{" "}
+          One permutation, several notations, all in sync. Drag tiles in the
+          bottom row of the two-line notation to reorder; switch to{" "}
           <i>adjacent only</i> and each step literally appends a generator to
           the word (the inversion count ticks; the word is reduced exactly when
           its length equals the inversion count). Drag a node in the cycle
