@@ -246,9 +246,8 @@ function dragSpec(
   const cands = candidates(state.term, draggedId, config);
   if (cands.length === 0) return d.between([state]);
   // Candidates with a waypoint (`mid`) use it as the drag target: dragging
-  // there shows the dragged node in place; dropping there (or reaching it,
-  // which chains) completes the rewrite via onDrop, with the collapse
-  // animated as the drop/chain transition.
+  // there shows the dragged node in place, and dropping there completes the
+  // rewrite, with the collapse as the drop animation.
   const midToResult = new Map<State, State>();
   const branches = cands.map((c) => {
     const base = { term: c.base };
@@ -260,13 +259,8 @@ function dragSpec(
     }
     return d.between([base, result]);
   });
-  // Snap (and chain) when the dragged node reaches a waypoint; onDrop then
-  // maps the waypoint to the completed rewrite, both for the drop and for
-  // the chained drag's starting state.
-  return d
-    .closest(branches)
-    .withSnapRadius(1, { chain: true, transition: 250 })
-    .onDrop((s) => midToResult.get(s) ?? s);
+  // onDrop maps a waypoint to the completed rewrite.
+  return d.closest(branches).onDrop((s) => midToResult.get(s) ?? s);
 }
 
 const WIDTH = 720;
@@ -315,8 +309,7 @@ export default demo(
           a bound variable inside the λ it's applied to: copies split off for
           the other occurrences as you go, and when it lands the boxes collapse.
           Drag a subterm <b>rightward out</b> of an enclosing box to abstract
-          over it (the reverse). When a rewrite completes, keep dragging to
-          chain into the next one.
+          over it (the reverse).
         </DemoNotes>
         <DemoWithConfig>
           <DemoDraggable
@@ -382,11 +375,6 @@ export default demo(
     );
   },
   {
-    tags: [
-      "d.closest",
-      "d.between",
-      "spec.withSnapRadius [chain]",
-      "dragologyEmergeFrom",
-    ],
+    tags: ["d.closest", "d.between", "spec.onDrop", "dragologyEmergeFrom"],
   },
 );
