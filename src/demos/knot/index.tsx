@@ -4,9 +4,7 @@ import { Draggable } from "../../draggable";
 import { DragSpec, lessThan, moreThan, param } from "../../DragSpec";
 import { Vec2 } from "../../math/vec2";
 import { altKey } from "../../modifierKeys";
-import { Svgx } from "../../svgx";
 import { path, rotateDeg, translate } from "../../svgx/helpers";
-import { layerSvg, layeredMerge } from "../../svgx/layers";
 import {
   Cubic,
   bez,
@@ -161,20 +159,6 @@ function edgeMid(k: Knot, e: string) {
   return bez(edgeCubics(k)[edgeIndex(k, e)], 0.5);
 }
 
-/**
- * Draw extra marks on top of a spec's preview while it's active. They
- * go away on drop, since the dropped state doesn't draw them.
- */
-function withMarks<T extends object>(
-  spec: DragSpec<T>,
-  marks: Svgx,
-): DragSpec<T> {
-  const layer = layerSvg(marks);
-  return spec.changeResult((r) => ({
-    preview: () => layeredMerge(r.preview(), layer),
-  }));
-}
-
 /** Keep only states whose drawing is exactly their code. */
 function clampValid(start: Knot) {
   let lastGood = start;
@@ -250,9 +234,8 @@ const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
           ...twists.map((m) => d.fixed(m.to)),
         ])
         .whenFar(cosmetic, { gapIn: 12, gapOut: 28 });
-      return withMarks(
-        spec,
-        <g id="twist-targets" dragologyZIndex="/1">
+      return spec.withOverlay(
+        <g>
           {twists.map((m, k) => (
             <circle
               id={`twist-target-${k}`}
