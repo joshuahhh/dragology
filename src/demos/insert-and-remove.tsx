@@ -181,6 +181,16 @@ export default demo(
     </div>
   ),
   {
+    fuzz: [
+      {
+        draggable,
+        initialState,
+        // ids of pulled-off tiles are random
+        options: {
+          stateKey: (s: State) => s.items.map((t) => t.label).join(""),
+        },
+      },
+    ],
     tags: [
       "d.closest",
       "d.dropTarget",

@@ -66,6 +66,8 @@ export default demo(
   {
     tags: ["d.between", "error"],
     hideByDefault: true,
+    // deliberately broken
+    fuzz: false,
   },
 );
 

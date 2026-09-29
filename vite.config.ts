@@ -30,7 +30,9 @@ export default defineConfig({
   },
   plugins: [react(), reactProd(), tailwindcss(), qrcode()],
   test: {
-    exclude: gitIgnored,
+    // The fuzz tests (src/fuzz) take minutes; they only run via
+    // `pnpm fuzz` (which sets FUZZ=1), not on every `pnpm test`.
+    exclude: [...gitIgnored, ...(process.env.FUZZ ? [] : ["src/fuzz/**"])],
     typecheck: {
       enabled: true,
       tsconfig: "./tsconfig.app.json",

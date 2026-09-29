@@ -1,0 +1,563 @@
+/**
+ * Breadth-first exploration of a Draggable, without a DOM.
+ *
+ * Starting from an initial state, we render the draggable, find every
+ * element that can be clicked or dragged, and plan actions: clicks
+ * call the handler; drags run the element's drag behavior along a
+ * short pointer path to a candidate target point, exercising previews
+ * and interpolation. Every reached state is explored in turn.
+ *
+ * Exploration runs in passes: each pass tries a few actions from every
+ * known state (oldest first), and states discovered along the way join
+ * the same pass. A state with hundreds of actions therefore doesn't
+ * block exploration of the states it leads to, and a time budget buys
+ * depth as well as breadth. Given enough budget, every planned action
+ * of every reachable state is eventually tried.
+ *
+ * Any exception thrown by rendering, layering, drag behaviors,
+ * previews, or lerping is recorded (with the action that triggered
+ * it) rather than propagated, so a single run reports all the
+ * distinct trouble it finds.
+ */
+
+import _ from "lodash";
+import React from "react";
+import { DragInitContext, dragSpecToBehavior } from "../DragBehavior";
+import { DragSpec } from "../DragSpec";
+import {
+  Draggable,
+  getOnDragCallbackOnElement,
+  makeDraggableProps,
+  SetState,
+} from "../draggable";
+import { Vec2 } from "../math/vec2";
+import { findElement, shouldRecurseIntoChildren, Svgx } from "../svgx";
+import { boundsCenter, getLocalBounds } from "../svgx/bounds";
+import { LayeredSvgx, layerSvg } from "../svgx/layers";
+import { lerpLayered } from "../svgx/lerp";
+import { assignPaths, findByPath, getPath } from "../svgx/path";
+import { combineTransforms, localToGlobal } from "../svgx/transform";
+
+export type FuzzAction =
+  | { type: "click"; elementId: string | null; path: string }
+  | {
+      type: "drag";
+      elementId: string | null;
+      path: string;
+      from: Vec2;
+      to: Vec2;
+      targetDescription: string;
+    };
+
+export type FuzzError = {
+  /** The state the action started from. */
+  state: unknown;
+  /** Depth (number of actions) from the initial state. */
+  depth: number;
+  action: FuzzAction | { type: "render" };
+  error: unknown;
+};
+
+/**
+ * Why exploration stopped: it ran out of states to explore, or it hit
+ * one of the limits (`maxStates`, `maxActions`, `maxErrors`,
+ * `maxTimeMs`).
+ */
+export type FuzzStopReason =
+  | "exhaustive"
+  | "states"
+  | "actions"
+  | "errors"
+  | "time";
+
+export type FuzzReport = {
+  statesVisited: number;
+  statesQueued: number;
+  actionsTried: number;
+  errors: FuzzError[];
+  stopReason: FuzzStopReason;
+  /** Whether exploration was cut short by a limit. */
+  truncated: boolean;
+  elapsedMs: number;
+  /** Deepest visited state (number of actions from the initial state). */
+  maxDepthVisited: number;
+  /** How many actions the initial state offers (clicks + drag targets). */
+  initialStateActions: number;
+  /** The single most expensive action, for diagnosing slow runs. */
+  slowestAction: { ms: number; action: FuzzAction } | null;
+};
+
+export type FuzzOptions<T extends object> = {
+  /** Don't visit (plan actions for) more than this many states. Default 50. */
+  maxStates?: number;
+  /** Don't explore states deeper than this. Default Infinity. */
+  maxDepth?: number;
+  /** Stop after this many errors. Default 10. */
+  maxErrors?: number;
+  /**
+   * Key used to dedupe states. Default `defaultStateKey`: JSON with
+   * non-integer numbers rounded to 3 significant figures. Override
+   * when states contain incidental data (random ids, history) that
+   * shouldn't distinguish them, or numbers that need more precision.
+   */
+  stateKey?: (state: T) => string;
+  /** Actions tried per state per pass. Default 4. */
+  actionsPerPass?: number;
+  /** Stop after trying this many actions in total. Default 3000. */
+  maxActions?: number;
+  /**
+   * Stop after this much wall-clock time. Checked between actions, so
+   * a run can overshoot by up to one action. Default Infinity.
+   */
+  maxTimeMs?: number;
+  /** Number of intermediate pointer steps per drag. Default 3. */
+  stepsPerDrag?: number;
+  /**
+   * Extra pointer offsets (relative to the drag start) to try in
+   * addition to every element's center. Default: nudges of 30px and
+   * 100px in each direction.
+   */
+  extraOffsets?: Vec2[];
+  /** Cap on pointer targets tried per dragged element. Default 40. */
+  maxTargetsPerDrag?: number;
+  /** Seed for the deterministic target sampling. Default 1. */
+  seed?: number;
+  /** Max chained re-inits within a single drag. Default 5. */
+  maxChains?: number;
+  /** Called after each pass (for progress logging). */
+  onProgress?: (report: FuzzReport) => void;
+};
+
+type Found = {
+  element: Svgx;
+  path: string;
+  id: string | null;
+  center: Vec2 | null;
+  accumulatedTransform: string;
+};
+
+/** Walk the tree collecting elements with their global centers. */
+function collectElements(root: Svgx): Found[] {
+  const out: Found[] = [];
+  const go = (el: Svgx, acc: string) => {
+    const t = combineTransforms(acc, (el.props as any).transform || "");
+    const path = getPath(el);
+    if (path) {
+      const lb = getLocalBounds(el);
+      out.push({
+        element: el,
+        path,
+        id: el.props.id ?? null,
+        center: lb.empty ? null : localToGlobal(t, boundsCenter(lb)),
+        accumulatedTransform: t,
+      });
+    }
+    if (shouldRecurseIntoChildren(el)) {
+      for (const child of React.Children.toArray(el.props.children)) {
+        if (React.isValidElement(child)) go(child as Svgx, t);
+      }
+    }
+  };
+  go(root, "");
+  return out;
+}
+
+/**
+ * Round a non-integer number to `digits` significant figures, and snap
+ * values within 1e-6 of zero to zero. Scale-free, so it works whether
+ * a number is pixels, radians, or a 0–1 parameter. Integers (ids,
+ * counts, indices) pass through unchanged.
+ */
+export function roundSignificant(v: number, digits = 3): number {
+  if (!Number.isFinite(v) || Number.isInteger(v)) return v;
+  if (Math.abs(v) < 1e-6) return 0;
+  return Number(v.toPrecision(digits));
+}
+
+/**
+ * Default dedupe key: JSON, with non-integer numbers rounded to 3
+ * significant figures, so continuous drags (d.vary) that land a hair
+ * apart count as the same state.
+ */
+export function defaultStateKey(state: unknown): string {
+  return JSON.stringify(state, (_key, v) =>
+    typeof v === "number" ? roundSignificant(v) : v,
+  );
+}
+
+/** Tiny seeded PRNG (mulberry32). */
+function rng(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function fuzzDraggable<T extends object>(
+  draggable: Draggable<T>,
+  initialState: T,
+  options: FuzzOptions<T> = {},
+): FuzzReport {
+  const {
+    maxStates = 50,
+    maxDepth = Infinity,
+    maxErrors = 10,
+    stateKey = defaultStateKey,
+    actionsPerPass = 4,
+    maxActions = 3000,
+    maxTimeMs = Infinity,
+    stepsPerDrag = 3,
+    extraOffsets = [
+      Vec2(30, 0),
+      Vec2(-30, 0),
+      Vec2(0, 30),
+      Vec2(0, -30),
+      Vec2(100, 0),
+      Vec2(-100, 0),
+      Vec2(0, 100),
+      Vec2(0, -100),
+    ],
+    maxTargetsPerDrag = 40,
+    seed = 1,
+    maxChains = 5,
+    onProgress,
+  } = options;
+  const random = rng(seed);
+
+  const report: FuzzReport = {
+    statesVisited: 0,
+    statesQueued: 1,
+    actionsTried: 0,
+    errors: [],
+    stopReason: "exhaustive",
+    truncated: false,
+    elapsedMs: 0,
+    maxDepthVisited: 0,
+    initialStateActions: 0,
+    slowestAction: null,
+  };
+  const timeAction = (action: FuzzAction, t0: number) => {
+    const ms = performance.now() - t0;
+    if (!report.slowestAction || ms > report.slowestAction.ms) {
+      report.slowestAction = { ms, action };
+    }
+  };
+  const startTime = performance.now();
+  let stopReason: FuzzStopReason | null = null;
+
+  /** Discovered but not yet visited, in discovery order. */
+  const frontier: { state: T; depth: number }[] = [
+    { state: initialState, depth: 0 },
+  ];
+  const seen = new Set<string>([stateKey(initialState)]);
+
+  const enqueue = (state: T, depth: number) => {
+    if (depth > maxDepth) return;
+    const key = stateKey(state);
+    if (seen.has(key)) return;
+    seen.add(key);
+    frontier.push({ state, depth });
+    report.statesQueued++;
+  };
+
+  /** Checks the per-action limits, recording which one (if any) was hit. */
+  const outOfBudget = () => {
+    if (stopReason !== null) return true;
+    if (report.errors.length >= maxErrors) stopReason = "errors";
+    else if (report.actionsTried >= maxActions) stopReason = "actions";
+    else if (performance.now() - startTime >= maxTimeMs) stopReason = "time";
+    return stopReason !== null;
+  };
+
+  /** Render with a setState that captures the resulting state. */
+  const render = (state: T, draggedId: string | null, isTracking: boolean) => {
+    let captured: T | null = null;
+    const setState: SetState<T> = (action) => {
+      captured =
+        typeof action === "function" ? (action as (p: T) => T)(state) : action;
+    };
+    const element = assignPaths(
+      draggable(makeDraggableProps({ state, draggedId, setState, isTracking })),
+    );
+    return { element, getCaptured: () => captured };
+  };
+
+  const layeredInert = (state: T, draggedId: string | null): LayeredSvgx =>
+    layerSvg(render(state, draggedId, false).element);
+
+  /** Exercise the interpolation between two renderings. */
+  const checkLerp = (a: LayeredSvgx, b: LayeredSvgx) => {
+    lerpLayered(a, b, 0.5);
+  };
+
+  type Planned =
+    | { type: "click"; found: Found }
+    | {
+        type: "drag";
+        found: Found;
+        from: Vec2;
+        target: { point: Vec2; description: string };
+      };
+
+  /** A visited state, with the actions not yet tried from it. */
+  type Node = {
+    state: T;
+    depth: number;
+    layered: LayeredSvgx;
+    pending: Planned[];
+  };
+  const nodes: Node[] = [];
+
+  const shuffle = <X>(xs: X[]): X[] => _.sortBy(xs, () => random());
+
+  /**
+   * Render a state and plan its actions. The plan interleaves elements
+   * (round-robin over a shuffled order), so the first few actions of a
+   * state touch different elements rather than one element's targets.
+   */
+  const visit = (state: T, depth: number) => {
+    report.statesVisited++;
+    report.maxDepthVisited = Math.max(report.maxDepthVisited, depth);
+    let layered: LayeredSvgx;
+    let elements: Found[];
+    try {
+      const rendered = render(state, null, false);
+      layered = layerSvg(rendered.element);
+      elements = collectElements(rendered.element);
+    } catch (error) {
+      report.errors.push({ state, depth, action: { type: "render" }, error });
+      return;
+    }
+
+    // Pointer targets: centers of id'd elements (the things that can
+    // be drop targets / layers), deduped by rounded position.
+    const targetPoints: { point: Vec2; description: string }[] = [];
+    const seenPoints = new Set<string>();
+    for (const e of elements) {
+      if (!e.center || e.id === null) continue;
+      const key = `${Math.round(e.center.x)},${Math.round(e.center.y)}`;
+      if (seenPoints.has(key)) continue;
+      seenPoints.add(key);
+      targetPoints.push({ point: e.center, description: `center of ${e.id}` });
+    }
+
+    const groups: Planned[][] = [];
+    for (const found of elements) {
+      if ((found.element.props as any).onClick) {
+        groups.push([{ type: "click", found }]);
+      }
+      const callback = getOnDragCallbackOnElement<T>(found.element);
+      if (!callback || !found.center) continue;
+      const from = found.center;
+      const candidates = shuffle([
+        ...targetPoints,
+        ...extraOffsets.map((o) => ({
+          point: from.add(o),
+          description: `start + (${o.x}, ${o.y})`,
+        })),
+      ]).slice(0, maxTargetsPerDrag);
+      groups.push(
+        candidates.map((target) => ({ type: "drag", found, from, target })),
+      );
+    }
+    const shuffledGroups = shuffle(groups);
+    const pending: Planned[] = [];
+    const longest = _.max(groups.map((g) => g.length)) ?? 0;
+    for (let j = 0; j < longest; j++) {
+      for (const g of shuffledGroups) if (j < g.length) pending.push(g[j]);
+    }
+
+    if (nodes.length === 0) report.initialStateActions = pending.length;
+    nodes.push({ state, depth, layered, pending });
+  };
+
+  /** Visit discovered states, up to maxStates. */
+  const visitFrontier = () => {
+    while (frontier.length > 0 && report.statesVisited < maxStates) {
+      const { state, depth } = frontier.shift()!;
+      visit(state, depth);
+    }
+  };
+
+  const runAction = (node: Node, planned: Planned) => {
+    const { state, depth } = node;
+    const { found } = planned;
+    const action: FuzzAction =
+      planned.type === "click"
+        ? { type: "click", elementId: found.id, path: found.path }
+        : {
+            type: "drag",
+            elementId: found.id,
+            path: found.path,
+            from: planned.from,
+            to: planned.target.point,
+            targetDescription: planned.target.description,
+          };
+    report.actionsTried++;
+    const t0 = performance.now();
+    try {
+      if (planned.type === "click") {
+        // Re-render so setState captures relative to a fresh render.
+        const r = render(state, null, false);
+        const el = findByPath(found.path, r.element);
+        const handler = el && ((el.element.props as any).onClick as any);
+        if (handler) {
+          handler({ stopPropagation() {}, preventDefault() {} });
+          const next = r.getCaptured();
+          if (next !== null && next !== state) {
+            checkLerp(node.layered, layeredInert(next, null));
+            enqueue(next, depth + 1);
+          }
+        }
+      } else {
+        const dropState = simulateDrag(state, found, planned.target.point);
+        if (dropState !== null) enqueue(dropState, depth + 1);
+      }
+    } catch (error) {
+      report.errors.push({ state, depth, action, error });
+    }
+    timeAction(action, t0);
+  };
+
+  visitFrontier();
+  passes: while (nodes.some((n) => n.pending.length > 0)) {
+    // Nodes appended during this pass are reached later in the same pass.
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      for (let k = 0; k < actionsPerPass && node.pending.length > 0; k++) {
+        if (outOfBudget()) break passes;
+        runAction(node, node.pending.shift()!);
+      }
+      visitFrontier();
+    }
+    onProgress?.(report);
+  }
+
+  if (stopReason === null && frontier.length > 0) stopReason = "states";
+  report.stopReason = stopReason ?? "exhaustive";
+  report.truncated = report.stopReason !== "exhaustive";
+  report.elapsedMs = performance.now() - startTime;
+  return report;
+
+  /**
+   * Run one drag from `found` (rendered from `state`) to `to`, in
+   * steps. Mirrors DraggableRenderer: init behavior at the start
+   * point, advance along the path, handle chaining, then drop.
+   * Returns the drop state.
+   *
+   * Every frame's preview is computed (catching errors in anything
+   * the user would see), but previews are only interpolated where
+   * DraggableRenderer interpolates them: when the active path
+   * changes (branch switch spring), when a drag chains, and on drop.
+   */
+  function simulateDrag(state: T, found: Found, to: Vec2): T | null {
+    // Like a real pointer-down: render with the dragged id known.
+    const dragRender = render(state, found.id, true).element;
+    const draggedEl = findByPath(found.path, dragRender);
+    if (!draggedEl) return null;
+    const callback = getOnDragCallbackOnElement<T>(draggedEl.element);
+    if (!callback) return null;
+    const lb = getLocalBounds(draggedEl.element);
+    if (lb.empty) return null;
+    const anchorPos = boundsCenter(lb);
+    const from = localToGlobal(draggedEl.accumulatedTransform, anchorPos);
+
+    let ctx: DragInitContext<T> = {
+      draggable,
+      draggedPath: found.path,
+      draggedId: found.id,
+      anchorPos,
+      startState: state,
+      debug: { varyVisualizer: false, trace: false },
+    };
+    let spec: DragSpec<T> = callback();
+    let behavior = dragSpecToBehavior(spec, ctx);
+    let chains = 0;
+
+    const steps = Math.max(1, stepsPerDrag);
+    let result = behavior({ pointer: from });
+    let prevPreview: LayeredSvgx = result.preview();
+    let prevActivePath = result.activePath;
+    for (let i = 1; i <= steps; i++) {
+      const pointer = from.lerp(to, i / steps);
+      result = behavior({ pointer });
+      let chained = false;
+
+      // Chaining: re-init from the new state (cf. resolveChainNows).
+      if (
+        result.chainNow &&
+        !_.isEqual(result.dropState, ctx.startState) &&
+        chains < maxChains
+      ) {
+        chains++;
+        const newState = result.dropState;
+        const newDraggedId = result.chainNow.draggedId ?? ctx.draggedId;
+        const content = render(newState, newDraggedId, true).element;
+        const nf = newDraggedId
+          ? findElement(content, (el) => el.props.id === newDraggedId)
+          : findByPath(ctx.draggedPath, content);
+        if (!nf) throw new Error(`chain: dragged element not found`);
+        const newSpec =
+          result.chainNow.followSpec ??
+          getOnDragCallbackOnElement<T>(nf.element)?.();
+        if (newSpec) {
+          const newPath = getPath(nf.element);
+          if (!newPath) throw new Error("chain: element has no path");
+          ctx = {
+            ...ctx,
+            draggedPath: newPath,
+            draggedId: newDraggedId,
+            startState: newState,
+          };
+          spec = newSpec;
+          behavior = dragSpecToBehavior(spec, ctx);
+          result = behavior({ pointer });
+          chained = true;
+        }
+      }
+
+      const preview = result.preview();
+      if (chained || result.activePath !== prevActivePath) {
+        checkLerp(prevPreview, preview);
+      }
+      prevPreview = preview;
+      prevActivePath = result.activePath;
+    }
+
+    // Drop: the idle render of the drop state, sprung from the last preview.
+    const dropState = result.dropState;
+    checkLerp(prevPreview, layeredInert(dropState, null));
+    return dropState;
+  }
+}
+
+/** Compact description of a fuzz error, for test output. */
+export function describeFuzzAction(a: FuzzAction | { type: "render" }): string {
+  if (a.type === "render") return "rendering";
+  if (a.type === "click") return `clicking ${a.elementId ?? a.path}`;
+  return `dragging ${a.elementId ?? a.path} from (${a.from.x.toFixed(0)}, ${a.from.y.toFixed(0)}) to ${a.targetDescription}`;
+}
+
+export function describeFuzzError(e: FuzzError): string {
+  const err = e.error instanceof Error ? e.error.message : String(e.error);
+  return `[depth ${e.depth}] ${describeFuzzAction(e.action)}: ${err}`;
+}
+
+/** Throw a readable AssertionError-ish if the report has errors. */
+export function expectNoFuzzErrors(report: FuzzReport, label = "") {
+  if (report.errors.length === 0) return;
+  const lines = report.errors.map(describeFuzzError);
+  const unique = _.uniq(lines);
+  throw new Error(
+    `${label ? label + ": " : ""}${report.errors.length} fuzz error(s) after ` +
+      `${report.statesVisited} states / ${report.actionsTried} actions:\n  ` +
+      unique.join("\n  ") +
+      (report.errors[0].error instanceof Error && report.errors[0].error.stack
+        ? `\n\nFirst error stack:\n${report.errors[0].error.stack}`
+        : ""),
+  );
+}

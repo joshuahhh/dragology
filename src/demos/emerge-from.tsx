@@ -71,5 +71,19 @@ export default demo(
       </DemoWithConfig>
     );
   },
-  { tags: ["d.between", "spec.withSnapRadius", "dragologyEmergeFrom"] },
+  {
+    fuzz: [
+      {
+        name: "no snap",
+        draggable: draggableFactory(defaultConfig),
+        initialState,
+      },
+      {
+        name: "snap",
+        draggable: draggableFactory({ snap: true }),
+        initialState,
+      },
+    ],
+    tags: ["d.between", "spec.withSnapRadius", "dragologyEmergeFrom"],
+  },
 );

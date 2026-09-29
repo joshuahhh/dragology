@@ -436,6 +436,30 @@ export function DemoSettingsBar({
   );
 }
 
+// ## Collecting draggables for tests
+//
+// Tests (see src/fuzz/demos.fuzz.test.tsx) need each demo's draggable
+// and initial state, which are otherwise private to the demo. Every
+// demo mounts DemoDraggable with exactly those, so when collection is
+// enabled, DemoDraggable records what it was mounted with.
+
+export type CollectedDraggable = {
+  draggable: Draggable<any>;
+  initialState: any;
+};
+
+let collector: CollectedDraggable[] | null = null;
+
+/** Enable collection; returns a function that stops it and returns what was collected. */
+export function collectDraggables(): () => CollectedDraggable[] {
+  const collected: CollectedDraggable[] = [];
+  collector = collected;
+  return () => {
+    if (collector === collected) collector = null;
+    return collected;
+  };
+}
+
 export function DemoDraggable<T extends object>({
   draggable,
   initialState,
@@ -451,6 +475,17 @@ export function DemoDraggable<T extends object>({
   stateRef?: React.RefObject<T | null>;
   stateOverride?: Partial<T>;
 }) {
+  const collectedRef = useRef(false);
+  if (collector && !collectedRef.current) {
+    collectedRef.current = true;
+    collector.push({
+      draggable,
+      initialState: stateOverride
+        ? { ...initialState, ...stateOverride }
+        : initialState,
+    });
+  }
+
   const [ownState, setOwnState] = useState(initialState);
   const state = useMemo(
     () => (stateOverride ? { ...ownState, ...stateOverride } : ownState),

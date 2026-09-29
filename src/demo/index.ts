@@ -1,9 +1,28 @@
 import { ComponentType } from "react";
+import { Draggable } from "../draggable";
+import { FuzzOptions } from "../fuzz/fuzzDraggable";
+
+/**
+ * A draggable + initial state that the fuzz tests (see
+ * src/fuzz/demos.fuzz.test.ts) should explore breadth-first.
+ */
+export type FuzzTarget<T extends object = any> = {
+  name?: string;
+  draggable: Draggable<T>;
+  initialState: T;
+  options?: FuzzOptions<T>;
+};
 
 export type DemoOptions = {
   tags?: string[];
   cardClassName?: string;
   hideByDefault?: boolean;
+  /**
+   * Targets for breadth-first fuzz testing (src/fuzz). If omitted,
+   * the test mounts the demo and fuzzes whatever it mounts
+   * DemoDraggable with. `false` opts out entirely.
+   */
+  fuzz?: FuzzTarget[] | false;
 };
 
 export type DemoInfo = {

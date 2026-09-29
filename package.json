@@ -16,6 +16,7 @@
     "clean": "rm -rf dist-lib dist-demo",
     "build:lib": "bash build-lib.sh",
     "test": "vitest run",
+    "fuzz": "FUZZ=1 vitest run src/fuzz --silent=false --reporter=verbose",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "prettier": "prettier --write src",
