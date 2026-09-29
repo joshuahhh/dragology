@@ -48,6 +48,14 @@ export type KNode = {
    * handles, so merging them back restores it exactly.
    */
   hint?: { a: number; b: number; e: string };
+  /**
+   * A pass node where a crossing is about to appear (at the start of a
+   * move) or just went away (at its end), on that crossing's
+   * over-strand. It draws a collapsed stand-in for the crossing's
+   * bridge, so interpolation moves the gap into place instead of
+   * fading it in or out.
+   */
+  ghostOf?: string;
 };
 export type Visit = { n: string; over: boolean; e: string };
 export type EdgeData = { a: number; b: number };
@@ -486,8 +494,13 @@ function handlesOf(c: Cubic): EdgeData {
   return { a: c[0].dist(c[1]), b: c[3].dist(c[2]) };
 }
 
-function passNode(p: Vec2, dir: Vec2, hint?: KNode["hint"]): KNode {
-  return { kind: "p", ...p.xy(), rot: dir.angleRad(), sign: 1, hint };
+function passNode(
+  p: Vec2,
+  dir: Vec2,
+  hint?: KNode["hint"],
+  ghostOf?: string,
+): KNode {
+  return { kind: "p", ...p.xy(), rot: dir.angleRad(), sign: 1, hint, ghostOf };
 }
 
 function crossingNode(p: Vec2, overDir: Vec2, underDir: Vec2): KNode {
@@ -674,8 +687,8 @@ function r1Twist(
 
   const from = clone(k);
   from.nextId = nextId;
-  from.nodes[q1] = passNode(m, T, hint);
-  from.nodes[q2] = passNode(m, T, hint);
+  from.nodes[q1] = passNode(m, T, hint, overFirst ? c : undefined);
+  from.nodes[q2] = passNode(m, T, hint, overFirst ? undefined : c);
   from.code[i].e = eL;
   from.code.splice(
     i + 1,
@@ -728,8 +741,8 @@ function r1Untwist(k: Knot, i: number): Move | null {
     const to = clone(k);
     to.nextId = nextId;
     delete to.nodes[v.n];
-    to.nodes[p1] = passNode(pos1, dir1);
-    to.nodes[p2] = passNode(pos2, dir2);
+    to.nodes[p1] = passNode(pos1, dir1, undefined, v.over ? v.n : undefined);
+    to.nodes[p2] = passNode(pos2, dir2, undefined, v.over ? undefined : v.n);
     to.code[i] = { ...to.code[i], n: p1, over: false };
     to.code[j] = { ...to.code[j], n: p2, over: false };
     to.edges[v.e] = loopEdge;
@@ -827,15 +840,24 @@ function r2Push(
     const F2 = subCubic(F, f1, f2);
     const F3 = subCubic(F, f2, 1);
 
-    // pre-split: pass nodes on E and F, exactly on the old curves
+    // E crosses F at F(f1) and F(f2); its first crossing is the one
+    // nearer its start. Crossing x1 goes at F(f1), x2 at F(f2).
+    const eFirstAt = parallel ? f1 : f2;
+    const eSecondAt = parallel ? f2 : f1;
+    const idAt = (t: number) => (t === f1 ? x1 : x2);
+
+    // pre-split: pass nodes on E and F, exactly on the old curves; the
+    // ones on the future over-strand stand in for the crossings' bridges
     const from = clone(k);
     from.nextId = nextId;
     const eHint = { ...k.edges[e], e };
     const fHint = { ...k.edges[fe], e: fe };
-    from.nodes[pe1] = passNode(E1[3], bezTan(E, 0.4), eHint);
-    from.nodes[pe2] = passNode(E2[3], bezTan(E, 0.6), eHint);
-    from.nodes[pf1] = passNode(F1[3], bezTan(F, f1), fHint);
-    from.nodes[pf2] = passNode(F2[3], bezTan(F, f2), fHint);
+    const eGhost = (t: number) => (under ? undefined : idAt(t));
+    const fGhost = (id: string) => (under ? id : undefined);
+    from.nodes[pe1] = passNode(E1[3], bezTan(E, 0.4), eHint, eGhost(eFirstAt));
+    from.nodes[pe2] = passNode(E2[3], bezTan(E, 0.6), eHint, eGhost(eSecondAt));
+    from.nodes[pf1] = passNode(F1[3], bezTan(F, f1), fHint, fGhost(x1));
+    from.nodes[pf2] = passNode(F2[3], bezTan(F, f2), fHint, fGhost(x2));
     from.edges[eP] = handlesOf(E1);
     from.edges[e] = handlesOf(E2);
     from.edges[eQ] = handlesOf(E3);
@@ -860,10 +882,6 @@ function r2Push(
       from.code.splice(i + 1, 0, ...eVisits);
     }
 
-    // E crosses F at F(f1) and F(f2); its first crossing is the one
-    // nearer its start
-    const eFirstAt = parallel ? f1 : f2;
-    const eSecondAt = parallel ? f2 : f1;
     const outward = (t: number) => {
       const n = bezTan(F, t).perp();
       return n.dot(NF) >= 0 ? n : n.mul(-1);
@@ -873,8 +891,6 @@ function r2Push(
       const fDir = bezTan(F, t);
       return under ? crossingNode(p, fDir, eDir) : crossingNode(p, eDir, fDir);
     };
-    // which crossing id goes where: x1 at F(f1), x2 at F(f2)
-    const idAt = (t: number) => (t === f1 ? x1 : x2);
     const firstPos = bez(F, eFirstAt);
     const secondPos = bez(F, eSecondAt);
 
@@ -1026,10 +1042,21 @@ function r2Pull(k: Knot, i: number): Move | null {
     to.nextId = nextId;
     delete to.nodes[vX.n];
     delete to.nodes[vY.n];
-    to.nodes[xs] = passNode(sh.xsPos, sh.d1);
-    to.nodes[ys] = passNode(sh.ysPos, sh.d2);
-    to.nodes[xt] = passNode(Xp, tDirX);
-    to.nodes[yt] = passNode(Yp, tDirY);
+    const sOver = vX.over;
+    to.nodes[xs] = passNode(
+      sh.xsPos,
+      sh.d1,
+      undefined,
+      sOver ? vX.n : undefined,
+    );
+    to.nodes[ys] = passNode(
+      sh.ysPos,
+      sh.d2,
+      undefined,
+      sOver ? vY.n : undefined,
+    );
+    to.nodes[xt] = passNode(Xp, tDirX, undefined, sOver ? undefined : vX.n);
+    to.nodes[yt] = passNode(Yp, tDirY, undefined, sOver ? undefined : vY.n);
     to.code[i] = { ...to.code[i], n: xs, over: false };
     to.code[j] = { ...to.code[j], n: ys, over: false };
     to.code[oX] = { ...to.code[oX], n: xt, over: false };

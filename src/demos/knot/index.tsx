@@ -243,12 +243,23 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId }) => {
       {/* over-strand bridges: a white halo cuts the under-strand, then
           the over-strand is redrawn on top */}
       {state.code.map((v, i) => {
-        if (!v.over || state.nodes[v.n].kind !== "x") return null;
+        const nd = state.nodes[v.n];
+        // a pass node standing in for a crossing that's about to appear
+        // or just went away draws a collapsed bridge (no gap), so the gap
+        // moves into place instead of fading
+        const ghost = nd.kind === "p" ? nd.ghostOf : undefined;
+        if (!ghost && (!v.over || nd.kind !== "x")) return null;
         const inIdx = (i - 1 + V) % V;
-        const dPath = bridgeD(cubics[inIdx], cubics[i]);
+        // (a stand-in is an invisible point: it travels with the strand
+        // and fades in as it grows into the crossing's bridge)
+        const p = cubics[i][0];
+        const dPath = ghost
+          ? path("M", p, "C", p, p, p, "C", p, p, p)
+          : bridgeD(cubics[inIdx], cubics[i]);
         return (
           <g
-            id={`bridge-${v.n}`}
+            id={`bridge-${ghost ?? v.n}`}
+            opacity={ghost ? 0 : 1}
             dragologyZIndex={1}
             style={{ pointerEvents: "none" }}
           >
