@@ -1,3 +1,4 @@
+import { Vec2 } from "../../math/vec2";
 // Classic hard diagrams, for the puzzle presets.
 //
 // Gauss codes are from Appendix A of Burton et al., "Hard diagrams of
@@ -6,7 +7,6 @@
 // vertex-index pairs, and crossings as [over arrow, under arrow,
 // virtual, label]); hard-layouts.py regenerates hard-layouts.json.
 
-import { Pt, pt } from "./geometry";
 import layouts from "./hard-layouts.json";
 import { Knot, knotFromPolyline } from "./knot";
 
@@ -45,13 +45,13 @@ export function knotFromPlink(
   const x0 = Math.min(...xs);
   const y0 = Math.min(...ys);
   const sc = Math.min(w / (Math.max(...xs) - x0), h / (Math.max(...ys) - y0));
-  const place = (v: number[]): Pt =>
-    pt(
+  const place = (v: number[]): Vec2 =>
+    Vec2(
       cx + (v[0] - x0 - (Math.max(...xs) - x0) / 2) * sc,
       cy + (v[1] - y0 - (Math.max(...ys) - y0) / 2) * sc,
     );
   // densify, remembering which arrow each polyline segment lies on
-  const poly: Pt[] = [];
+  const poly: Vec2[] = [];
   const segArrow: number[] = [];
   order.forEach((vi, k) => {
     const a = place(verts[vi]);
@@ -59,7 +59,7 @@ export function knotFromPlink(
     const steps = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 6));
     for (let s = 0; s < steps; s++) {
       poly.push(
-        pt(a.x + ((b.x - a.x) * s) / steps, a.y + ((b.y - a.y) * s) / steps),
+        Vec2(a.x + ((b.x - a.x) * s) / steps, a.y + ((b.y - a.y) * s) / steps),
       );
       segArrow.push(arrowOrder[k]);
     }

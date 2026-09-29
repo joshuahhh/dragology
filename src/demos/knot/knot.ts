@@ -1,3 +1,4 @@
+import { Vec2 } from "../../math/vec2";
 // Knot diagram model for the knot demo.
 //
 // A diagram is a cyclic sequence of *visits* (the Gauss code). Each
@@ -17,33 +18,20 @@
 
 import {
   Cubic,
-  Pt,
-  add,
-  angleOf,
   bez,
   bezTan,
   closestOnCubic,
-  cross,
   cubicFrom,
   cubicLen,
   cyc,
-  dist,
-  dot,
   fitHandles,
-  len,
-  lerpPt,
-  mul,
-  norm,
   paramAtLen,
-  perp,
   polylineSelfCrossings,
-  pt,
+  safeNorm,
   sampleCubic,
   segHit,
   split,
-  sub,
   subCubic,
-  unit,
 } from "./geometry";
 
 export type NodeKind = "x" | "p";
@@ -74,17 +62,17 @@ const MIN_HANDLE = 3;
 
 // # Geometry of a diagram
 
-export function nodePos(k: Knot, i: number): Pt {
+export function nodePos(k: Knot, i: number): Vec2 {
   const nd = k.nodes[k.code[i].n];
-  return pt(nd.x, nd.y);
+  return Vec2(nd.x, nd.y);
 }
 
 /** Direction of the strand at visit i. */
-export function dirAt(k: Knot, i: number): Pt {
+export function dirAt(k: Knot, i: number): Vec2 {
   const v = k.code[i];
   const nd = k.nodes[v.n];
-  if (nd.kind === "p" || v.over) return unit(nd.rot);
-  return unit(nd.rot - (nd.sign * Math.PI) / 2);
+  if (nd.kind === "p" || v.over) return Vec2.polarRad(1, nd.rot);
+  return Vec2.polarRad(1, nd.rot - (nd.sign * Math.PI) / 2);
 }
 
 const cubicsCache = new WeakMap<Knot, Cubic[]>();
@@ -190,13 +178,13 @@ export function strayCrossings(k: Knot, limit = Infinity): number {
         continue;
       }
       const h = segHit(
-        pt(px[s1], py[s1]),
-        pt(qx[s1], qy[s1]),
-        pt(px[s2], py[s2]),
-        pt(qx[s2], qy[s2]),
+        Vec2(px[s1], py[s1]),
+        Vec2(qx[s1], qy[s1]),
+        Vec2(px[s2], py[s2]),
+        Vec2(qx[s2], qy[s2]),
       );
       if (!h) continue;
-      const X = pt(
+      const X = Vec2(
         px[s1] + (qx[s1] - px[s1]) * h.t,
         py[s1] + (qy[s1] - py[s1]) * h.t,
       );
@@ -204,7 +192,7 @@ export function strayCrossings(k: Knot, limit = Infinity): number {
       const n2 = endNodes(s2);
       const ok = n1.some(
         (id) =>
-          n2.includes(id) && dist(X, pt(k.nodes[id].x, k.nodes[id].y)) < 1.5,
+          n2.includes(id) && X.dist(Vec2(k.nodes[id].x, k.nodes[id].y)) < 1.5,
       );
       if (!ok && ++stray >= limit) return stray;
     }
@@ -530,16 +518,16 @@ function clone(k: Knot): Knot {
 }
 
 function handlesOf(c: Cubic): EdgeData {
-  return { a: dist(c[0], c[1]), b: dist(c[3], c[2]) };
+  return { a: c[0].dist(c[1]), b: c[3].dist(c[2]) };
 }
 
-function passNode(p: Pt, dir: Pt, hint?: KNode["hint"]): KNode {
-  return { kind: "p", x: p.x, y: p.y, rot: angleOf(dir), sign: 1, hint };
+function passNode(p: Vec2, dir: Vec2, hint?: KNode["hint"]): KNode {
+  return { kind: "p", x: p.x, y: p.y, rot: dir.angleRad(), sign: 1, hint };
 }
 
-function crossingNode(p: Pt, overDir: Pt, underDir: Pt): KNode {
-  const sign = cross(overDir, underDir) < 0 ? 1 : -1;
-  return { kind: "x", x: p.x, y: p.y, rot: angleOf(overDir), sign };
+function crossingNode(p: Vec2, overDir: Vec2, underDir: Vec2): KNode {
+  const sign = overDir.cross(underDir) < 0 ? 1 : -1;
+  return { kind: "x", x: p.x, y: p.y, rot: overDir.angleRad(), sign };
 }
 
 function clampHandle(h: number): number {
@@ -671,9 +659,9 @@ function r1Twist(
   from.edges[e] = { a: 0, b: 0 };
   from.edges[eR] = handlesOf(R);
 
-  const N = mul(perp(T), side);
-  const d1 = norm(add(T, N));
-  const d2 = norm(sub(T, N));
+  const N = T.perp().mul(side);
+  const d1 = safeNorm(T.add(N));
+  const d2 = safeNorm(T.sub(N));
   for (const size of [58, 44, 74, 34]) {
     const to = clone(from);
     delete to.nodes[q1];
@@ -695,16 +683,16 @@ function r1Untwist(k: Knot, i: number): Move | null {
   const w = k.code[j];
   if (v.n !== w.n || k.nodes[v.n].kind !== "x") return null;
   const cn = k.nodes[v.n];
-  const cp = pt(cn.x, cn.y);
+  const cp = Vec2(cn.x, cn.y);
   let nextId = k.nextId;
   const p1 = `n${nextId++}`;
   const p2 = `n${nextId++}`;
 
   const make = (
-    pos1: Pt,
-    dir1: Pt,
-    pos2: Pt,
-    dir2: Pt,
+    pos1: Vec2,
+    dir1: Vec2,
+    pos2: Vec2,
+    dir2: Vec2,
     loopEdge: EdgeData,
     otherEdge?: EdgeData,
   ): Knot => {
@@ -723,36 +711,35 @@ function r1Untwist(k: Knot, i: number): Move | null {
   if (V === 2) {
     // The last crossing: the other loop becomes a circle.
     const big = sampleCubic(edgeCubics(k)[j], 32);
-    const center = mul(
-      big.reduce((acc, p) => add(acc, p), pt(0, 0)),
-      1 / big.length,
-    );
+    const center = big
+      .reduce((acc, p) => acc.add(p), Vec2(0, 0))
+      .mul(1 / big.length);
     const r = Math.max(
       30,
-      big.reduce((acc, p) => acc + dist(p, center), 0) / big.length,
+      big.reduce((acc, p) => acc + p.dist(center), 0) / big.length,
     );
     let turn = 0;
     for (let s = 0; s < big.length - 1; s++) {
-      turn += cross(sub(big[s], center), sub(big[s + 1], big[s]));
+      turn += big[s].sub(center).cross(big[s + 1].sub(big[s]));
     }
     const sgn = turn >= 0 ? 1 : -1;
-    const u0 = norm(sub(cp, center));
+    const u0 = safeNorm(cp.sub(center));
     const h = (4 / 3) * r;
     const to = make(
-      add(center, mul(u0, r)),
-      mul(perp(u0), sgn),
-      sub(center, mul(u0, r)),
-      mul(perp(u0), -sgn),
+      center.add(u0.mul(r)),
+      u0.perp().mul(sgn),
+      center.sub(u0.mul(r)),
+      u0.perp().mul(-sgn),
       { a: h, b: h },
       { a: h, b: h },
     );
     return isValid(to) ? { kind: "R1-", from: k, to } : null;
   }
 
-  const T = norm(add(dirAt(k, i), dirAt(k, j)));
+  const T = safeNorm(dirAt(k, i).add(dirAt(k, j)));
   let first: Knot | null = null;
   for (const half of [8, 5, 12]) {
-    const to = make(sub(cp, mul(T, half)), T, add(cp, mul(T, half)), T, {
+    const to = make(cp.sub(T.mul(half)), T, cp.add(T.mul(half)), T, {
       a: (2 * half) / 3,
       b: (2 * half) / 3,
     });
@@ -766,11 +753,11 @@ function r1Untwist(k: Knot, i: number): Move | null {
 const R2_MAX = 150; // how far away a strand can be pushed across
 const R2_MARGIN = 10; // keep new crossings this far from existing nodes
 
-function clearSight(k: Knot, a: Pt, b: Pt): boolean {
-  const d = norm(sub(b, a));
-  const a2 = add(a, mul(d, 3));
-  const b2 = sub(b, mul(d, 3));
-  if (dot(sub(b2, a2), d) <= 0) return true;
+function clearSight(k: Knot, a: Vec2, b: Vec2): boolean {
+  const d = safeNorm(b.sub(a));
+  const a2 = a.add(d.mul(3));
+  const b2 = b.sub(d.mul(3));
+  if (b2.sub(a2).dot(d) <= 0) return true;
   for (const c of edgeCubics(k)) {
     const s = sampleCubic(c, SAMPLES);
     for (let i = 0; i < SAMPLES; i++) {
@@ -798,9 +785,9 @@ function r2Push(
   const TE = bezTan(E, 0.5);
   const f = bez(F, tf);
   const TF = bezTan(F, tf);
-  let NF = perp(TF);
-  if (dot(NF, sub(f, m)) < 0) NF = mul(NF, -1);
-  const parallel = dot(TE, TF) > 0;
+  let NF = TF.perp();
+  if (NF.dot(f.sub(m)) < 0) NF = NF.mul(-1);
+  const parallel = TE.dot(TF) > 0;
   const e = k.code[i].e;
   const fe = k.code[j].e;
 
@@ -869,10 +856,10 @@ function r2Push(
     const eFirstAt = parallel ? f1 : f2;
     const eSecondAt = parallel ? f2 : f1;
     const outward = (t: number) => {
-      const n = perp(bezTan(F, t));
-      return dot(n, NF) >= 0 ? n : mul(n, -1);
+      const n = bezTan(F, t).perp();
+      return n.dot(NF) >= 0 ? n : n.mul(-1);
     };
-    const nodeAt = (t: number, eDir: Pt): KNode => {
+    const nodeAt = (t: number, eDir: Vec2): KNode => {
       const p = bez(F, t);
       const fDir = bezTan(F, t);
       return under ? crossingNode(p, fDir, eDir) : crossingNode(p, eDir, fDir);
@@ -889,10 +876,7 @@ function r2Push(
       delete to.nodes[pf1];
       delete to.nodes[pf2];
       to.nodes[idAt(eFirstAt)] = nodeAt(eFirstAt, outward(eFirstAt));
-      to.nodes[idAt(eSecondAt)] = nodeAt(
-        eSecondAt,
-        mul(outward(eSecondAt), -1),
-      );
+      to.nodes[idAt(eSecondAt)] = nodeAt(eSecondAt, outward(eSecondAt).mul(-1));
       for (const v of to.code) {
         if (v.n === pe1) Object.assign(v, { n: idAt(eFirstAt), over: !under });
         else if (v.n === pe2)
@@ -900,8 +884,8 @@ function r2Push(
         else if (v.n === pf1) Object.assign(v, { n: x1, over: under });
         else if (v.n === pf2) Object.assign(v, { n: x2, over: under });
       }
-      const dP = dist(P, firstPos);
-      const dQ = dist(secondPos, Q);
+      const dP = P.dist(firstPos);
+      const dQ = secondPos.dist(Q);
       to.edges[eP] = {
         a: clampHandle(Math.min(k.edges[e].a, dP * 0.6)),
         b: clampHandle(dP / 3),
@@ -959,17 +943,17 @@ function r2Pull(k: Knot, i: number): Move | null {
   const oY = otherVisit(k, j);
   if (cyc(oX + 1, V) !== oY && cyc(oY + 1, V) !== oX) return null;
 
-  const Xp = pt(X.x, X.y);
-  const Yp = pt(Y.x, Y.y);
+  const Xp = Vec2(X.x, X.y);
+  const Yp = Vec2(Y.x, Y.y);
   const sMid = edgeCubics(k)[i];
-  const Ldir = norm(sub(Yp, Xp));
-  const bulge = sub(bez(sMid, 0.5), lerpPt(Xp, Yp, 0.5));
-  let far = sub(bulge, mul(Ldir, dot(bulge, Ldir)));
-  if (len(far) < 1) {
+  const Ldir = safeNorm(Yp.sub(Xp));
+  const bulge = bez(sMid, 0.5).sub(Xp.lerp(Yp, 0.5));
+  let far = bulge.sub(Ldir.mul(bulge.dot(Ldir)));
+  if (far.len() < 1) {
     const d = dirAt(k, i);
-    far = sub(d, mul(Ldir, dot(d, Ldir)));
+    far = d.sub(Ldir.mul(d.dot(Ldir)));
   }
-  const home = mul(norm(far), -1);
+  const home = safeNorm(far).mul(-1);
 
   let nextId = k.nextId;
   const xs = `n${nextId++}`;
@@ -989,19 +973,19 @@ function r2Pull(k: Knot, i: number): Move | null {
     tPts.map((p, q) => {
       const a = tPts[Math.max(0, q - 1)];
       const b = tPts[Math.min(tPts.length - 1, q + 1)];
-      let nrm = perp(norm(sub(b, a)));
-      if (dot(nrm, home) < 0) nrm = mul(nrm, -1);
-      return add(p, mul(nrm, c));
+      let nrm = safeNorm(b.sub(a)).perp();
+      if (nrm.dot(home) < 0) nrm = nrm.mul(-1);
+      return p.add(nrm.mul(c));
     });
 
-  type Shape = { xsPos: Pt; ysPos: Pt; d1: Pt; d2: Pt; mid: EdgeData };
+  type Shape = { xsPos: Vec2; ysPos: Vec2; d1: Vec2; d2: Vec2; mid: EdgeData };
   const shapes: Shape[] = [];
   // faithful: the pulled strand follows the other strand's curve,
   // offset toward the side it came from
   for (const c of [16, 11, 24]) {
     const off = offsetAlongT(c);
-    const d1 = norm(sub(off[1], off[0]));
-    const d2 = norm(sub(off[off.length - 1], off[off.length - 2]));
+    const d1 = safeNorm(off[1].sub(off[0]));
+    const d2 = safeNorm(off[off.length - 1].sub(off[off.length - 2]));
     const xsPos = off[0];
     const ysPos = off[off.length - 1];
     shapes.push({
@@ -1014,10 +998,10 @@ function r2Pull(k: Knot, i: number): Move | null {
   }
   // simple: a straight segment offset from the crossings
   for (const c of [18, 12, 26]) {
-    const xsPos = add(Xp, mul(home, c));
-    const ysPos = add(Yp, mul(home, c));
-    const sDir = norm(sub(ysPos, xsPos));
-    const h = clampHandle(dist(xsPos, ysPos) / 3);
+    const xsPos = Xp.add(home.mul(c));
+    const ysPos = Yp.add(home.mul(c));
+    const sDir = safeNorm(ysPos.sub(xsPos));
+    const h = clampHandle(xsPos.dist(ysPos) / 3);
     shapes.push({ xsPos, ysPos, d1: sDir, d2: sDir, mid: { a: h, b: h } });
   }
 
@@ -1107,7 +1091,7 @@ function r3With(
   const B = k.nodes[vB.n];
   const cId = k.code[a2].n;
   const C = k.nodes[cId];
-  const Cp = pt(C.x, C.y);
+  const Cp = Vec2(C.x, C.y);
 
   const swap = (code: Visit[], p: number, q: number) => {
     const tmp = { n: code[p].n, over: code[p].over };
@@ -1132,8 +1116,8 @@ function r3With(
     const t = paramAtLen(beyond, forward ? dd : L - dd);
     const p = bez(beyond, t);
     const tDir = bezTan(beyond, t);
-    const rel = angleOf(dirAt(k, sVisit)) - angleOf(dirAt(k, o));
-    const sDir = unit(angleOf(tDir) + rel);
+    const rel = dirAt(k, sVisit).angleRad() - dirAt(k, o).angleRad();
+    const sDir = Vec2.polarRad(1, tDir.angleRad() + rel);
     const node = k.code[sVisit].over
       ? crossingNode(p, sDir, tDir)
       : crossingNode(p, tDir, sDir);
@@ -1178,8 +1162,8 @@ function r3With(
   type Placement = { a: KNode; b: KNode; fixEdges?: (to: Knot) => void };
   const placements: (() => Placement | null)[] = [
     ...[1, 0.7, 0.45].map((f) => () => {
-      const a = slide(i, oA, a2, f * dist(pt(A.x, A.y), Cp));
-      const b = slide(j, oB, b2, f * dist(pt(B.x, B.y), Cp));
+      const a = slide(i, oA, a2, f * Vec2(A.x, A.y).dist(Cp));
+      const b = slide(j, oB, b2, f * Vec2(B.x, B.y).dist(Cp));
       if (!a || !b) return null;
       return {
         a: a.node,
@@ -1208,9 +1192,8 @@ function r3With(
       const n1 = v.n;
       const n2 = to.code[r].n;
       if (!moved.has(n1) && !moved.has(n2)) return;
-      const d = dist(
-        pt(to.nodes[n1].x, to.nodes[n1].y),
-        pt(to.nodes[n2].x, to.nodes[n2].y),
+      const d = Vec2(to.nodes[n1].x, to.nodes[n1].y).dist(
+        Vec2(to.nodes[n2].x, to.nodes[n2].y),
       );
       const ed = { ...to.edges[v.e] };
       if (moved.has(n1)) ed.a = clampHandle(d / 3);
@@ -1286,7 +1269,7 @@ function mergeRun(k: Knot, s: number, count: number): Knot | null {
     keepId = h0.e;
   } else {
     const cubics = edgeCubics(k);
-    const pts: Pt[] = [];
+    const pts: Vec2[] = [];
     for (let q = 0; q <= count; q++) {
       const c = cubics[cyc(s + q, V)];
       const smp = sampleCubic(c, 8);
@@ -1404,7 +1387,7 @@ export function knotFromParametric(
     );
   };
   return knotFromPolyline(
-    raw.map((p) => pt(p.x, p.y)),
+    raw.map((p) => Vec2(p.x, p.y)),
     (u, other) => zAt(u) > zAt(other),
   );
 }
@@ -1416,13 +1399,13 @@ export function knotFromParametric(
  * segments: u = s + t lies on segment s).
  */
 export function knotFromPolyline(
-  poly: Pt[],
+  poly: Vec2[],
   isOver: (u: number, other: number) => boolean,
 ): Knot {
   const M = poly.length;
-  const tangentAt = (u: number): Pt => {
+  const tangentAt = (u: number): Vec2 => {
     const s = Math.floor(u);
-    return norm(sub(poly[cyc(s + 2, M)], poly[cyc(s - 1, M)]));
+    return safeNorm(poly[cyc(s + 2, M)].sub(poly[cyc(s - 1, M)]));
   };
   const crossings = polylineSelfCrossings(poly);
 
@@ -1470,7 +1453,7 @@ export function knotFromPolyline(
     const u0 = visits[q].u;
     let u1 = visits[r].u;
     if (u1 <= u0) u1 += M;
-    const pts: Pt[] = [];
+    const pts: Vec2[] = [];
     for (let s = Math.ceil(u0 + 0.5); s < u1 - 0.5; s++) pts.push(poly[s % M]);
     k.edges[v.e] = fitHandles(
       nodePos(k, q),

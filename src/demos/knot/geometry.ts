@@ -1,27 +1,19 @@
 // Geometry helpers for the knot demo: points, cubic Béziers, segment
 // intersection, and least-squares cubic fitting.
 
-export type Pt = { x: number; y: number };
-export type Cubic = [Pt, Pt, Pt, Pt];
+import { Vec2 } from "../../math/vec2";
 
-export const pt = (x: number, y: number): Pt => ({ x, y });
-export const add = (a: Pt, b: Pt): Pt => pt(a.x + b.x, a.y + b.y);
-export const sub = (a: Pt, b: Pt): Pt => pt(a.x - b.x, a.y - b.y);
-export const mul = (a: Pt, s: number): Pt => pt(a.x * s, a.y * s);
-export const dot = (a: Pt, b: Pt): number => a.x * b.x + a.y * b.y;
-export const cross = (a: Pt, b: Pt): number => a.x * b.y - a.y * b.x;
-export const len = (a: Pt): number => Math.hypot(a.x, a.y);
-export const dist = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
-export const lerpPt = (a: Pt, b: Pt, t: number): Pt =>
-  pt(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
-export const norm = (a: Pt): Pt => {
-  const l = len(a) || 1;
-  return pt(a.x / l, a.y / l);
-};
-/** Rotate by +90° (in screen coordinates, clockwise). */
-export const perp = (a: Pt): Pt => pt(-a.y, a.x);
-export const unit = (angle: number): Pt => pt(Math.cos(angle), Math.sin(angle));
-export const angleOf = (a: Pt): number => Math.atan2(a.y, a.x);
+export type Cubic = [Vec2, Vec2, Vec2, Vec2];
+
+/**
+ * Unit vector in v's direction, or the zero vector if v is zero.
+ * (Vec2's own `norm` gives NaN there; zero-length edges are normal
+ * here, e.g. the collapsed loop in a pre-split twist.)
+ */
+export function safeNorm(v: Vec2): Vec2 {
+  const l = v.len();
+  return l > 0 ? v.div(l) : Vec2(0);
+}
 
 export function cyc(i: number, n: number): number {
   return ((i % n) + n) % n;
@@ -29,45 +21,45 @@ export function cyc(i: number, n: number): number {
 
 // # Cubics
 
-export function bez(c: Cubic, t: number): Pt {
+export function bez(c: Cubic, t: number): Vec2 {
   const mt = 1 - t;
   const a = mt * mt * mt;
   const b = 3 * mt * mt * t;
   const d = 3 * mt * t * t;
   const e = t * t * t;
-  return pt(
+  return Vec2(
     a * c[0].x + b * c[1].x + d * c[2].x + e * c[3].x,
     a * c[0].y + b * c[1].y + d * c[2].y + e * c[3].y,
   );
 }
 
 /** Derivative of the cubic at t. */
-export function bezD(c: Cubic, t: number): Pt {
+export function bezD(c: Cubic, t: number): Vec2 {
   const mt = 1 - t;
   const a = 3 * mt * mt;
   const b = 6 * mt * t;
   const d = 3 * t * t;
-  return pt(
+  return Vec2(
     a * (c[1].x - c[0].x) + b * (c[2].x - c[1].x) + d * (c[3].x - c[2].x),
     a * (c[1].y - c[0].y) + b * (c[2].y - c[1].y) + d * (c[3].y - c[2].y),
   );
 }
 
 /** Unit tangent at t (falls back to the chord for degenerate cubics). */
-export function bezTan(c: Cubic, t: number): Pt {
+export function bezTan(c: Cubic, t: number): Vec2 {
   const d = bezD(c, t);
-  if (len(d) > 1e-9) return norm(d);
-  return norm(sub(c[3], c[0]));
+  if (d.len() > 1e-9) return safeNorm(d);
+  return safeNorm(c[3].sub(c[0]));
 }
 
 /** De Casteljau split at t. */
 export function split(c: Cubic, t: number): [Cubic, Cubic] {
-  const p01 = lerpPt(c[0], c[1], t);
-  const p12 = lerpPt(c[1], c[2], t);
-  const p23 = lerpPt(c[2], c[3], t);
-  const p012 = lerpPt(p01, p12, t);
-  const p123 = lerpPt(p12, p23, t);
-  const m = lerpPt(p012, p123, t);
+  const p01 = c[0].lerp(c[1], t);
+  const p12 = c[1].lerp(c[2], t);
+  const p23 = c[2].lerp(c[3], t);
+  const p012 = p01.lerp(p12, t);
+  const p123 = p12.lerp(p23, t);
+  const m = p012.lerp(p123, t);
   return [
     [c[0], p01, p012, m],
     [m, p123, p23, c[3]],
@@ -81,8 +73,8 @@ export function subCubic(c: Cubic, t0: number, t1: number): Cubic {
   return split(right, (t1 - t0) / (1 - t0))[0];
 }
 
-export function sampleCubic(c: Cubic, n: number): Pt[] {
-  const out: Pt[] = [];
+export function sampleCubic(c: Cubic, n: number): Vec2[] {
+  const out: Vec2[] = [];
   for (let i = 0; i <= n; i++) out.push(bez(c, i / n));
   return out;
 }
@@ -92,7 +84,7 @@ export function cubicLen(c: Cubic, n = 24): number {
   let prev = c[0];
   for (let i = 1; i <= n; i++) {
     const q = bez(c, i / n);
-    L += dist(prev, q);
+    L += prev.dist(q);
     prev = q;
   }
   return L;
@@ -105,7 +97,7 @@ export function paramAtLen(c: Cubic, L: number, n = 48): number {
   let prev = c[0];
   for (let i = 1; i <= n; i++) {
     const q = bez(c, i / n);
-    const seg = dist(prev, q);
+    const seg = prev.dist(q);
     if (acc + seg >= L) {
       const f = seg > 0 ? (L - acc) / seg : 0;
       return (i - 1 + f) / n;
@@ -119,16 +111,16 @@ export function paramAtLen(c: Cubic, L: number, n = 48): number {
 /** Closest point on the cubic to p, restricted to t ∈ [tMin, tMax]. */
 export function closestOnCubic(
   c: Cubic,
-  p: Pt,
+  p: Vec2,
   tMin = 0,
   tMax = 1,
   n = 64,
-): { t: number; p: Pt; d: number } {
+): { t: number; p: Vec2; d: number } {
   let best = { t: tMin, p: bez(c, tMin), d: Infinity };
   for (let i = 0; i <= n; i++) {
     const t = tMin + ((tMax - tMin) * i) / n;
     const q = bez(c, t);
-    const d = dist(p, q);
+    const d = p.dist(q);
     if (d < best.d) best = { t, p: q, d };
   }
   return best;
@@ -139,14 +131,14 @@ export function closestOnCubic(
  * dQ) with handle lengths a, b.
  */
 export function cubicFrom(
-  P: Pt,
-  dP: Pt,
-  Q: Pt,
-  dQ: Pt,
+  P: Vec2,
+  dP: Vec2,
+  Q: Vec2,
+  dQ: Vec2,
   a: number,
   b: number,
 ): Cubic {
-  return [P, add(P, mul(dP, a)), sub(Q, mul(dQ, b)), Q];
+  return [P, P.add(dP.mul(a)), Q.sub(dQ.mul(b)), Q];
 }
 
 /**
@@ -154,22 +146,22 @@ export function cubicFrom(
  * to Q (direction dQ) passing near `pts` (ordered along the curve).
  */
 export function fitHandles(
-  P: Pt,
-  dP: Pt,
-  Q: Pt,
-  dQ: Pt,
-  pts: Pt[],
+  P: Vec2,
+  dP: Vec2,
+  Q: Vec2,
+  dQ: Vec2,
+  pts: Vec2[],
   minHandle = 4,
 ): { a: number; b: number } {
   if (pts.length === 0) {
-    const d = dist(P, Q) / 3;
+    const d = P.dist(Q) / 3;
     return { a: Math.max(d, minHandle), b: Math.max(d, minHandle) };
   }
   // initial parameters by chord length (including the endpoints)
   const chain = [P, ...pts, Q];
   const cum = [0];
   for (let i = 1; i < chain.length; i++) {
-    cum.push(cum[i - 1] + dist(chain[i - 1], chain[i]));
+    cum.push(cum[i - 1] + chain[i - 1].dist(chain[i]));
   }
   const total = cum[cum.length - 1] || 1;
   let ts = pts.map((_, i) => cum[i + 1] / total);
@@ -181,20 +173,20 @@ export function fitHandles(
     let A22 = 0;
     let r1 = 0;
     let r2 = 0;
-    const dd = dot(dP, dQ);
+    const dd = dP.dot(dQ);
     pts.forEach((p, i) => {
       const t = ts[i];
       const mt = 1 - t;
       const al = 3 * mt * mt * t;
       const be = 3 * mt * t * t;
-      const base = add(mul(P, mt * mt * mt + al), mul(Q, be + t * t * t));
-      const r = sub(p, base);
+      const base = P.mul(mt * mt * mt + al).add(Q.mul(be + t * t * t));
+      const r = p.sub(base);
       // model: base + al·a·dP − be·b·dQ
       A11 += al * al;
       A22 += be * be;
       A12 += -al * be * dd;
-      r1 += al * dot(dP, r);
-      r2 += -be * dot(dQ, r);
+      r1 += al * dP.dot(r);
+      r2 += -be * dQ.dot(r);
     });
     const det = A11 * A22 - A12 * A12;
     if (Math.abs(det) > 1e-9) {
@@ -218,10 +210,10 @@ export function fitHandles(
 
 /** Intersection parameters of segments p→p2 and q→q2, if they cross. */
 export function segHit(
-  p: Pt,
-  p2: Pt,
-  q: Pt,
-  q2: Pt,
+  p: Vec2,
+  p2: Vec2,
+  q: Vec2,
+  q2: Vec2,
 ): { t: number; u: number } | null {
   const rx = p2.x - p.x;
   const ry = p2.y - p.y;
@@ -241,9 +233,9 @@ export function segHit(
  * A self-crossing of a closed polyline between segments m1 < m2
  * (segment m runs from sample m to m+1). u1 = m1 + t1 < u2 = m2 + t2.
  */
-export type PolyCrossing = { u1: number; u2: number; p: Pt };
+export type PolyCrossing = { u1: number; u2: number; p: Vec2 };
 
-export function polylineSelfCrossings(s: Pt[]): PolyCrossing[] {
+export function polylineSelfCrossings(s: Vec2[]): PolyCrossing[] {
   const M = s.length;
   const out: PolyCrossing[] = [];
   for (let m1 = 0; m1 < M; m1++) {
@@ -254,7 +246,7 @@ export function polylineSelfCrossings(s: Pt[]): PolyCrossing[] {
         out.push({
           u1: m1 + h.t,
           u2: m2 + h.u,
-          p: lerpPt(s[m1], s[(m1 + 1) % M], h.t),
+          p: s[m1].lerp(s[(m1 + 1) % M], h.t),
         });
       }
     }

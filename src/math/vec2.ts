@@ -165,7 +165,7 @@ class Vec2Class {
   }
 
   len(): number {
-    return Math.sqrt(this.len2());
+    return Math.hypot(this.x, this.y);
   }
 
   norm(): Vec2 {
@@ -227,6 +227,11 @@ class Vec2Class {
     // TODO weird that we need a new variable here to make TS happy
     const v2 = Vec2(v);
     return this.add(v2.sub(this).norm().mul(d));
+  }
+
+  /** Rotated a quarter turn: exactly (-y, x). */
+  perp(): Vec2 {
+    return Vec2(-this.y, this.x);
   }
 
   rotateRad(angleRad: number): Vec2 {

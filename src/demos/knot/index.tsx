@@ -5,17 +5,7 @@ import { DragSpec, lessThan, moreThan, param } from "../../DragSpec";
 import { Vec2 } from "../../math/vec2";
 import { altKey } from "../../modifierKeys";
 import { rotateDeg, translate } from "../../svgx/helpers";
-import {
-  Cubic,
-  angleOf,
-  bez,
-  bezTan,
-  cubicLen,
-  dot,
-  paramAtLen,
-  sub,
-  subCubic,
-} from "./geometry";
+import { Cubic, bez, bezTan, cubicLen, paramAtLen, subCubic } from "./geometry";
 import {
   Knot,
   Move,
@@ -144,7 +134,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
   const edgeColor = state.code.map((_, i) => colorOfArc(arcOfEdge(state, i)));
 
   const marker = bez(cubics[0], 0.5);
-  const markerAngle = (angleOf(bezTan(cubics[0], 0.5)) * 180) / Math.PI;
+  const markerAngle = (bezTan(cubics[0], 0.5).angleRad() * 180) / Math.PI;
 
   const edgeSpec = (e: string, i: number): DragSpec<State> =>
     d.reactTo(altKey, (under) => {
@@ -199,8 +189,8 @@ const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
   const moveSpec = (m: Move, e: string): DragSpec<State> => {
     const A = edgeMid(m.from, e);
     const B = edgeMid(m.to, e);
-    const AB = sub(B, A);
-    const L2 = dot(AB, AB) || 1;
+    const AB = B.sub(A);
+    const L2 = AB.dot(AB) || 1;
     return d.between([m.from, m.to]).changeFrame((frame) => {
       const p = frame.pointer;
       const t = ((p.x - A.x) * AB.x + (p.y - A.y) * AB.y) / L2;
