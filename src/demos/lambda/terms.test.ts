@@ -78,15 +78,6 @@ describe("substitute", () => {
     expect(clones.every((n) => n.emergeMode === "clone")).toBe(true);
   });
 
-  it("skips shadowed occurrences in waypoints", () => {
-    const t = parseTerm("(λx. x (λx. x) x) y");
-    const cs = candidates(t, byName(t, "y").id, { ...off, beta: true });
-    expect(cs.map((c) => printTerm(c.mid!))).toEqual([
-      "(λx. y (λx. x) x) _",
-      "(λx. x (λx. x) y) _",
-    ]);
-  });
-
   it("respects shadowing", () => {
     const body = parseTerm("x (λx. x)", "b");
     const { term, count } = substitute(body, "x", parseTerm("y", "a"));
@@ -113,17 +104,17 @@ describe("candidates", () => {
     expect(roots[1].arg.id).toBe(y.id);
     expect(roots[0].arg.emergeFrom).toBe(y.id);
     expect(roots[1].fn.emergeFrom).toBe(y.id);
-    // waypoints: y sits on that occurrence, a hole where it came from
+    // waypoints: all occurrences replaced, hole where y came from, and
+    // the substituted subtree shared with the result
     expect(cs.map((c) => printTerm(c.mid!))).toEqual([
-      "(λx. y x) _",
-      "(λx. x y) _",
+      "(λx. y y) _",
+      "(λx. y y) _",
     ]);
-    const mid1 = cs[1].mid as Term & { type: "app" };
-    expect((mid1.fn as Term & { type: "lam" }).body).toMatchObject({
-      type: "app",
-      arg: { id: y.id },
-    });
-    expect(mid1.arg).toMatchObject({ type: "hole", of: { id: y.id } });
+    for (const c of cs) {
+      const mid = c.mid as Term & { type: "app" };
+      expect((mid.fn as Term & { type: "lam" }).body).toBe(c.result);
+      expect(mid.arg).toMatchObject({ type: "hole", of: { id: y.id } });
+    }
   });
 
   it("does not β-reduce when the argument would vanish", () => {

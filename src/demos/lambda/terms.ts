@@ -348,9 +348,9 @@ export type Candidate = {
   /** Rewrite starts here; renders identically to the input term. */
   base: Term;
   /**
-   * Optional waypoint on the way to `result`: the dragged node has been
-   * moved to its destination but nothing else has changed yet. Dropping
-   * here should complete the rewrite.
+   * Optional drag target standing in for `result`: the dragged node has
+   * been moved to its destination, but the surrounding structure hasn't
+   * collapsed yet. Dropping here completes the rewrite.
    */
   mid?: Term;
   result: Term;
@@ -364,12 +364,6 @@ export type RewriteOptions = {
   etaExpand: boolean;
   etaReduce: boolean;
 };
-
-/** Is the variable node `id` inside a λ that rebinds `name` (within `root`)? */
-function isShadowed(root: Term, id: string, name: string): boolean {
-  const path = pathTo(root, id)!;
-  return path.slice(0, -1).some((t) => t.type === "lam" && t.param === name);
-}
 
 /** Binder names on the path strictly below `top` down to (not including) `node`. */
 function bindersBetween(path: Term[]): Set<string> {
@@ -413,17 +407,13 @@ export function candidates(
     const { count } = substitute(lam.body, lam.param, dragged);
     for (let i = 0; i < count; i++) {
       const { term: reduced } = substitute(lam.body, lam.param, dragged, i);
-      // Waypoint: the argument sits on occurrence i, boxes still intact,
-      // and a hole marks where it came from.
-      const occurrence = allNodes(lam.body).filter(
-        (n) =>
-          n.type === "var" &&
-          n.name === lam.param &&
-          !isShadowed(lam.body, n.id, lam.param),
-      )[i];
+      // Waypoint: every occurrence already replaced (so the clones emerge
+      // during the drag), but the app/λ boxes still intact and a hole
+      // marking where the argument came from. The same `reduced` subtree is
+      // used in both, so the drop animation only has to collapse the boxes.
       const mid = replaceById(base, parent.id, {
         ...parent,
-        fn: { ...lam, body: replaceById(lam.body, occurrence.id, dragged) },
+        fn: { ...lam, body: reduced },
         arg: { type: "hole", id: newId(), of: dragged },
       });
       results.push({
