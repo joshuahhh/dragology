@@ -148,6 +148,8 @@ const ZONE_MIN_W = 70;
 const ZONE_LABEL_Y = 11;
 const ZONE_BOX_Y = 16;
 const ZONE_BOX_H = CHIP_H + ZONE_PAD * 2;
+const SNAP_IN = 40;
+const SNAP_OUT = 56;
 
 const TABLE_Y = ZONE_BOX_Y + ZONE_BOX_H + 18;
 const ROW_H = 18;
@@ -214,8 +216,12 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       const idx = amb(_.range(draft.zones[zone].length + 1));
       draft.zones[zone].splice(idx, 0, field);
     });
+    // Zones act as islands: the table only re-pivots once the chip is
+    // near a slot. Far from every slot, the current state stays put, so
+    // dragging across the Rows zone doesn't flip the table halfway.
     return d
       .closest(candidates)
+      .whenFar(state, { gapIn: SNAP_IN, gapOut: SNAP_OUT })
       .withBranchTransition(150)
       .withFloating({ ghost: { opacity: 0.3 } });
   };
