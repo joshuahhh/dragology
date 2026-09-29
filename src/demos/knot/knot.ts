@@ -128,73 +128,63 @@ function isValidUncached(k: Knot): boolean {
 export function strayCrossings(k: Knot, limit = Infinity): number {
   const V = k.code.length;
   if (V === 0) return Infinity;
+  // each edge as a polyline; segment i of edge e runs pts[e][i] → pts[e][i+1]
+  const pts = edgeCubics(k).map((c) => sampleCubic(c, SAMPLES));
+  const segBoxes = pts.map((ps) =>
+    ps.slice(0, -1).map((p, i) => boxOf([p, ps[i + 1]])),
+  );
+  const edgeBoxes = pts.map(boxOf);
+  // the node a segment touches, if it's the first or last of its edge
+  const endNodes = (e: number, i: number): string[] => [
+    ...(i === 0 ? [k.code[e].n] : []),
+    ...(i === SAMPLES - 1 ? [k.code[(e + 1) % V].n] : []),
+  ];
   let stray = 0;
-  const cubics = edgeCubics(k);
-  const S = SAMPLES;
-  const n = V * S;
-  const px = new Float64Array(n);
-  const py = new Float64Array(n);
-  const qx = new Float64Array(n);
-  const qy = new Float64Array(n);
-  cubics.forEach((c, e) => {
-    const s = sampleCubic(c, S);
-    for (let i = 0; i < S; i++) {
-      px[e * S + i] = s[i].x;
-      py[e * S + i] = s[i].y;
-      qx[e * S + i] = s[i + 1].x;
-      qy[e * S + i] = s[i + 1].y;
-    }
-  });
-  const minX = new Float64Array(n);
-  const maxX = new Float64Array(n);
-  const minY = new Float64Array(n);
-  const maxY = new Float64Array(n);
-  for (let s = 0; s < n; s++) {
-    minX[s] = Math.min(px[s], qx[s]);
-    maxX[s] = Math.max(px[s], qx[s]);
-    minY[s] = Math.min(py[s], qy[s]);
-    maxY[s] = Math.max(py[s], qy[s]);
-  }
-  // node that a segment touches at its end (if it's an end segment)
-  const endNodes = (s: number): string[] => {
-    const e = Math.floor(s / S);
-    const i = s % S;
-    const out: string[] = [];
-    if (i === 0) out.push(k.code[e].n);
-    if (i === S - 1) out.push(k.code[(e + 1) % V].n);
-    return out;
-  };
-  for (let s1 = 0; s1 < n; s1++) {
-    const e1 = Math.floor(s1 / S);
-    for (let s2 = s1 + 1; s2 < n; s2++) {
-      const e2 = Math.floor(s2 / S);
-      if (e1 === e2 && s2 - s1 <= 1) continue;
-      if (
-        maxX[s1] < minX[s2] - 1e-6 ||
-        maxX[s2] < minX[s1] - 1e-6 ||
-        maxY[s1] < minY[s2] - 1e-6 ||
-        maxY[s2] < minY[s1] - 1e-6
-      ) {
-        continue;
+  for (let e1 = 0; e1 < V; e1++) {
+    for (let e2 = e1; e2 < V; e2++) {
+      if (apart(edgeBoxes[e1], edgeBoxes[e2])) continue;
+      for (let i = 0; i < SAMPLES; i++) {
+        // (neighboring segments of one edge share an end point)
+        for (let j = e1 === e2 ? i + 2 : 0; j < SAMPLES; j++) {
+          if (apart(segBoxes[e1][i], segBoxes[e2][j])) continue;
+          const p = pts[e1][i];
+          const q = pts[e1][i + 1];
+          const h = segHit(p, q, pts[e2][j], pts[e2][j + 1]);
+          if (!h) continue;
+          // crossing at a node the two segments both end at is fine
+          const X = p.lerp(q, h.t);
+          const shared = endNodes(e2, j);
+          const ok = endNodes(e1, i).some(
+            (id) => shared.includes(id) && X.dist(k.nodes[id]) < 1.5,
+          );
+          if (!ok && ++stray >= limit) return stray;
+        }
       }
-      const h = segHit(
-        Vec2(px[s1], py[s1]),
-        Vec2(qx[s1], qy[s1]),
-        Vec2(px[s2], py[s2]),
-        Vec2(qx[s2], qy[s2]),
-      );
-      if (!h) continue;
-      const X = Vec2(
-        px[s1] + (qx[s1] - px[s1]) * h.t,
-        py[s1] + (qy[s1] - py[s1]) * h.t,
-      );
-      const n1 = endNodes(s1);
-      const n2 = endNodes(s2);
-      const ok = n1.some((id) => n2.includes(id) && X.dist(k.nodes[id]) < 1.5);
-      if (!ok && ++stray >= limit) return stray;
     }
   }
   return stray;
+}
+
+type Box = { x0: number; x1: number; y0: number; y1: number };
+
+function boxOf(ps: Vec2[]): Box {
+  const xs = ps.map((p) => p.x);
+  const ys = ps.map((p) => p.y);
+  return {
+    x0: Math.min(...xs),
+    x1: Math.max(...xs),
+    y0: Math.min(...ys),
+    y1: Math.max(...ys),
+  };
+}
+
+function apart(a: Box, b: Box): boolean {
+  return (
+    a.x1 < b.x0 - 1e-6 ||
+    b.x1 < a.x0 - 1e-6 ||
+    a.y1 < b.y0 - 1e-6 ||
+    b.y1 < a.y0 - 1e-6
+  );
 }
 
 // # Invariants
