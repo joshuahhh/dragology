@@ -7,7 +7,15 @@ import { altKey } from "../../modifierKeys";
 import { Svgx } from "../../svgx";
 import { path, rotateDeg, translate } from "../../svgx/helpers";
 import { layerSvg, layeredMerge } from "../../svgx/layers";
-import { Cubic, bez, bezTan, cubicLen, paramAtLen, subCubic } from "./geometry";
+import {
+  Cubic,
+  bez,
+  bezTan,
+  cubicLen,
+  distToSegment,
+  paramAtLen,
+  subCubic,
+} from "./geometry";
 import {
   Knot,
   Move,
@@ -27,6 +35,8 @@ const HEIGHT = 470;
 const STROKE = 5;
 const GAP = 4; // white gap on each side of an over-strand
 const BRIDGE = 13; // length of the over-strand bridge on each side of a crossing
+const OVERSHOOT = 40; // a move stays in play this far past its result
+const PUSH_ENGAGE = 20; // a push engages this far short of the strand it crosses
 
 const PALETTE = ["#e11d48", "#2563eb", "#16a34a"];
 const MONO = "#334155";
@@ -258,22 +268,28 @@ const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
     });
 
   /**
-   * A move interpolates from its start to its result. Past the result,
-   * the pointer is slid back along the move's direction, so
-   * overshooting a target keeps the move rather than dropping out of
-   * it (only sideways distance counts as being "far").
+   * A move interpolates from its start to its result, and is in play
+   * within a capsule along that path: from where it engages (its start,
+   * or for a push, just short of the strand it crosses) to a little
+   * past its result. Past the result, the pointer is slid back along
+   * the move's direction, so overshooting keeps the move.
    */
   const moveSpec = (m: Move, e: string): DragSpec<State> => {
     const A = edgeMid(m.from, e);
     const B = edgeMid(m.to, e);
-    const AB = B.sub(A);
-    const L2 = AB.dot(AB) || 1;
-    return d.between([m.from, m.to]).changeFrame((frame) => {
-      const p = frame.pointer;
-      const t = ((p.x - A.x) * AB.x + (p.y - A.y) * AB.y) / L2;
-      if (t <= 1) return {};
-      return { pointer: p.sub(Vec2(AB.x * (t - 1), AB.y * (t - 1))) };
-    });
+    const len = A.dist(B) || 1;
+    const dir = B.sub(A).div(len);
+    const start = m.meets ? m.meets.sub(dir.mul(PUSH_ENGAGE)) : A;
+    const end = B.add(dir.mul(OVERSHOOT));
+    let pointer = A;
+    return d
+      .between([m.from, m.to])
+      .changeFrame((frame) => {
+        pointer = frame.pointer;
+        const past = pointer.sub(B).dot(dir);
+        return past > 0 ? { pointer: pointer.sub(dir.mul(past)) } : {};
+      })
+      .changeResult(() => ({ gap: distToSegment(pointer, start, end) }));
   };
 
   const nodeSpec = (n: string): DragSpec<State> =>

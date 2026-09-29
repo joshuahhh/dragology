@@ -21,7 +21,6 @@ import {
   Cubic,
   bez,
   bezTan,
-  closestOnCubic,
   cubicFrom,
   cubicLen,
   cyc,
@@ -643,7 +642,13 @@ function sameLevelPair(
 // # Moves
 
 export type MoveKind = "R1" | "R1-" | "R2" | "R2-" | "R3";
-export type Move = { kind: MoveKind; from: Knot; to: Knot };
+export type Move = {
+  kind: MoveKind;
+  from: Knot;
+  to: Knot;
+  /** For a push: where the dragged strand meets the other strand. */
+  meets?: Vec2;
+};
 
 /**
  * R1 twist on the edge leaving visit i: a loop on the given side.
@@ -774,22 +779,8 @@ function r1Untwist(k: Knot, i: number): Move | null {
   return to && { kind: "R1-", from: k, to };
 }
 
-const R2_MAX = 150; // how far away a strand can be pushed across
+const R2_MAX = 250; // how far away a strand can be pushed across
 const R2_MARGIN = 10; // keep new crossings this far from existing nodes
-
-function clearSight(k: Knot, a: Vec2, b: Vec2): boolean {
-  const d = safeNorm(b.sub(a));
-  const a2 = a.add(d.mul(3));
-  const b2 = b.sub(d.mul(3));
-  if (b2.sub(a2).dot(d) <= 0) return true;
-  for (const c of edgeCubics(k)) {
-    const s = sampleCubic(c, SAMPLES);
-    for (let i = 0; i < SAMPLES; i++) {
-      if (segHit(a2, b2, s[i], s[i + 1])) return false;
-    }
-  }
-  return true;
-}
 
 /**
  * R2: push the edge leaving visit i across the edge leaving visit j,
@@ -913,28 +904,38 @@ function r2Push(
         a: clampHandle(dQ / 3),
         b: clampHandle(Math.min(k.edges[e].b, dQ * 0.6)),
       };
-      if (isValid(to)) return { kind: "R2", from, to };
+      if (isValid(to)) return { kind: "R2", from, to, meets: f };
     }
   }
   return null;
 }
 
+/**
+ * Pushes of the edge leaving visit i: straight out from its midpoint on
+ * either side, across the first strand in that direction.
+ */
 function r2PushAll(k: Knot, i: number, under: boolean): Move[] {
   const cubics = edgeCubics(k);
   const m = bez(cubics[i], 0.5);
+  const normal = bezTan(cubics[i], 0.5).perp();
+  const samples = cubics.map((c) => sampleCubic(c, SAMPLES));
   const out: Move[] = [];
-  cubics.forEach((F, j) => {
-    if (j === i) return;
-    const LF = cubicLen(F, 48);
-    const lo = paramAtLen(F, 30);
-    const hi = paramAtLen(F, LF - 30);
-    if (hi <= lo) return;
-    const cl = closestOnCubic(F, m, lo, hi);
-    if (cl.d > R2_MAX || cl.d < 4) return;
-    if (!clearSight(k, m, cl.p)) return;
-    const mv = r2Push(k, i, j, cl.t, under);
+  for (const side of [1, -1]) {
+    const far = m.add(normal.mul(side * R2_MAX));
+    // first strand the ray from m hits (ignoring where it starts)
+    let hit: { t: number; j: number; tf: number } | null = null;
+    for (const [j, s] of samples.entries()) {
+      for (let q = 0; q < SAMPLES; q++) {
+        const h = segHit(m, far, s[q], s[q + 1]);
+        if (h && h.t * R2_MAX > 4 && (!hit || h.t < hit.t)) {
+          hit = { t: h.t, j, tf: (q + h.u) / SAMPLES };
+        }
+      }
+    }
+    if (!hit || hit.j === i) continue;
+    const mv = r2Push(k, i, hit.j, hit.tf, under);
     if (mv) out.push(mv);
-  });
+  }
   return out;
 }
 

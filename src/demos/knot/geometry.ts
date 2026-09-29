@@ -208,6 +208,14 @@ export function fitHandles(
 
 // # Segments
 
+/** Distance from p to the segment a→b. */
+export function distToSegment(p: Vec2, a: Vec2, b: Vec2): number {
+  const ab = b.sub(a);
+  const L2 = ab.dot(ab);
+  const t = L2 > 0 ? Math.min(1, Math.max(0, p.sub(a).dot(ab) / L2)) : 0;
+  return p.dist(a.lerp(b, t));
+}
+
 /** Intersection parameters of segments p→p2 and q→q2, if they cross. */
 export function segHit(
   p: Vec2,
