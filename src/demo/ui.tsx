@@ -2,7 +2,6 @@ import { PrettyPrint } from "@joshuahhh/pretty-print";
 import {
   createContext,
   ReactNode,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -464,39 +463,39 @@ export function collectDraggables(): () => CollectedDraggable[] {
 export function DemoDraggable<T extends object>({
   draggable,
   initialState,
+  state: controlledState,
+  onDropState,
   width,
   height,
   stateRef,
   stateOverride,
-  transformDropState,
 }: {
   draggable: Draggable<T>;
-  initialState: T;
   width: number;
   height: number;
   stateRef?: React.RefObject<T | null>;
   stateOverride?: Partial<T>;
-  /**
-   * Applied to each dropped state (along with the state before it)
-   * before it becomes the new state.
-   */
-  transformDropState?: (state: T, previous: T) => T;
-}) {
+} & (
+  | { initialState: T; state?: undefined; onDropState?: undefined }
+  /** Controlled: the caller owns the state. */
+  | { state: T; onDropState: (state: T) => void; initialState?: undefined }
+)) {
+  // exactly one of these is given
+  const start = (initialState ?? controlledState) as T;
   const collectedRef = useRef(false);
   if (collector && !collectedRef.current) {
     collectedRef.current = true;
     collector.push({
       draggable,
-      initialState: stateOverride
-        ? { ...initialState, ...stateOverride }
-        : initialState,
+      initialState: stateOverride ? { ...start, ...stateOverride } : start,
     });
   }
 
-  const [ownState, setOwnState] = useState(initialState);
+  const [ownState, setOwnState] = useState(start);
+  const baseState = controlledState ?? ownState;
   const state = useMemo(
-    () => (stateOverride ? { ...ownState, ...stateOverride } : ownState),
-    [ownState, stateOverride],
+    () => (stateOverride ? { ...baseState, ...stateOverride } : baseState),
+    [baseState, stateOverride],
   );
   const {
     showTreeView,
@@ -508,13 +507,7 @@ export function DemoDraggable<T extends object>({
     thumbArea,
   } = useDemoSettings();
   const [status, setStatus] = useState<DragStatus<T> | null>(null);
-  const handleDropState = useCallback(
-    (s: T) =>
-      setOwnState((prev) =>
-        transformDropState ? transformDropState(s, prev) : s,
-      ),
-    [transformDropState],
-  );
+  const handleDropState = onDropState ?? setOwnState;
   const [hoveredLayerBounds, setHoveredLayerBounds] = useState<Bounds | null>(
     null,
   );
