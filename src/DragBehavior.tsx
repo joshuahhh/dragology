@@ -139,6 +139,8 @@ export function dragSpecToBehavior<T extends object>(
       return changeGapBehavior(spec, ctx);
     case "with-snap-radius":
       return withSnapRadiusBehavior(spec, ctx);
+    case "with-overlay":
+      return withOverlayBehavior(spec, ctx);
     case "with-drop-transition":
       return withDropTransitionBehavior(spec, ctx);
     case "with-branch-transition":
@@ -695,6 +697,29 @@ function withSnapRadiusBehavior<T extends object>(
         : spec,
     };
   };
+}
+
+// Overlays draw above everything, including floating elements (which
+// are shifted by 1000000).
+const OVERLAY_Z_SHIFT = 2000000;
+let overlayCount = 0;
+
+function withOverlayBehavior<T extends object>(
+  spec: DragSpecData<T> & { type: "with-overlay" },
+  ctx: DragInitContext<T>,
+): DragBehavior<T> {
+  // Each overlay gets its own id prefix, so its ids can't collide with
+  // the preview's or another overlay's.
+  const layer = layeredShiftZIndices(
+    layeredPrefixIds(
+      layerSvg(<g>{spec.overlay}</g>),
+      `overlay-${overlayCount++}-`,
+    ),
+    OVERLAY_Z_SHIFT,
+  );
+  return changeResultBehaviorBase(spec, ctx, (result) => ({
+    preview: () => layeredMerge(result.preview(), layer),
+  }));
 }
 
 function withDropTransitionBehavior<T extends object>(

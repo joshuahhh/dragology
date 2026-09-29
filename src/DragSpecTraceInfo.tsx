@@ -42,6 +42,7 @@ export type DragSpecTraceInfoByType = {
     outputPreview: LayeredSvgx;
   };
   "with-drop-transition": Record<string, never>;
+  "with-overlay": Record<string, never>;
   "with-branch-transition": Record<string, never>;
   between: {
     renderedStates: RenderedState[];

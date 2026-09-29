@@ -240,6 +240,7 @@ export function OverlayVis<T extends object>({
     case "change-gap":
     case "with-snap-radius":
     case "with-drop-transition":
+    case "with-overlay":
     case "with-branch-transition":
     case "with-chaining":
     case "with-init-context":

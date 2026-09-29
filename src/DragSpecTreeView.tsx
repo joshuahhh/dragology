@@ -306,6 +306,13 @@ function SpecNode<T extends object>({
         <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
+  } else if (spec.type === "with-overlay") {
+    const { childPath } = info(spec);
+    return (
+      <Box label="withOverlay" path={path}>
+        <SpecNode spec={spec.inner} path={childPath} />
+      </Box>
+    );
   } else if (spec.type === "switch-to-state-and-follow") {
     const { color, traceInfo, childPath } = info(spec);
     return (

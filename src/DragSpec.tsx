@@ -5,7 +5,7 @@ import type {
   DragResult,
 } from "./DragBehavior";
 import { PathIn, ValueAtPath, getAtPath } from "./paths";
-import type { SvgxProps } from "./svgx";
+import type { Svgx, SvgxProps } from "./svgx";
 import {
   Transition,
   TransitionLike,
@@ -78,6 +78,7 @@ export type DragSpecData<T extends object> = {
       inner: DragSpecData<T>;
       transition: Transition | false;
     }
+  | { type: "with-overlay"; inner: DragSpecData<T>; overlay: Svgx }
   | {
       type: "between";
       specs: DragSpecData<T>[];
@@ -204,6 +205,15 @@ export interface DragSpecMethods<T extends object> {
   withDropTransition(transition: TransitionLike): DragSpec<T>;
 
   /**
+   * Draw extra SVG on top of the drag preview while this behavior is
+   * active, e.g. marks at drop targets. It's in canvas coordinates,
+   * drawn above everything else, and goes away on drop (the dropped
+   * state doesn't draw it). On a branch of a `closest`, it shows only
+   * while that branch is the active one.
+   */
+  withOverlay(overlay: Svgx): DragSpec<T>;
+
+  /**
    * Set a transition to be used when switching between branches of a
    * behavior. "Branches" isn't yet a very well-established concept,
    * but this includes, e.g., switching between behaviors in a
@@ -318,6 +328,9 @@ const dragSpecMethods: DragSpecMethods<any> & ThisType<DragSpec<any>> = {
       inner: this,
       transition: resolveTransitionLike(transition),
     });
+  },
+  withOverlay(overlay) {
+    return attachMethods({ type: "with-overlay", inner: this, overlay });
   },
   withBranchTransition(transition) {
     return attachMethods({

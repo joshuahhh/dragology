@@ -225,6 +225,17 @@ Drag specs have chainable methods that modify behavior:
 | `.withBranchTransition(ms)` | Animate when switching between `closest()` branches or `whenFar` foreground/background |
 | `.onDrop(state)` | Override the final state on drop; accepts a value or `(previewState) => newState` |
 | `.during(fn)` | Transform the preview state each frame (for live recomputation) |
+| `.withOverlay(svg)` | Draw extra SVG (in canvas coordinates, on top) while this spec is active, e.g. marks at drop targets; gone on drop |
+
+Example: marking a snap target. The mark shows only while this spec drives the drag, and fades out on drop because the dropped state doesn't draw it:
+
+```tsx
+dragologyOnDrag={() =>
+  d.fixed(targetState)
+    .whenFar(state)
+    .withOverlay(<circle transform={translate(targetPos)} r={6} fill="none" stroke="gray" />)
+}
+```
 
 Example — a bouncy toggle:
 
