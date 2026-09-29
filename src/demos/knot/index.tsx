@@ -327,6 +327,175 @@ const draggable: Draggable<Knot> = ({ state, d, draggedId, setState }) => {
   );
 };
 
+// # Legend
+
+const LEGEND_INK = "#334155";
+const LEGEND_DRAG = "#ea580c";
+
+/** A strand in a legend picture; over-strands get a white halo so
+ * whatever they cross shows a gap. */
+function LegendStrand({ d, over }: { d: string; over?: boolean }) {
+  return (
+    <g>
+      {over && <path d={d} fill="none" stroke="white" strokeWidth={9} />}
+      <path
+        d={d}
+        fill="none"
+        stroke={LEGEND_INK}
+        strokeWidth={3}
+        strokeLinecap="round"
+      />
+    </g>
+  );
+}
+
+/** The dragged handle, with a dashed arrow to where it goes. */
+function LegendDrag({
+  from,
+  to,
+}: {
+  from: [number, number];
+  to?: [number, number];
+}) {
+  let arrow = null;
+  if (to) {
+    const [x1, y1] = from;
+    const [x2, y2] = to;
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    const ux = (x2 - x1) / len;
+    const uy = (y2 - y1) / len;
+    const head = `M${x2},${y2} L${x2 - 7 * ux - 4 * uy},${y2 - 7 * uy + 4 * ux} L${x2 - 7 * ux + 4 * uy},${y2 - 7 * uy - 4 * ux} Z`;
+    arrow = (
+      <g>
+        <line
+          x1={x1}
+          y1={y1}
+          x2={x2 - 6 * ux}
+          y2={y2 - 6 * uy}
+          stroke={LEGEND_DRAG}
+          strokeWidth={2}
+          strokeDasharray="4 3"
+        />
+        <path d={head} fill={LEGEND_DRAG} />
+      </g>
+    );
+  }
+  return (
+    <g>
+      {arrow}
+      <circle cx={from[0]} cy={from[1]} r={4.5} fill={LEGEND_DRAG} />
+    </g>
+  );
+}
+
+function LegendPicture({ children }: { children: React.ReactNode }) {
+  return (
+    <svg width={80} height={62} viewBox="0 0 80 62" className="shrink-0">
+      {children}
+    </svg>
+  );
+}
+
+const legendMoves: {
+  title: string;
+  before: React.ReactNode;
+  after: React.ReactNode;
+  caption: React.ReactNode;
+}[] = [
+  {
+    title: "Twist (R1)",
+    before: (
+      <>
+        <LegendStrand d="M4,46 C30,46 50,46 76,46" />
+        <LegendDrag from={[40, 46]} to={[40, 10]} />
+      </>
+    ),
+    after: (
+      <>
+        <LegendStrand d="M4,46 C18,46 32,44 40,38 C50,30 58,18 50,10 C43,3 30,6 29,14" />
+        <LegendStrand d="M29,14 C28,22 33,32 40,38 C47,44 62,46 76,46" over />
+        <LegendDrag from={[42, 6]} />
+      </>
+    ),
+    caption: (
+      <>Pull a strand sideways into a loop. Drag the loop back in to undo.</>
+    ),
+  },
+  {
+    title: "Push (R2)",
+    before: (
+      <>
+        <LegendStrand d="M4,44 C30,44 50,44 76,44" />
+        <LegendStrand d="M4,16 C30,16 50,16 76,16" />
+        <LegendDrag from={[40, 16]} to={[40, 56]} />
+      </>
+    ),
+    after: (
+      <>
+        <LegendStrand d="M4,44 C30,44 50,44 76,44" />
+        <LegendStrand d="M4,16 C24,16 26,56 40,56 C54,56 56,16 76,16" over />
+        <LegendDrag from={[40, 56]} />
+      </>
+    ),
+    caption: (
+      <>
+        Push a strand across a neighbor (hold <kbd>Alt</kbd> to go under). Drag
+        it back to undo.
+      </>
+    ),
+  },
+  {
+    title: "Slide (R3)",
+    before: (
+      <>
+        <LegendStrand d="M12,6 L68,58" />
+        <LegendStrand d="M68,6 L12,58" over />
+        <LegendStrand d="M4,18 L76,18" over />
+        <LegendDrag from={[40, 18]} to={[40, 48]} />
+      </>
+    ),
+    after: (
+      <>
+        <LegendStrand d="M12,6 L68,58" />
+        <LegendStrand d="M68,6 L12,58" over />
+        <LegendStrand d="M4,46 L76,46" over />
+        <LegendDrag from={[40, 46]} />
+      </>
+    ),
+    caption: (
+      <>
+        A strand over (or under) both sides of a triangle slides across the
+        crossing opposite it.
+      </>
+    ),
+  },
+];
+
+function MoveLegend() {
+  return (
+    <div className="flex flex-wrap gap-3 mt-3">
+      {legendMoves.map((m) => (
+        <div
+          key={m.title}
+          className="flex-1 min-w-[170px] rounded-lg border border-gray-200 bg-white p-2"
+        >
+          <div className="text-xs font-semibold text-gray-700 mb-1">
+            {m.title}
+          </div>
+          <div className="flex items-center justify-center gap-1">
+            <LegendPicture>{m.before}</LegendPicture>
+            <span className="text-gray-400 text-lg">→</span>
+            <LegendPicture>{m.after}</LegendPicture>
+          </div>
+          <div className="text-xs text-gray-500 mt-1 leading-snug">
+            {m.caption}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default demo(
   () => (
     <div>
@@ -355,6 +524,7 @@ export default demo(
         height={HEIGHT}
         transformDropState={cleanup}
       />
+      <MoveLegend />
     </div>
   ),
   {
