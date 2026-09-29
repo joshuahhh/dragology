@@ -1005,11 +1005,7 @@ function latticeView(
   const current = lattice.byKey.get(currentKey)!;
   const moves = [...infos.values()]
     .filter(({ parent }) => parent !== null)
-    .map((info) => ({
-      edgeId: info.node.edgeId,
-      cls: edgeClass(info, infos.get(info.parent!.id)!),
-      move: flipMove(state, info.node.id),
-    }));
+    .map((info) => ({ move: flipMove(state, info.node.id) }));
   return (
     <g transform={translate(LAT_ORIGIN.x, LAT_ORIGIN.y)}>
       {lattice.edges.map(([a, b, cls]) => {
@@ -1024,22 +1020,6 @@ function latticeView(
             stroke={classColor(cls, lattice.classes)}
             strokeWidth={1.5}
             opacity={0.45}
-          />
-        );
-      })}
-      {/* the current vertex's edges, emphasized */}
-      {moves.map(({ edgeId, cls, move }) => {
-        const vb = lattice.byKey.get(shapeKey(move.to.root))!;
-        return (
-          <line
-            id={`lat-edge-${edgeId}`}
-            x1={current.x}
-            y1={current.y}
-            x2={vb.x}
-            y2={vb.y}
-            stroke={classColor(cls, lattice.classes)}
-            strokeWidth={4}
-            strokeLinecap="round"
           />
         );
       })}
