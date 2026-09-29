@@ -12,7 +12,13 @@ import { translate } from "../svgx/helpers";
 
 type Task = {
   name: string;
-  start: number; // in days
+  /**
+   * Days to wait after the earliest possible start (when all
+   * prerequisites are done). Start times are never stored: they are
+   * derived from the dependency graph plus these lags, so moving an
+   * upstream task moves everything downstream with it.
+   */
+  lag: number;
   duration: number; // in days
   lane: number;
 };
@@ -27,13 +33,13 @@ export type State = {
 
 export const initialState: State = {
   tasks: {
-    plan: { name: "Plan", start: 0, duration: 4, lane: 0 },
-    design: { name: "Design", start: 4, duration: 6, lane: 1 },
-    infra: { name: "Infra", start: 4, duration: 5, lane: 2 },
-    build: { name: "Build", start: 10, duration: 8, lane: 0 },
-    docs: { name: "Docs", start: 11, duration: 4, lane: 3 },
-    test: { name: "Test", start: 18, duration: 4, lane: 1 },
-    ship: { name: "Ship", start: 22, duration: 2, lane: 2 },
+    plan: { name: "Plan", lag: 0, duration: 4, lane: 0 },
+    design: { name: "Design", lag: 0, duration: 6, lane: 1 },
+    infra: { name: "Infra", lag: 0, duration: 5, lane: 2 },
+    build: { name: "Build", lag: 0, duration: 8, lane: 0 },
+    docs: { name: "Docs", lag: 1, duration: 4, lane: 3 },
+    test: { name: "Test", lag: 0, duration: 4, lane: 1 },
+    ship: { name: "Ship", lag: 0, duration: 2, lane: 2 },
   },
   deps: [
     { from: "plan", to: "design" },
@@ -114,40 +120,53 @@ function topoOrder(state: State): string[] {
   return order;
 }
 
+type Scheduled = { earliest: number; start: number; end: number };
+
 /**
- * Push every task forward (never backward) so it starts no earlier
- * than all its prerequisites end. Runs in topological order, so a
- * push cascades through the whole DAG in one pass.
+ * Derive every task's start time: the latest end among its
+ * prerequisites (or day 0), plus its own lag. One pass in topological
+ * order covers the whole DAG.
  */
-function propagate(state: State): State {
-  return produce(state, (draft) => {
-    for (const id of topoOrder(draft)) {
-      const task = draft.tasks[id];
-      for (const p of predecessors(draft, id)) {
-        const pred = draft.tasks[p];
-        task.start = Math.max(task.start, pred.start + pred.duration);
-      }
-    }
-  });
+function schedule(state: State): Map<string, Scheduled> {
+  const out = new Map<string, Scheduled>();
+  for (const id of topoOrder(state)) {
+    const task = state.tasks[id];
+    const earliest = Math.max(
+      0,
+      ...predecessors(state, id).map((p) => out.get(p)!.end),
+    );
+    const start = earliest + task.lag;
+    out.set(id, { earliest, start, end: start + task.duration });
+  }
+  return out;
 }
 
-/** Earliest a task may start, given where its prerequisites currently end. */
-function earliestStart(state: State, id: string): number {
-  return Math.max(
-    0,
-    ...predecessors(state, id).map(
-      (p) => state.tasks[p].start + state.tasks[p].duration,
-    ),
-  );
+/**
+ * Change the dependency edges while keeping every task's start time
+ * where it was, as far as the new graph allows: lags are recomputed
+ * so tasks don't jump when an arrow is added or removed.
+ */
+function withDeps(state: State, deps: Dep[]): State {
+  const before = schedule(state);
+  return produce(state, (draft) => {
+    draft.deps = deps;
+    const after = schedule(draft);
+    for (const id of Object.keys(draft.tasks)) {
+      draft.tasks[id].lag = Math.max(
+        0,
+        before.get(id)!.start - after.get(id)!.earliest,
+      );
+    }
+  });
 }
 
 /**
  * Critical path analysis on the schedule as it actually stands:
  * a task is critical if delaying it would delay the project's end.
  */
-function criticalPath(state: State) {
+function criticalPath(state: State, sched: Map<string, Scheduled>) {
   const order = topoOrder(state);
-  const end = (id: string) => state.tasks[id].start + state.tasks[id].duration;
+  const end = (id: string) => sched.get(id)!.end;
   const projectEnd = Math.max(0, ...order.map(end));
   const latestFinish = new Map<string, number>();
   for (const id of [...order].reverse()) {
@@ -168,7 +187,7 @@ function criticalPath(state: State) {
   const isCriticalDep = (dep: Dep) =>
     isCritical(dep.from) &&
     isCritical(dep.to) &&
-    Math.abs(end(dep.from) - state.tasks[dep.to].start) < 1e-6;
+    Math.abs(end(dep.from) - sched.get(dep.to)!.start) < 1e-6;
   return { projectEnd, slack, isCritical, isCriticalDep };
 }
 
@@ -180,7 +199,11 @@ export const draggable: Draggable<State> = ({
   draggedId,
   setState,
 }) => {
-  const { projectEnd, isCritical, isCriticalDep, slack } = criticalPath(state);
+  const sched = schedule(state);
+  const { projectEnd, isCritical, isCriticalDep, slack } = criticalPath(
+    state,
+    sched,
+  );
 
   // If a bar is being dragged, which tasks may it be dropped on?
   const draggedTaskId = draggedId?.startsWith("bar-")
@@ -264,8 +287,8 @@ export const draggable: Draggable<State> = ({
       {state.deps.map((dep) => {
         const from = state.tasks[dep.from];
         const to = state.tasks[dep.to];
-        const a = Vec2(dayX(from.start + from.duration), laneY(from.lane));
-        const b = Vec2(dayX(to.start), laneY(to.lane));
+        const a = Vec2(dayX(sched.get(dep.from)!.end), laneY(from.lane));
+        const b = Vec2(dayX(sched.get(dep.to)!.start), laneY(to.lane));
         const critical = isCriticalDep(dep);
         const color = critical ? CRITICAL_COLOR : "#94a3b8";
         // Route: out to the right, down/up, then into the successor
@@ -277,11 +300,12 @@ export const draggable: Draggable<State> = ({
             dragologyZIndex={-1}
             onClick={() =>
               setState(
-                produce(state, (s) => {
-                  s.deps = s.deps.filter(
+                withDeps(
+                  state,
+                  state.deps.filter(
                     (x) => !(x.from === dep.from && x.to === dep.to),
-                  );
-                }),
+                  ),
+                ),
                 { transition: 200 },
               )
             }
@@ -308,7 +332,8 @@ export const draggable: Draggable<State> = ({
 
       {/* Task bars */}
       {Object.entries(state.tasks).map(([id, task]) => {
-        const x = dayX(task.start);
+        const { earliest, start } = sched.get(id)!;
+        const x = dayX(start);
         const y = laneY(task.lane) - BAR_H / 2;
         const w = task.duration * DAY_W;
         const critical = isCritical(id);
@@ -317,44 +342,39 @@ export const draggable: Draggable<State> = ({
         const isTarget = validTargets?.has(id) ?? false;
         const dimmed = validTargets !== null && !isTarget && !isDragged;
 
-        // Vary a numeric field of this task, cascading pushes to dependents.
-        const varyAndPropagate = (
-          field: "start" | "duration",
+        // Vary a numeric field of this task. Because starts are derived
+        // in `schedule`, everything downstream follows automatically.
+        const varyField = (
+          field: "lag" | "duration",
           constraint: (s: State) => number[],
-        ) =>
-          d
-            .vary(state, param("tasks", id, field), { constraint })
-            .during(propagate);
+        ) => d.vary(state, param("tasks", id, field), { constraint });
 
-        // Drag body: slide start; hover another task to make it a prerequisite.
+        // Drag body: slide start (i.e. vary lag); hover another task to
+        // make it a prerequisite.
         const onDragBar = () =>
           d
             .closest(
               linkTargets(state, id).map((targetId) =>
                 d.dropTarget(
                   `bar-${targetId}`,
-                  propagate(
-                    produce(state, (s) => {
-                      s.deps.push({ from: targetId, to: id });
-                    }),
-                  ),
+                  withDeps(state, [...state.deps, { from: targetId, to: id }]),
                 ),
               ),
             )
             .withFloating({ ghost: { opacity: 0.35 } })
             .whenFar(
-              varyAndPropagate("start", (s) => [
-                moreThan(s.tasks[id].start, earliestStart(s, id)),
-                lessThan(s.tasks[id].start + s.tasks[id].duration, HORIZON),
+              varyField("lag", (s) => [
+                moreThan(s.tasks[id].lag, 0),
+                lessThan(schedule(s).get(id)!.end, HORIZON),
               ]),
             )
             .withBranchTransition(120);
 
         // Drag right edge: change duration.
         const onDragEnd = () =>
-          varyAndPropagate("duration", (s) => [
+          varyField("duration", (s) => [
             moreThan(s.tasks[id].duration, MIN_DURATION),
-            lessThan(s.tasks[id].start + s.tasks[id].duration, HORIZON),
+            lessThan(schedule(s).get(id)!.end, HORIZON),
           ]);
 
         // Drag grip: move between resource lanes.
@@ -375,6 +395,29 @@ export const draggable: Draggable<State> = ({
             dragologyZIndex={isDragged ? "/1" : false}
             opacity={dimmed ? 0.4 : 1}
           >
+            {/* Lag: the wait between earliest possible start and actual start */}
+            {task.lag > 0 && (
+              <g id={`lag-${id}`} dragologyZIndex={-1}>
+                <line
+                  x1={dayX(earliest)}
+                  y1={y + BAR_H / 2}
+                  x2={x}
+                  y2={y + BAR_H / 2}
+                  stroke={fill}
+                  strokeWidth={3}
+                  strokeDasharray="2 3"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1={dayX(earliest)}
+                  y1={y + 4}
+                  x2={dayX(earliest)}
+                  y2={y + BAR_H - 4}
+                  stroke={fill}
+                  strokeWidth={2}
+                />
+              </g>
+            )}
             <rect
               id={`bar-${id}`}
               transform={translate(x, y)}
@@ -470,13 +513,14 @@ export default demo(
   () => (
     <div>
       <DemoNotes>
-        A Gantt chart with dependencies. Drag a bar to shift its start; tasks
-        that depend on it are pushed forward through the dependency DAG. Drag
-        the right edge to change duration. Drop a bar onto another task to make
-        that task a prerequisite (targets that would create a cycle are dimmed).
-        Drag the grip on the left to move between resource lanes. Click an arrow
-        to remove it. The critical path is highlighted in red and updates live;
-        grey numbers show slack.
+        A Gantt chart with dependencies. Start times are never stored: each task
+        starts when its prerequisites are done, plus an optional lag (shown as a
+        dotted lead-in). Drag a bar to change its lag; everything downstream
+        moves with it. Drag the right edge to change duration. Drop a bar onto
+        another task to make that task a prerequisite (targets that would create
+        a cycle are dimmed). Drag the grip on the left to move between resource
+        lanes. Click an arrow to remove it. The critical path is highlighted in
+        red and updates live; grey numbers show slack.
       </DemoNotes>
       <DemoDraggable
         draggable={draggable}
@@ -489,7 +533,6 @@ export default demo(
   {
     tags: [
       "d.vary [constraint]",
-      "spec.during",
       "d.dropTarget",
       "d.closest",
       "spec.whenFar",
