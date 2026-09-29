@@ -4,7 +4,9 @@ import { Draggable } from "../../draggable";
 import { DragSpec, lessThan, moreThan, param } from "../../DragSpec";
 import { Vec2 } from "../../math/vec2";
 import { altKey } from "../../modifierKeys";
+import { Svgx } from "../../svgx";
 import { path, rotateDeg, translate } from "../../svgx/helpers";
+import { layerSvg, layeredMerge } from "../../svgx/layers";
 import { Cubic, bez, bezTan, cubicLen, paramAtLen, subCubic } from "./geometry";
 import {
   Knot,
@@ -149,6 +151,20 @@ function edgeMid(k: Knot, e: string) {
   return bez(edgeCubics(k)[edgeIndex(k, e)], 0.5);
 }
 
+/**
+ * Draw extra marks on top of a spec's preview while it's active. They
+ * go away on drop, since the dropped state doesn't draw them.
+ */
+function withMarks<T extends object>(
+  spec: DragSpec<T>,
+  marks: Svgx,
+): DragSpec<T> {
+  const layer = layerSvg(marks);
+  return spec.changeResult((r) => ({
+    preview: () => layeredMerge(r.preview(), layer),
+  }));
+}
+
 /** Keep only states whose drawing is exactly their code. */
 function clampValid(start: Knot) {
   let lastGood = start;
@@ -213,9 +229,32 @@ const draggable: Draggable<State> = ({ state, d, draggedId, setState }) => {
           },
         )
         .during(clampValid(state));
-      return d
-        .closest(moves.map((m) => moveSpec(m, e)))
+      // Twists are rarely wanted, so they don't claim a direction of
+      // the drag: each is a small target ring, and only snaps in when
+      // the pointer reaches it. Everything else bends the strand.
+      const twists = moves.filter((m) => m.kind === "R1");
+      const others = moves.filter((m) => m.kind !== "R1");
+      const spec = d
+        .closest([
+          ...others.map((m) => moveSpec(m, e)),
+          ...twists.map((m) => d.fixed(m.to)),
+        ])
         .whenFar(cosmetic, { gapIn: 12, gapOut: 28 });
+      return withMarks(
+        spec,
+        <g id="twist-targets" dragologyZIndex="/1">
+          {twists.map((m, k) => (
+            <circle
+              id={`twist-target-${k}`}
+              transform={translate(edgeMid(m.to, e))}
+              r={6}
+              fill="none"
+              stroke="#94a3b8"
+              strokeWidth={1.5}
+            />
+          ))}
+        </g>,
+      );
     });
 
   /**
@@ -459,7 +498,15 @@ const legendMoves: {
     before: (
       <>
         <LegendStrand d="M4,46 C30,46 50,46 76,46" />
-        <LegendDrag from={[40, 46]} to={[40, 10]} />
+        <circle
+          cx={40}
+          cy={10}
+          r={5}
+          fill="none"
+          stroke="#94a3b8"
+          strokeWidth={1.5}
+        />
+        <LegendDrag from={[40, 46]} to={[40, 17]} />
       </>
     ),
     after: (
@@ -470,7 +517,10 @@ const legendMoves: {
       </>
     ),
     caption: (
-      <>Pull a strand sideways into a loop. Drag the loop back in to undo.</>
+      <>
+        Drag a strand onto one of the small rings beside it to make a loop. Drag
+        the loop back in to undo.
+      </>
     ),
   },
   {
@@ -557,12 +607,12 @@ export default demo(
           Reidemeister moves
         </DemoLink>
         . Each strand between two crossings is a single curve. Grab one by its
-        middle: pull it sideways to twist out a loop (R1), push it across a
-        neighboring strand (R2; hold <kbd>Alt</kbd> to pass under), or slide it
-        across a crossing (R3). Drag a loop back into the strand or a bigon back
-        across its partner to undo. Drag in other directions to bend the strand,
-        or drag a crossing to move it. The Jones polynomial never changes;
-        crossing number and writhe do. Tangle A is the{" "}
+        middle: drag it onto a ring beside it to twist a loop (R1), push it
+        across a neighboring strand (R2; hold <kbd>Alt</kbd> to pass under), or
+        slide it across a crossing (R3). Drag a loop back into the strand or a
+        bigon back across its partner to undo. Drag in other directions to bend
+        the strand, or drag a crossing to move it. The Jones polynomial never
+        changes; crossing number and writhe do. Tangle A is the{" "}
         <DemoLink href="https://en.wikipedia.org/wiki/Hard_unknot">
           Culprit
         </DemoLink>
