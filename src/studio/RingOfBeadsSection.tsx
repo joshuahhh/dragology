@@ -212,7 +212,7 @@ export function RingOfBeadsSection() {
               thumbArea={9000}
               dragOffset={dragOffset}
               nodeProps={{
-                "with-floating/when-far/bg/": {
+                "withFloating/whenFar/bg/": {
                   width: 150,
                 },
               }}

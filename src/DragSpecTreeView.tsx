@@ -94,12 +94,12 @@ function SpecNode<T extends object>({
     };
   };
 
-  /** A labeled box around a single child. */
+  /** A box around a single child, labeled with its type and optional detail. */
   const wrapper = (
-    label: string,
     s: DragSpecData<T> & { inner: DragSpecData<T> },
+    detail?: string,
   ) => (
-    <Box label={label} path={path}>
+    <Box label={detail ? `${s.type} (${detail})` : s.type} path={path}>
       <SpecNode spec={s.inner} path={info(s).childPath} />
     </Box>
   );
@@ -121,7 +121,7 @@ function SpecNode<T extends object>({
         )}
       </Box>
     );
-  } else if (spec.type === "with-floating") {
+  } else if (spec.type === "withFloating") {
     const { color, childPath, traceInfo } = info(spec);
     return (
       <Box label="withFloating" color={color} path={path}>
@@ -131,7 +131,7 @@ function SpecNode<T extends object>({
         <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
-  } else if (spec.type === "vary" || spec.type === "vary-func") {
+  } else if (spec.type === "vary" || spec.type === "varyFunc") {
     const { active, color, traceInfo } = info(spec);
     const label =
       spec.type === "vary"
@@ -194,7 +194,7 @@ function SpecNode<T extends object>({
         </div>
       </Box>
     );
-  } else if (spec.type === "when-far") {
+  } else if (spec.type === "whenFar") {
     const gapLabel =
       spec.gapIn === spec.gapOut
         ? `gap=${spec.gapIn}`
@@ -203,16 +203,16 @@ function SpecNode<T extends object>({
       <Box label={`whenFar (${gapLabel})`} path={path}>
         <div style={{ display: "flex", flexDirection: "row", gap: 4 }}>
           <Slot label="fg">
-            <SpecNode spec={spec.foreground} path={path + "when-far/fg/"} />
+            <SpecNode spec={spec.foreground} path={path + "whenFar/fg/"} />
           </Slot>
           <Slot label="bg">
-            <SpecNode spec={spec.background} path={path + "when-far/bg/"} />
+            <SpecNode spec={spec.background} path={path + "whenFar/bg/"} />
           </Slot>
         </div>
       </Box>
     );
-  } else if (spec.type === "on-drop") {
-    return wrapper("onDrop", spec);
+  } else if (spec.type === "onDrop") {
+    return wrapper(spec);
   } else if (spec.type === "during") {
     const { childPath, traceInfo } = info(spec);
     return (
@@ -223,13 +223,13 @@ function SpecNode<T extends object>({
         <SpecNode spec={spec.inner} path={childPath} />
       </Box>
     );
-  } else if (spec.type === "change-frame") {
-    return wrapper("changeFrame", spec);
-  } else if (spec.type === "change-result") {
-    return wrapper("changeResult", spec);
-  } else if (spec.type === "change-gap") {
-    return wrapper("changeGap", spec);
-  } else if (spec.type === "with-snap-radius") {
+  } else if (spec.type === "changeFrame") {
+    return wrapper(spec);
+  } else if (spec.type === "changeResult") {
+    return wrapper(spec);
+  } else if (spec.type === "changeGap") {
+    return wrapper(spec);
+  } else if (spec.type === "withSnapRadius") {
     const { childPath, traceInfo } = info(spec);
     const snapped = traceInfo?.snapped ?? false;
     const snapSegment = spec.transition
@@ -286,14 +286,11 @@ function SpecNode<T extends object>({
             ))}
       </Box>
     );
-  } else if (spec.type === "with-drop-transition") {
-    return wrapper(
-      `withDropTransition (${describeTransition(spec.transition)})`,
-      spec,
-    );
-  } else if (spec.type === "with-overlay") {
-    return wrapper("withOverlay", spec);
-  } else if (spec.type === "switch-to-state-and-follow") {
+  } else if (spec.type === "withDropTransition") {
+    return wrapper(spec, describeTransition(spec.transition));
+  } else if (spec.type === "withOverlay") {
+    return wrapper(spec);
+  } else if (spec.type === "switchToStateAndFollow") {
     const { color, traceInfo, childPath } = info(spec);
     return (
       <Box
@@ -306,12 +303,9 @@ function SpecNode<T extends object>({
         )}
       </Box>
     );
-  } else if (spec.type === "with-branch-transition") {
-    return wrapper(
-      `withBranchTransition (${describeTransition(spec.transition)})`,
-      spec,
-    );
-  } else if (spec.type === "drop-target") {
+  } else if (spec.type === "withBranchTransition") {
+    return wrapper(spec, describeTransition(spec.transition));
+  } else if (spec.type === "dropTarget") {
     const { active, color, traceInfo } = info(spec);
     return (
       <Box
@@ -325,8 +319,8 @@ function SpecNode<T extends object>({
         )}
       </Box>
     );
-  } else if (spec.type === "with-chaining") {
-    return wrapper("withChaining", spec);
+  } else if (spec.type === "withChaining") {
+    return wrapper(spec);
   } else if (spec.type === "substate") {
     const { childPath } = info(spec);
     return (
@@ -334,7 +328,7 @@ function SpecNode<T extends object>({
         <SpecNode spec={spec.innerSpec} path={childPath} />
       </Box>
     );
-  } else if (spec.type === "react-to") {
+  } else if (spec.type === "reactTo") {
     const { traceInfo, childPath } = info(spec);
     return (
       <Box label="reactTo" path={path}>
@@ -360,8 +354,8 @@ function SpecNode<T extends object>({
         )}
       </Box>
     );
-  } else if (spec.type === "with-init-context") {
-    return wrapper("withInitContext", spec);
+  } else if (spec.type === "withInitContext") {
+    return wrapper(spec);
   } else if (spec.type === "custom") {
     return (
       <Box label="custom" path={path}>

@@ -85,7 +85,7 @@ function ListsInListsWithTree() {
                 svgHeight={HEIGHT}
                 thumbArea={2000}
                 nodeProps={{
-                  "when-far/bg/": {
+                  "whenFar/bg/": {
                     width: 80,
                     // height: 90,
                   },

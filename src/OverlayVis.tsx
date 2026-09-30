@@ -40,7 +40,7 @@ export function OverlayVis<T extends object>({
       );
     }
 
-    case "with-floating": {
+    case "withFloating": {
       const info = getTraceInfo(spec);
       if (!info) return null;
       return (
@@ -82,7 +82,7 @@ export function OverlayVis<T extends object>({
       );
     }
 
-    case "when-far": {
+    case "whenFar": {
       const info = getTraceInfo(spec);
       if (!info) return null;
       if (info.inForeground) {
@@ -176,7 +176,7 @@ export function OverlayVis<T extends object>({
     }
 
     case "vary":
-    case "vary-func": {
+    case "varyFunc": {
       const info = getTraceInfo(spec);
       if (!info) return null;
       const pos = info.renderedStates[0].position;
@@ -208,7 +208,7 @@ export function OverlayVis<T extends object>({
       );
     }
 
-    case "drop-target": {
+    case "dropTarget": {
       const info = getTraceInfo(spec);
       if (!info || info.globalBounds.empty) return null;
       return (
@@ -233,20 +233,20 @@ export function OverlayVis<T extends object>({
     }
 
     // Passthrough to inner:
-    case "on-drop":
+    case "onDrop":
     case "during":
-    case "change-frame":
-    case "change-result":
-    case "change-gap":
-    case "with-snap-radius":
-    case "with-drop-transition":
-    case "with-overlay":
-    case "with-branch-transition":
-    case "with-chaining":
-    case "with-init-context":
+    case "changeFrame":
+    case "changeResult":
+    case "changeGap":
+    case "withSnapRadius":
+    case "withDropTransition":
+    case "withOverlay":
+    case "withBranchTransition":
+    case "withChaining":
+    case "withInitContext":
       return <OverlayVis spec={spec.inner} pointer={pointer} active={active} />;
 
-    case "switch-to-state-and-follow": {
+    case "switchToStateAndFollow": {
       const info = getTraceInfo(spec);
       return info ? (
         <OverlayVis spec={info.tracedInner} pointer={pointer} active={active} />
@@ -258,7 +258,7 @@ export function OverlayVis<T extends object>({
         <OverlayVis spec={spec.innerSpec} pointer={pointer} active={active} />
       );
 
-    case "react-to": {
+    case "reactTo": {
       const info = getTraceInfo(spec);
       return info ? (
         <OverlayVis spec={info.tracedInner} pointer={pointer} active={active} />

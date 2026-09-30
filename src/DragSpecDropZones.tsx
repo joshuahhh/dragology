@@ -448,7 +448,7 @@ function* computeDropZones(
 
   // TODO: Special case - If there's exactly one bg zone, make it
   // pale gray. Match "bg" as any path segment (e.g. "bg/...",
-  // "with-floating/bg/...").
+  // "withFloating/bg/...").
   const isBgPath = (p: string) => p.split("/").includes("bg");
   const bgPaths = [...pathSet].filter(isBgPath);
   if (bgPaths.length === 1) {

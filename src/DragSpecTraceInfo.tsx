@@ -12,7 +12,7 @@ export type RenderedState = { layered: LayeredSvgx; position: Vec2 };
  */
 export type DragSpecTraceInfoByType = {
   fixed: { outputPreview: LayeredSvgx; position: Vec2 | null };
-  "with-floating": {
+  withFloating: {
     outputPreview?: LayeredSvgx;
     /**
      * Where the element is floated FROM. Will be null if the element
@@ -22,19 +22,19 @@ export type DragSpecTraceInfoByType = {
     elementPos?: Vec2 | null;
   };
   closest: { bestIndex: number };
-  "when-far": { inForeground: boolean };
+  whenFar: { inForeground: boolean };
   during: { outputPreview: LayeredSvgx };
   vary: {
     renderedStates: RenderedState[];
     currentParams: number[];
     exploredPositions?: Vec2[];
   };
-  "vary-func": {
+  varyFunc: {
     renderedStates: RenderedState[];
     currentParams: number[];
     exploredPositions?: Vec2[];
   };
-  "with-snap-radius": {
+  withSnapRadius: {
     snapped: boolean;
     outputPreview: LayeredSvgx;
   };
@@ -47,15 +47,15 @@ export type DragSpecTraceInfoByType = {
     /** Index → weight for each state contributing to the interpolation. */
     weights: Map<number, number>;
   };
-  "switch-to-state-and-follow": {
+  switchToStateAndFollow: {
     tracedInner: DragSpecData<any>;
   };
-  "drop-target": {
+  dropTarget: {
     renderedStates: RenderedState[];
     inside: boolean;
     globalBounds: Bounds;
   };
-  "react-to": {
+  reactTo: {
     currentValue: unknown;
     changeCount: number;
     tracedInner: DragSpecData<any>;

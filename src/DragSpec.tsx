@@ -21,21 +21,21 @@ export type DragSpecData<T extends object> = {
 } & (
   | { type: "fixed"; state: T }
   | {
-      type: "with-floating";
+      type: "withFloating";
       inner: DragSpecData<T>;
       ghost: SvgxProps | undefined;
       tether: ((dist: number) => number) | undefined;
     }
   | { type: "closest"; specs: DragSpecData<T>[]; stickiness: number }
   | {
-      type: "when-far";
+      type: "whenFar";
       foreground: DragSpecData<T>;
       background: DragSpecData<T>;
       gapIn: number;
       gapOut: number;
     }
   | {
-      type: "on-drop";
+      type: "onDrop";
       inner: DragSpecData<T>;
       onDropState: T | ((previewState: T) => T);
     }
@@ -46,39 +46,39 @@ export type DragSpecData<T extends object> = {
       options: VaryOptions<T>;
     }
   | {
-      type: "vary-func";
+      type: "varyFunc";
       initParams: number[];
       stateFromParams: (params: number[]) => T;
       options: VaryOptions<T>;
     }
   | {
-      type: "change-frame";
+      type: "changeFrame";
       inner: DragSpecData<T>;
       f: Reader<Partial<DragFrame>, DragFrame>;
     }
   | {
-      type: "change-result";
+      type: "changeResult";
       inner: DragSpecData<T>;
       f: Reader<Partial<DragResult<T>>, DragResult<T>>;
     }
   | {
-      type: "change-gap";
+      type: "changeGap";
       inner: DragSpecData<T>;
       f: (gap: number) => number;
     }
   | {
-      type: "with-snap-radius";
+      type: "withSnapRadius";
       inner: DragSpecData<T>;
       radius: number;
       transition: Transition | false;
       chain: boolean;
     }
   | {
-      type: "with-drop-transition";
+      type: "withDropTransition";
       inner: DragSpecData<T>;
       transition: Transition | false;
     }
-  | { type: "with-overlay"; inner: DragSpecData<T>; overlay: Svgx }
+  | { type: "withOverlay"; inner: DragSpecData<T>; overlay: Svgx }
   | {
       type: "between";
       specs: DragSpecData<T>[];
@@ -86,13 +86,13 @@ export type DragSpecData<T extends object> = {
       sharpness?: number;
     }
   | {
-      type: "switch-to-state-and-follow";
+      type: "switchToStateAndFollow";
       state: T;
       draggedId: string;
       followSpec?: DragSpec<T>;
     }
   | {
-      type: "drop-target";
+      type: "dropTarget";
       state: T;
       targetId: string;
       /**
@@ -103,12 +103,12 @@ export type DragSpecData<T extends object> = {
       boundsState?: T;
     }
   | {
-      type: "with-branch-transition";
+      type: "withBranchTransition";
       inner: DragSpecData<T>;
       transition: Transition | false;
     }
   | {
-      type: "with-chaining";
+      type: "withChaining";
       inner: DragSpecData<T>;
       chaining: Chaining<T>;
     }
@@ -125,12 +125,12 @@ export type DragSpecData<T extends object> = {
       innerSpec: DragSpecData<object>;
     }
   | {
-      type: "react-to";
+      type: "reactTo";
       getter: () => unknown;
       callback: (value: any) => DragSpec<T>;
     }
   | {
-      type: "with-init-context";
+      type: "withInitContext";
       inner: DragSpecData<T>;
       f: Reader<Partial<DragInitContext<T>>, DragInitContext<T>>;
     }
@@ -189,7 +189,7 @@ export class DragSpecMethods<T extends object> {
    */
   onDrop(this: DragSpec<T>, state: T | ((previewState: T) => T)): DragSpec<T> {
     return attachMethods({
-      type: "on-drop",
+      type: "onDrop",
       inner: this,
       onDropState: state,
     });
@@ -213,7 +213,7 @@ export class DragSpecMethods<T extends object> {
       `whenFar: gapIn (${gapIn}) must be <= gapOut (${gapOut}), otherwise the behavior oscillates`,
     );
     return attachMethods({
-      type: "when-far",
+      type: "whenFar",
       foreground: this,
       background: resolveDragSpecLike(background),
       gapIn,
@@ -236,7 +236,7 @@ export class DragSpecMethods<T extends object> {
     }: { transition?: TransitionLike; chain?: boolean } = {},
   ): DragSpec<T> {
     return attachMethods({
-      type: "with-snap-radius",
+      type: "withSnapRadius",
       inner: this,
       radius,
       transition: resolveTransitionLike(transition),
@@ -254,7 +254,7 @@ export class DragSpecMethods<T extends object> {
     transition: TransitionLike,
   ): DragSpec<T> {
     return attachMethods({
-      type: "with-drop-transition",
+      type: "withDropTransition",
       inner: this,
       transition: resolveTransitionLike(transition),
     });
@@ -268,7 +268,7 @@ export class DragSpecMethods<T extends object> {
    * while that branch is the active one.
    */
   withOverlay(this: DragSpec<T>, overlay: Svgx): DragSpec<T> {
-    return attachMethods({ type: "with-overlay", inner: this, overlay });
+    return attachMethods({ type: "withOverlay", inner: this, overlay });
   }
 
   /**
@@ -291,7 +291,7 @@ export class DragSpecMethods<T extends object> {
     transition: TransitionLike,
   ): DragSpec<T> {
     return attachMethods({
-      type: "with-branch-transition",
+      type: "withBranchTransition",
       inner: this,
       transition: resolveTransitionLike(transition),
     });
@@ -305,7 +305,7 @@ export class DragSpecMethods<T extends object> {
     this: DragSpec<T>,
     f: Reader<Partial<DragFrame>, DragFrame>,
   ): DragSpec<T> {
-    return attachMethods({ type: "change-frame", inner: this, f });
+    return attachMethods({ type: "changeFrame", inner: this, f });
   }
 
   /**
@@ -317,7 +317,7 @@ export class DragSpecMethods<T extends object> {
     this: DragSpec<T>,
     f: Reader<Partial<DragResult<T>>, DragResult<T>>,
   ): DragSpec<T> {
-    return attachMethods({ type: "change-result", inner: this, f });
+    return attachMethods({ type: "changeResult", inner: this, f });
   }
 
   /**
@@ -326,7 +326,7 @@ export class DragSpecMethods<T extends object> {
    * behavior's drop target in a `closest`.
    */
   changeGap(this: DragSpec<T>, f: (gap: number) => number): DragSpec<T> {
-    return attachMethods({ type: "change-gap", inner: this, f });
+    return attachMethods({ type: "changeGap", inner: this, f });
   }
 
   /**
@@ -342,7 +342,7 @@ export class DragSpecMethods<T extends object> {
     { ghost, tether }: FloatingOptions = {},
   ): DragSpec<T> {
     return attachMethods({
-      type: "with-floating",
+      type: "withFloating",
       inner: this,
       ghost: ghost === true ? { opacity: 0.5 } : ghost,
       tether,
@@ -368,7 +368,7 @@ export class DragSpecMethods<T extends object> {
   ): DragSpec<T> {
     const transition = resolveTransitionLike(transitionLike);
     return attachMethods({
-      type: "with-chaining",
+      type: "withChaining",
       inner: this,
       chaining: { ...rest, transition },
     });
@@ -392,7 +392,7 @@ export class DragSpecMethods<T extends object> {
     this: DragSpec<T>,
     f: Reader<Partial<DragInitContext<T>>, DragInitContext<T>>,
   ): DragSpec<T> {
-    return attachMethods({ type: "with-init-context", inner: this, f });
+    return attachMethods({ type: "withInitContext", inner: this, f });
   }
 }
 
@@ -530,7 +530,7 @@ export class DragSpecBuilder<T extends object> {
     options?: VaryOptions<T>,
   ): DragSpec<T> {
     return attachMethods({
-      type: "vary-func",
+      type: "varyFunc",
       initParams,
       stateFromParams,
       options: (options ?? {}) as VaryOptions<T>,
@@ -560,7 +560,7 @@ export class DragSpecBuilder<T extends object> {
     options?: { boundsState?: T },
   ): DragSpec<T> {
     return attachMethods({
-      type: "drop-target",
+      type: "dropTarget",
       state,
       targetId,
       boundsState: options?.boundsState,
@@ -600,7 +600,7 @@ export class DragSpecBuilder<T extends object> {
     followSpec?: DragSpecLike<T>,
   ): DragSpec<T> {
     return attachMethods({
-      type: "switch-to-state-and-follow",
+      type: "switchToStateAndFollow",
       state,
       draggedId,
       followSpec: followSpec && resolveDragSpecLike(followSpec),
@@ -616,7 +616,7 @@ export class DragSpecBuilder<T extends object> {
     getter: () => V,
     callback: (value: V) => DragSpec<T>,
   ): DragSpec<T> {
-    return attachMethods({ type: "react-to", getter, callback });
+    return attachMethods({ type: "reactTo", getter, callback });
   }
 }
 
