@@ -22,7 +22,6 @@ export const demoList: DemoListEntry[] = [
   "canvas-of-lists",
   "lists-in-lists",
   "lists-in-lists-vanilla",
-  "layout-editor",
   "two-kinds-of-tree",
   "kanban",
   "ring-of-beads",
@@ -102,7 +101,13 @@ export const demoList: DemoListEntry[] = [
   "with-pointer-delay",
   {
     section: "Nursery",
-    demos: ["proof-by-dragging", "regex-nfa-sync", "gantt", "tableaux"],
+    demos: [
+      "proof-by-dragging",
+      "regex-nfa-sync",
+      "gantt",
+      "tableaux",
+      "layout-editor",
+    ],
   },
 ];
 
