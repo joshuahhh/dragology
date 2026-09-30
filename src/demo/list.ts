@@ -42,7 +42,6 @@ export const demoList: DemoListEntry[] = [
   "fifteen",
   "hanoi",
   "sokoban",
-  "tableaux",
   "spinny",
   "scheduler",
   "graph",
@@ -102,7 +101,7 @@ export const demoList: DemoListEntry[] = [
   "with-pointer-delay",
   {
     section: "Nursery",
-    demos: ["proof-by-dragging", "regex-nfa-sync", "gantt"],
+    demos: ["proof-by-dragging", "regex-nfa-sync", "gantt", "tableaux"],
   },
 ];
 
