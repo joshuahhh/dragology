@@ -94,6 +94,16 @@ function SpecNode<T extends object>({
     };
   };
 
+  /** A labeled box around a single child. */
+  const wrapper = (
+    label: string,
+    s: DragSpecData<T> & { inner: DragSpecData<T> },
+  ) => (
+    <Box label={label} path={path}>
+      <SpecNode spec={s.inner} path={info(s).childPath} />
+    </Box>
+  );
+
   if (spec.type === "fixed") {
     const { active, color, traceInfo } = info(spec);
     if (tightFixed && traceInfo) {
@@ -202,12 +212,7 @@ function SpecNode<T extends object>({
       </Box>
     );
   } else if (spec.type === "on-drop") {
-    const { childPath } = info(spec);
-    return (
-      <Box label="onDrop" path={path}>
-        <SpecNode spec={spec.inner} path={childPath} />
-      </Box>
-    );
+    return wrapper("onDrop", spec);
   } else if (spec.type === "during") {
     const { childPath, traceInfo } = info(spec);
     return (
@@ -219,26 +224,11 @@ function SpecNode<T extends object>({
       </Box>
     );
   } else if (spec.type === "change-frame") {
-    const { childPath } = info(spec);
-    return (
-      <Box label="changeFrame" path={path}>
-        <SpecNode spec={spec.inner} path={childPath} />
-      </Box>
-    );
+    return wrapper("changeFrame", spec);
   } else if (spec.type === "change-result") {
-    const { childPath } = info(spec);
-    return (
-      <Box label="changeResult" path={path}>
-        <SpecNode spec={spec.inner} path={childPath} />
-      </Box>
-    );
+    return wrapper("changeResult", spec);
   } else if (spec.type === "change-gap") {
-    const { childPath } = info(spec);
-    return (
-      <Box label="changeGap" path={path}>
-        <SpecNode spec={spec.inner} path={childPath} />
-      </Box>
-    );
+    return wrapper("changeGap", spec);
   } else if (spec.type === "with-snap-radius") {
     const { childPath, traceInfo } = info(spec);
     const snapped = traceInfo?.snapped ?? false;
@@ -297,22 +287,12 @@ function SpecNode<T extends object>({
       </Box>
     );
   } else if (spec.type === "with-drop-transition") {
-    const { childPath } = info(spec);
-    return (
-      <Box
-        label={`withDropTransition (${describeTransition(spec.transition)})`}
-        path={path}
-      >
-        <SpecNode spec={spec.inner} path={childPath} />
-      </Box>
+    return wrapper(
+      `withDropTransition (${describeTransition(spec.transition)})`,
+      spec,
     );
   } else if (spec.type === "with-overlay") {
-    const { childPath } = info(spec);
-    return (
-      <Box label="withOverlay" path={path}>
-        <SpecNode spec={spec.inner} path={childPath} />
-      </Box>
-    );
+    return wrapper("withOverlay", spec);
   } else if (spec.type === "switch-to-state-and-follow") {
     const { color, traceInfo, childPath } = info(spec);
     return (
@@ -327,14 +307,9 @@ function SpecNode<T extends object>({
       </Box>
     );
   } else if (spec.type === "with-branch-transition") {
-    const { childPath } = info(spec);
-    return (
-      <Box
-        label={`withBranchTransition (${describeTransition(spec.transition)})`}
-        path={path}
-      >
-        <SpecNode spec={spec.inner} path={childPath} />
-      </Box>
+    return wrapper(
+      `withBranchTransition (${describeTransition(spec.transition)})`,
+      spec,
     );
   } else if (spec.type === "drop-target") {
     const { active, color, traceInfo } = info(spec);
@@ -351,12 +326,7 @@ function SpecNode<T extends object>({
       </Box>
     );
   } else if (spec.type === "with-chaining") {
-    const { childPath } = info(spec);
-    return (
-      <Box label="withChaining" path={path}>
-        <SpecNode spec={spec.inner} path={childPath} />
-      </Box>
-    );
+    return wrapper("withChaining", spec);
   } else if (spec.type === "substate") {
     const { childPath } = info(spec);
     return (
@@ -391,12 +361,7 @@ function SpecNode<T extends object>({
       </Box>
     );
   } else if (spec.type === "with-init-context") {
-    const { childPath } = info(spec);
-    return (
-      <Box label="withInitContext" path={path}>
-        <SpecNode spec={spec.inner} path={childPath} />
-      </Box>
-    );
+    return wrapper("withInitContext", spec);
   } else if (spec.type === "custom") {
     return (
       <Box label="custom" path={path}>

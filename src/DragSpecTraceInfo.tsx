@@ -6,8 +6,9 @@ import { LayeredSvgx } from "./svgx/layers";
 export type RenderedState = { layered: LayeredSvgx; position: Vec2 };
 
 /**
- * Maps each DragSpec variant's `type` discriminant to its trace info
- * shape.
+ * Maps DragSpec variants' `type` discriminants to their trace info
+ * shapes. Variants with no trace info can be left out (see
+ * `DragSpecTraceInfo`).
  */
 export type DragSpecTraceInfoByType = {
   fixed: { outputPreview: LayeredSvgx; position: Vec2 | null };
@@ -22,7 +23,6 @@ export type DragSpecTraceInfoByType = {
   };
   closest: { bestIndex: number };
   "when-far": { inForeground: boolean };
-  "on-drop": Record<string, never>;
   during: { outputPreview: LayeredSvgx };
   vary: {
     renderedStates: RenderedState[];
@@ -34,16 +34,10 @@ export type DragSpecTraceInfoByType = {
     currentParams: number[];
     exploredPositions?: Vec2[];
   };
-  "change-frame": Record<string, never>;
-  "change-result": Record<string, never>;
-  "change-gap": Record<string, never>;
   "with-snap-radius": {
     snapped: boolean;
     outputPreview: LayeredSvgx;
   };
-  "with-drop-transition": Record<string, never>;
-  "with-overlay": Record<string, never>;
-  "with-branch-transition": Record<string, never>;
   between: {
     renderedStates: RenderedState[];
     closestIndex: number;
@@ -61,28 +55,30 @@ export type DragSpecTraceInfoByType = {
     inside: boolean;
     globalBounds: Bounds;
   };
-  "with-chaining": Record<string, never>;
-  substate: Record<string, never>;
   "react-to": {
     currentValue: unknown;
     changeCount: number;
     tracedInner: DragSpecData<any>;
   };
-  "with-init-context": Record<string, never>;
-  custom: Record<string, never>;
 };
+
+/** Trace info shape for a spec type; empty if it isn't listed above. */
+export type DragSpecTraceInfo<K extends DragSpecData<any>["type"]> =
+  K extends keyof DragSpecTraceInfoByType
+    ? DragSpecTraceInfoByType[K]
+    : Record<string, never>;
 
 /** Get typed trace info from a spec node, or undefined if not annotated. */
 export function getTraceInfo<S extends DragSpecData<any>>(
   spec: S,
-): DragSpecTraceInfoByType[S["type"]] | undefined {
-  return spec.traceInfo as DragSpecTraceInfoByType[S["type"]] | undefined;
+): DragSpecTraceInfo<S["type"]> | undefined {
+  return spec.traceInfo as DragSpecTraceInfo<S["type"]> | undefined;
 }
 
 /** Return a copy of the spec with typed trace info attached. */
 export function setTraceInfo<S extends DragSpecData<any>>(
   spec: S,
-  traceInfo: DragSpecTraceInfoByType[S["type"]],
+  traceInfo: DragSpecTraceInfo<S["type"]>,
 ): S {
   return { ...spec, traceInfo };
 }

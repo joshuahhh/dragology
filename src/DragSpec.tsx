@@ -181,20 +181,45 @@ declare const _dragSpecBrand: unique symbol;
 export type DragSpecBrand = { readonly [_dragSpecBrand]: true };
 
 // Fluent methods available on every DragSpec value.
-export interface DragSpecMethods<T extends object> {
+export class DragSpecMethods<T extends object> {
   /**
    * Set a new drop state for the behavior – the drag preview will be
    * the same as before, but dropping will transition into the given
    * state.
    */
-  onDrop(state: T | ((previewState: T) => T)): DragSpec<T>;
+  onDrop(this: DragSpec<T>, state: T | ((previewState: T) => T)): DragSpec<T> {
+    return attachMethods({
+      type: "on-drop",
+      inner: this,
+      onDropState: state,
+    });
+  }
 
   /**
    * Switch to an alternate behavior when the pointer gets more than
    * a certain distance ("gap") away. This distance is 50 pixels by
    * default, but can be configured via the `gap` option.
    */
-  whenFar(background: DragSpecLike<T>, opts?: WhenFarOptions): DragSpec<T>;
+  whenFar(
+    this: DragSpec<T>,
+    background: DragSpecLike<T>,
+    opts: WhenFarOptions = {},
+  ): DragSpec<T> {
+    const gap = opts.gap ?? 50;
+    const gapIn = opts.gapIn ?? gap;
+    const gapOut = opts.gapOut ?? gap;
+    assert(
+      gapIn <= gapOut,
+      `whenFar: gapIn (${gapIn}) must be <= gapOut (${gapOut}), otherwise the behavior oscillates`,
+    );
+    return attachMethods({
+      type: "when-far",
+      foreground: this,
+      background: resolveDragSpecLike(background),
+      gapIn,
+      gapOut,
+    });
+  }
 
   /**
    * Set a "snap radius" for the behavior. If the dragged element
@@ -203,16 +228,37 @@ export interface DragSpecMethods<T extends object> {
    * state. (This changes the drag preview but not the drop state.)
    */
   withSnapRadius(
+    this: DragSpec<T>,
     radius: number,
-    options?: { transition?: TransitionLike; chain?: boolean },
-  ): DragSpec<T>;
+    {
+      transition = false,
+      chain = false,
+    }: { transition?: TransitionLike; chain?: boolean } = {},
+  ): DragSpec<T> {
+    return attachMethods({
+      type: "with-snap-radius",
+      inner: this,
+      radius,
+      transition: resolveTransitionLike(transition),
+      chain,
+    });
+  }
 
   /**
    * Set a transition to be used when dropping an element. You don't
    * need to call this to get a drop transition – by default you get
    * a 200ms cubic-out. This is for customization.
    */
-  withDropTransition(transition: TransitionLike): DragSpec<T>;
+  withDropTransition(
+    this: DragSpec<T>,
+    transition: TransitionLike,
+  ): DragSpec<T> {
+    return attachMethods({
+      type: "with-drop-transition",
+      inner: this,
+      transition: resolveTransitionLike(transition),
+    });
+  }
 
   /**
    * Draw extra SVG on top of the drag preview while this behavior is
@@ -221,7 +267,9 @@ export interface DragSpecMethods<T extends object> {
    * state doesn't draw it). On a branch of a `closest`, it shows only
    * while that branch is the active one.
    */
-  withOverlay(overlay: Svgx): DragSpec<T>;
+  withOverlay(this: DragSpec<T>, overlay: Svgx): DragSpec<T> {
+    return attachMethods({ type: "with-overlay", inner: this, overlay });
+  }
 
   /**
    * Set a transition to be used when switching between branches of a
@@ -238,27 +286,48 @@ export interface DragSpecMethods<T extends object> {
    * every application of `withBranchTransition` applies to all
    * branch switches within the behavior.
    */
-  withBranchTransition(transition: TransitionLike): DragSpec<T>;
+  withBranchTransition(
+    this: DragSpec<T>,
+    transition: TransitionLike,
+  ): DragSpec<T> {
+    return attachMethods({
+      type: "with-branch-transition",
+      inner: this,
+      transition: resolveTransitionLike(transition),
+    });
+  }
 
   /**
    * Advanced: Transform the frame (input) before it reaches the inner
    * behavior. Use this, e.g., to remap the pointer position.
    */
-  changeFrame(f: Reader<Partial<DragFrame>, DragFrame>): DragSpec<T>;
+  changeFrame(
+    this: DragSpec<T>,
+    f: Reader<Partial<DragFrame>, DragFrame>,
+  ): DragSpec<T> {
+    return attachMethods({ type: "change-frame", inner: this, f });
+  }
 
   /**
    * Advanced: Transform the behavior's entire result on each frame.
    * This is the most general wrapper — you can change any field of
    * the DragResult (preview, drop state, gap, etc.).
    */
-  changeResult(f: Reader<Partial<DragResult<T>>, DragResult<T>>): DragSpec<T>;
+  changeResult(
+    this: DragSpec<T>,
+    f: Reader<Partial<DragResult<T>>, DragResult<T>>,
+  ): DragSpec<T> {
+    return attachMethods({ type: "change-result", inner: this, f });
+  }
 
   /**
    * Advanced: Change the behavior's reported "gap" measurement via
    * the provided function. Use this, e.g., to "reweight" the
    * behavior's drop target in a `closest`.
    */
-  changeGap(f: (gap: number) => number): DragSpec<T>;
+  changeGap(this: DragSpec<T>, f: (gap: number) => number): DragSpec<T> {
+    return attachMethods({ type: "change-gap", inner: this, f });
+  }
 
   /**
    * Wrap this behavior with floating: on each frame, the inner
@@ -268,7 +337,17 @@ export interface DragSpecMethods<T extends object> {
    * function to limit how far the float deviates from the inner
    * behavior's element position.
    */
-  withFloating(opts?: FloatingOptions): DragSpec<T>;
+  withFloating(
+    this: DragSpec<T>,
+    { ghost, tether }: FloatingOptions = {},
+  ): DragSpec<T> {
+    return attachMethods({
+      type: "with-floating",
+      inner: this,
+      ghost: ghost === true ? { opacity: 0.5 } : ghost,
+      tether,
+    });
+  }
 
   /**
    * When the drop state changes, immediately chain into a new drag
@@ -276,18 +355,33 @@ export interface DragSpecMethods<T extends object> {
    * element). Options can optionally be provided to fine-tune the
    * behavior of the chaining.
    */
-  withChaining(opts?: {
-    draggedId?: string;
-    followSpec?: DragSpec<T>;
-    transition?: TransitionLike;
-  }): DragSpec<T>;
+  withChaining(
+    this: DragSpec<T>,
+    {
+      transition: transitionLike = true,
+      ...rest
+    }: {
+      draggedId?: string;
+      followSpec?: DragSpec<T>;
+      transition?: TransitionLike;
+    } = {},
+  ): DragSpec<T> {
+    const transition = resolveTransitionLike(transitionLike);
+    return attachMethods({
+      type: "with-chaining",
+      inner: this,
+      chaining: { ...rest, transition },
+    });
+  }
 
   /**
    * Transform the state on every frame, rendering it as a preview.
    * (Same drop behavior as `onDrop`, but that doesn't change the
    * preview.)
    */
-  during(fn: (state: T) => T): DragSpec<T>;
+  during(this: DragSpec<T>, fn: (state: T) => T): DragSpec<T> {
+    return attachMethods({ type: "during", inner: this, duringFn: fn });
+  }
 
   /**
    * Transform the DragInitContext before the inner spec is
@@ -295,95 +389,15 @@ export interface DragSpecMethods<T extends object> {
    * `draggedPath` for child behaviors.
    */
   withInitContext(
+    this: DragSpec<T>,
     f: Reader<Partial<DragInitContext<T>>, DragInitContext<T>>,
-  ): DragSpec<T>;
+  ): DragSpec<T> {
+    return attachMethods({ type: "with-init-context", inner: this, f });
+  }
 }
 
-const dragSpecMethods: DragSpecMethods<any> & ThisType<DragSpec<any>> = {
-  onDrop(state) {
-    return attachMethods({
-      type: "on-drop",
-      inner: this,
-      onDropState: state,
-    });
-  },
-  whenFar(bg, opts: WhenFarOptions = {}) {
-    const gap = opts.gap ?? 50;
-    const gapIn = opts.gapIn ?? gap;
-    const gapOut = opts.gapOut ?? gap;
-    assert(
-      gapIn <= gapOut,
-      `whenFar: gapIn (${gapIn}) must be <= gapOut (${gapOut}), otherwise the behavior oscillates`,
-    );
-    return attachMethods({
-      type: "when-far",
-      foreground: this,
-      background: resolveDragSpecLike(bg),
-      gapIn,
-      gapOut,
-    });
-  },
-  withSnapRadius(radius, { transition = false, chain = false } = {}) {
-    return attachMethods({
-      type: "with-snap-radius",
-      inner: this,
-      radius,
-      transition: resolveTransitionLike(transition),
-      chain,
-    });
-  },
-  withDropTransition(transition) {
-    return attachMethods({
-      type: "with-drop-transition",
-      inner: this,
-      transition: resolveTransitionLike(transition),
-    });
-  },
-  withOverlay(overlay) {
-    return attachMethods({ type: "with-overlay", inner: this, overlay });
-  },
-  withBranchTransition(transition) {
-    return attachMethods({
-      type: "with-branch-transition",
-      inner: this,
-      transition: resolveTransitionLike(transition),
-    });
-  },
-  changeFrame(f) {
-    return attachMethods({ type: "change-frame", inner: this, f });
-  },
-  changeResult(f) {
-    return attachMethods({ type: "change-result", inner: this, f });
-  },
-  changeGap(f) {
-    return attachMethods({ type: "change-gap", inner: this, f });
-  },
-  withFloating({ ghost, tether } = {}) {
-    return attachMethods({
-      type: "with-floating",
-      inner: this,
-      ghost: ghost === true ? { opacity: 0.5 } : ghost,
-      tether,
-    });
-  },
-  withChaining({ transition: transitionLike = true, ...rest } = {}) {
-    const transition = resolveTransitionLike(transitionLike);
-    return attachMethods({
-      type: "with-chaining",
-      inner: this,
-      chaining: { ...rest, transition },
-    });
-  },
-  during(fn) {
-    return attachMethods({ type: "during", inner: this, duringFn: fn });
-  },
-  withInitContext(f) {
-    return attachMethods({ type: "with-init-context", inner: this, f });
-  },
-};
-
 function attachMethods<T extends object>(data: DragSpecData<T>): DragSpec<T> {
-  return Object.assign(Object.create(dragSpecMethods), data);
+  return Object.assign(Object.create(DragSpecMethods.prototype), data);
 }
 
 function isDragSpec<T extends object>(
@@ -392,7 +406,7 @@ function isDragSpec<T extends object>(
   return (
     typeof value === "object" &&
     value !== null &&
-    Object.getPrototypeOf(value) === dragSpecMethods
+    Object.getPrototypeOf(value) === DragSpecMethods.prototype
   );
 }
 
