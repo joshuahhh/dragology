@@ -66,7 +66,7 @@ export function getLocalBounds(element: Svgx): Bounds {
   const props = element.props;
   const type = element.type;
 
-  if (type === "rect") {
+  if (type === "rect" || type === "foreignObject" || type === "image") {
     const x = Number(props.x) || 0;
     const y = Number(props.y) || 0;
     const w = Number(props.width) || 0;
@@ -113,6 +113,27 @@ export function getLocalBounds(element: Svgx): Bounds {
       maxX: Math.max(x1, x2),
       maxY: Math.max(y1, y2),
     };
+  }
+
+  if (type === "polygon" || type === "polyline") {
+    const nums = String(props.points ?? "")
+      .trim()
+      .split(/[\s,]+/)
+      .filter((s) => s !== "")
+      .map(Number);
+    let bounds: Bounds = emptyBounds;
+    for (let i = 0; i + 1 < nums.length; i += 2) {
+      const [x, y] = [nums[i], nums[i + 1]];
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      bounds = unionBounds(bounds, {
+        empty: false,
+        minX: x,
+        minY: y,
+        maxX: x,
+        maxY: y,
+      });
+    }
+    return bounds;
   }
 
   // For containers, recurse into children
