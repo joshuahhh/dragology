@@ -521,6 +521,7 @@ const W = 700;
 
 const POLY_C = { x: 125, y: 150 };
 const POLY_R = 95;
+const DIAG_SEGMENTS = 10;
 
 const TREE_ORIGIN = { x: 270, y: 60 };
 const TREE_W = 200;
@@ -621,45 +622,55 @@ function polygonView(
       {nodes
         .filter(({ parent }) => parent !== null)
         .map(({ node, lo, hi }) => {
-          // Drawn as two halves, each anchored (via its transform) at
-          // one end of the diagonal. Grabbing a half tracks that end,
-          // so `d.closest` can tell which way the user is swinging it.
+          // The library tracks a dragged element through its transform,
+          // so the grab area is split into short invisible segments,
+          // each positioned by a translate to its own point along the
+          // diagonal. Under interpolation a segment moves straight to
+          // the same fraction along the new diagonal – exactly where
+          // that point of the line goes – and the two ways of pairing
+          // the ends give different targets, so `d.closest` can tell
+          // which way the user is swinging it. Segment centers avoid the
+          // exact midpoint, which can coincide before and after a flip.
           const [pa, pb] = node.edgeReversed
             ? [V[hi + 1], V[lo]]
             : [V[lo], V[hi + 1]];
-          const mid = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
           const onDrag = () => {
             const { from, to } = flipVariants(state, node.id);
             return d.closest(to.map((t) => d.between([from, t])));
           };
-          const half = (end: "a" | "b", anchor: { x: number; y: number }) => {
-            const line = (stroke: string, strokeWidth: number) => (
-              <line
-                x1={0}
-                y1={0}
-                x2={mid.x - anchor.x}
-                y2={mid.y - anchor.y}
-                stroke={stroke}
-                strokeWidth={strokeWidth}
-                strokeLinecap="round"
-              />
-            );
-            return (
-              <g
-                id={`diag-${node.edgeId}-${end}`}
-                transform={translate(anchor)}
-                style={{ cursor: "grab" }}
-                dragologyOnDrag={onDrag}
-              >
-                {line("transparent", 16)}
-                {line(edgeColor(node.edgeId), 3.5)}
-              </g>
-            );
-          };
+          const K = DIAG_SEGMENTS;
+          const step = { x: (pb.x - pa.x) / K, y: (pb.y - pa.y) / K };
           return (
             <g id={`diag-${node.edgeId}`}>
-              {half("a", pa)}
-              {half("b", pb)}
+              <line
+                x1={pa.x}
+                y1={pa.y}
+                x2={pb.x}
+                y2={pb.y}
+                stroke={edgeColor(node.edgeId)}
+                strokeWidth={3.5}
+                strokeLinecap="round"
+              />
+              {_.range(K).map((k) => (
+                <g
+                  id={`diag-${node.edgeId}-seg-${k}`}
+                  transform={translate(
+                    pa.x + (k + 0.5) * step.x,
+                    pa.y + (k + 0.5) * step.y,
+                  )}
+                  style={{ cursor: "grab" }}
+                  dragologyOnDrag={onDrag}
+                >
+                  <line
+                    x1={-step.x / 2}
+                    y1={-step.y / 2}
+                    x2={step.x / 2}
+                    y2={step.y / 2}
+                    stroke="transparent"
+                    strokeWidth={16}
+                  />
+                </g>
+              ))}
             </g>
           );
         })}
