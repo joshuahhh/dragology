@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTitle } from "../useTitle";
-import { Demo, listedDemos, unlistedDemos } from "./registry";
+import { Demo, listedDemoGroups, listedDemos, unlistedDemos } from "./registry";
 import { tagMatches } from "./tags";
 import { DemoCard, DemoSettingsBar, DemoSettingsProvider, DemoTag } from "./ui";
 
@@ -20,18 +20,12 @@ export function DemoPage() {
       replace: false,
     });
 
-  const visibleListedDemos = showHidden
-    ? listedDemos
-    : listedDemos.filter((d) => !d.hideByDefault);
-  const filteredDemos = tagFilter
-    ? visibleListedDemos.filter((d) => hasTag(d, tagFilter))
-    : visibleListedDemos;
-  const visibleUnlisted = showHidden
-    ? unlistedDemos
-    : unlistedDemos.filter((d) => !d.hideByDefault);
-  const filteredUnlisted = tagFilter
-    ? visibleUnlisted.filter((d) => hasTag(d, tagFilter))
-    : visibleUnlisted;
+  const isShown = (d: Demo) =>
+    (showHidden || !d.hideByDefault) && (!tagFilter || hasTag(d, tagFilter));
+  const filteredGroups = listedDemoGroups
+    .map((g) => ({ ...g, demos: g.demos.filter(isShown) }))
+    .filter((g) => g.demos.length > 0);
+  const filteredUnlisted = unlistedDemos.filter(isShown);
   const hiddenCount =
     listedDemos.filter((d) => d.hideByDefault).length +
     unlistedDemos.filter((d) => d.hideByDefault).length;
@@ -84,20 +78,32 @@ export function DemoPage() {
           </>
         )}
         <div className="flex flex-col gap-5 px-5 pb-5 max-w-3xl mx-auto flex-1 w-full">
-          {filteredUnlisted.length > 0 && (
+          {filteredUnlisted.length > 0 && filteredGroups[0]?.title === null && (
             <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
               Listed
             </h2>
           )}
-          {filteredDemos.map((demo) => (
+          {filteredGroups.map((group, i) => (
             <div
-              key={demo.id}
-              id={demo.id}
-              className={
-                demo.hideByDefault ? "ring-2 ring-red-300 rounded-lg" : ""
-              }
+              key={group.title ?? `group-${i}`}
+              className="flex flex-col gap-5"
             >
-              <DemoCard demo={demo} linkTitle onTagClick={onTagClick} />
+              {group.title !== null && (
+                <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wide mt-5">
+                  {group.title}
+                </h2>
+              )}
+              {group.demos.map((demo) => (
+                <div
+                  key={demo.id}
+                  id={demo.id}
+                  className={
+                    demo.hideByDefault ? "ring-2 ring-red-300 rounded-lg" : ""
+                  }
+                >
+                  <DemoCard demo={demo} linkTitle onTagClick={onTagClick} />
+                </div>
+              ))}
             </div>
           ))}
         </div>

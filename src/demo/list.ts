@@ -1,4 +1,11 @@
-export const demoList = [
+/**
+ * The demos page, in order. A plain id is a demo; a section groups
+ * demos under a heading. Sections don't nest.
+ */
+export type DemoListEntry = string | DemoListSection;
+export type DemoListSection = { section: string; demos: string[] };
+
+export const demoList: DemoListEntry[] = [
   "linear-track",
   "linear-track-chained",
   "simple-triangle",
@@ -94,3 +101,8 @@ export const demoList = [
   "simple-triangle-custom",
   "with-pointer-delay",
 ];
+
+/** Every listed demo id, in page order, with sections flattened. */
+export const listedDemoIds: string[] = demoList.flatMap((entry) =>
+  typeof entry === "string" ? [entry] : entry.demos,
+);

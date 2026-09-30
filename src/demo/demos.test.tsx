@@ -3,7 +3,7 @@ import { cleanup, render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { isDemo } from ".";
-import { demoList } from "./list";
+import { listedDemoIds } from "./list";
 import { findDemoModule, shouldSkipDemo } from "./testModules";
 
 // These tests check that each demo component can be rendered without
@@ -12,7 +12,7 @@ import { findDemoModule, shouldSkipDemo } from "./testModules";
 
 afterEach(cleanup);
 
-for (const id of demoList) {
+for (const id of listedDemoIds) {
   if (shouldSkipDemo(id)) continue;
 
   it(id, async () => {
