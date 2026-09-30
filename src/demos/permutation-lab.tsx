@@ -45,6 +45,8 @@ type Letter = number | null;
  * logical word as soon as the next interaction builds a new state. */
 type Col = Letter | "closed";
 
+const isZeroWidth = (c: Col): c is "closed" => c === "closed";
+
 type State = {
   n: number;
   word: Col[];
@@ -331,7 +333,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
   // a cancel drop); `word` is the logical word all the math and drag
   // specs use, and `state` is the cleaned state they build on.
   const cols = rawState.word;
-  const word: Letter[] = cols.filter((c): c is Letter => c !== "closed");
+  const word: Letter[] = cols.filter((c): c is Letter => !isZeroWidth(c));
   const state: State = { ...rawState, word };
   const perm = permFromWord(n, word);
   const inv = inversions(perm);
@@ -402,7 +404,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
     const letters: { i: number; j: number; jl: number; pairId: string }[] = [];
     let jl = 0;
     cols.forEach((i, j) => {
-      if (i === "closed") return;
+      if (isZeroWidth(i)) return;
       const myJl = jl++;
       if (i === null) return;
       const a = arr[i];
@@ -502,7 +504,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
   const wireX0 = 0;
   const wireX1 = wireX0 + COLS * CW;
   const rowY = (r: number) => r * RS;
-  const colW = (j: number) => (j < rawLen && cols[j] === "closed" ? 0 : CW);
+  const colW = (j: number) => (j < rawLen && isZeroWidth(cols[j]) ? 0 : CW);
   const colX = (j: number) =>
     wireX0 +
     _.sum(_.range(Math.min(j, rawLen)).map(colW)) +
@@ -556,12 +558,16 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
             e
           </text>
         )}
-        {wordLetters.map(({ i, jl, pairId }, k) => (
+        {/* fixed anchors for letters to grow from: they never scale,
+            so a letter emerging while its neighbor is still emerging
+            (chained drags) doesn't stack scale transforms */}
+        {_.range(CAP).map((k) => (
+          <g id={`word-slot-${k}`} transform={translate(34 + k * letterW, 0)} />
+        ))}
+        {wordLetters.map(({ i, jl, pairId }) => (
           <text
             id={`word-letter-${pairId}`}
-            dragologyEmergeFrom={
-              k === 0 ? "word-pi" : `word-letter-${wordLetters[k - 1].pairId}`
-            }
+            dragologyEmergeFrom={`word-slot-${jl}`}
             dragologyEmergeMode="scale"
             transform={translate(34 + jl * letterW, 0)}
             fontSize={18}
@@ -951,51 +957,54 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
             neighbor to write s_i s_i; drag the apex of such a double
             crossing back across to cancel it (s_i s_i = e). */}
         {_.range(1, n + 1).map((v) => {
+          // Walk the logical word (zero-width closed columns are skipped;
+          // `layoutOf` maps a logical index to its layout column). Handle
+          // ids use logical indices so they line up across states with
+          // and without closed columns, and every handle sits at the right
+          // edge of its column.
           const handles: Svgx[] = [];
+          const L = word.length;
+          const realCols = _.range(rawLen).filter((j) => !isZeroWidth(cols[j]));
+          const layoutOf = (k: number) => (k < L ? realCols[k] : rawLen);
+          const edgeX = (k: number) => colX(layoutOf(k)) + CW;
+          const rowAfter = (r: number, letter: Letter) =>
+            letter === null
+              ? r
+              : r === letter
+                ? letter + 1
+                : r === letter + 1
+                  ? letter
+                  : r;
           let rMut = v - 1;
-          let jMut = 0;
-          while (jMut <= rawLen) {
+          let kMut = 0;
+          while (kMut <= L) {
             // snapshot the loop variables so drag closures don't see
             // later mutations
-            const j = jMut;
+            const k = kMut;
             const r = rMut;
-            // index of this column in the logical word; handle ids use it
-            // so they line up across states with and without closed columns
-            const jl = cols.slice(0, j).filter((c) => c !== "closed").length;
-            const id = `strand-${v}-${jl}`;
-            if (j < rawLen && cols[j] === "closed") {
-              jMut += 1; // zero width, nothing to grab
-              continue;
-            }
-            const letter: Letter = j < rawLen ? (cols[j] as Letter) : null;
-            const next =
-              letter === null
-                ? r
-                : r === letter
-                  ? letter + 1
-                  : r === letter + 1
-                    ? letter
-                    : r;
+            const id = `strand-${v}-${k}`;
+            const letter: Letter = k < L ? word[k] : null;
+            const next = rowAfter(r, letter);
             // Pair up runs of identical letters from the right, so that a
             // pair inserted next to an existing identical crossing is the
             // pair (the apex id must match the one the drag started from).
             let runLen = 0;
-            while (word[jl + runLen] === letter) runLen++;
+            while (k + runLen < L && word[k + runLen] === letter) runLen++;
             if (
               letter !== null &&
               next !== r &&
-              word[jl + 1] === letter &&
+              word[k + 1] === letter &&
               runLen % 2 === 0
             ) {
-              // apex of a double crossing at columns j, j+1
+              // apex of a double crossing at logical columns k, k+1
               const gapped: State = {
                 ...state,
-                word: word.map((l, k) => (k === jl || k === jl + 1 ? null : l)),
+                word: word.map((l, m) => (m === k || m === k + 1 ? null : l)),
               };
               handles.push(
                 <g
                   id={id}
-                  transform={translate(colX(j + 1), rowY(next))}
+                  transform={translate(edgeX(k), rowY(next))}
                   dragologyZIndex={1}
                   dragologyOnDrag={() =>
                     d.between([state, gapped]).onDrop((s) => ({
@@ -1018,15 +1027,16 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
                   />
                 </g>,
               );
-              jMut += 2;
+              rMut = rowAfter(next, letter);
+              kMut += 2;
               continue;
             }
-            if (letter === null && j + 1 < rawLen && cols[j + 1] === null) {
+            if (letter === null && k + 1 < L && word[k + 1] === null) {
               // two blank columns (mid-cancel): the apex handle lands here
               handles.push(
-                <g id={id} transform={translate(colX(j + 1), rowY(r))} />,
+                <g id={id} transform={translate(edgeX(k), rowY(r))} />,
               );
-              jMut += 2;
+              kMut += 2;
               continue;
             }
             if (next === r && canAppend(2)) {
@@ -1034,27 +1044,26 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               // zero-width columns here (drawn identically to the current
               // state), so the double crossing widens from nothing and
               // everything to the right slides over, instead of columns
-              // morphing in place.
+              // morphing in place. The handle sits at the column's right
+              // edge, which is where the new apex ends up, so the drag is
+              // purely vertical; the hit rect covers the column.
               const withClosed: State = {
                 ...state,
                 word: [
-                  ...word.slice(0, jl),
+                  ...word.slice(0, k),
                   "closed",
                   "closed",
-                  ...word.slice(jl),
+                  ...word.slice(k),
                 ],
               };
               const insert = (i: number): State => ({
                 ...state,
-                word: [...word.slice(0, jl), i, i, ...word.slice(jl)],
+                word: [...word.slice(0, k), i, i, ...word.slice(k)],
               });
-              // The handle sits at the column's right edge, which is where
-              // the apex of the new double crossing ends up, so the drag
-              // is purely vertical; the hit rect covers the column.
               handles.push(
                 <g
                   id={id}
-                  transform={translate(colX(j + 1), rowY(r))}
+                  transform={translate(edgeX(k), rowY(r))}
                   dragologyZIndex={1}
                   dragologyOnDrag={() =>
                     d.closest([
@@ -1077,7 +1086,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               );
             }
             rMut = next;
-            jMut += 1;
+            kMut += 1;
           }
           return <g>{handles}</g>;
         })}
