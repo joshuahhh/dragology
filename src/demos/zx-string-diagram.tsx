@@ -738,6 +738,8 @@ function yankSpec(
 type RenderCtx = {
   d: DragSpecBuilder<State>;
   draggedId: string | null;
+  /** Treat every spider drag as an Alt-drag (for fuzzing unfusion). */
+  alwaysUnfuse?: boolean;
 };
 
 function renderDiagram(state: State, ctx: RenderCtx | null, prefix = "") {
@@ -879,7 +881,7 @@ function renderDiagram(state: State, ctx: RenderCtx | null, prefix = "") {
               ctx
                 ? () =>
                     ctx.d.reactTo(altKey, (alt) =>
-                      alt
+                      alt || ctx.alwaysUnfuse
                         ? unfuseSpec(ctx.d, state, id)
                         : spiderSpec(ctx.d, state, id),
                     )
@@ -938,69 +940,73 @@ function renderDiagram(state: State, ctx: RenderCtx | null, prefix = "") {
   );
 }
 
-const draggable: Draggable<State> = ({ state, d, draggedId }) => {
-  const puzzle = PUZZLES[state.puzzle];
-  const proved = puzzle.goal
-    ? graphKey(state) === GOAL_KEYS[state.puzzle]
-    : false;
-  const goalScale = 0.42;
-  const goalH = puzzle.goal ? (outputY(puzzle.goal) + TOP) * goalScale : 0;
+const makeDraggable =
+  (alwaysUnfuse = false): Draggable<State> =>
+  ({ state, d, draggedId }) => {
+    const puzzle = PUZZLES[state.puzzle];
+    const proved = puzzle.goal
+      ? graphKey(state) === GOAL_KEYS[state.puzzle]
+      : false;
+    const goalScale = 0.42;
+    const goalH = puzzle.goal ? (outputY(puzzle.goal) + TOP) * goalScale : 0;
 
-  return (
-    <g>
-      <style>{`
+    return (
+      <g>
+        <style>{`
         .zx-bead:hover { opacity: 1; }
         .zx-label { cursor: grab; }
       `}</style>
-      {renderDiagram(state, { d, draggedId })}
-      {puzzle.goal && (
-        <g transform={translate(DIAG_W + 8, 12)}>
-          <rect
-            id="goal-frame"
-            dragologyZIndex={-2}
-            width={GOAL_W - 16}
-            height={goalH + 44}
-            rx={8}
-            fill={proved ? "#ecfdf5" : "#f9fafb"}
-            stroke={proved ? "#10b981" : "#e5e7eb"}
-            strokeWidth={proved ? 2 : 1}
-          />
-          <text
-            transform={translate(10, 18)}
-            fontSize={11}
-            fontFamily="ui-sans-serif, system-ui, sans-serif"
-            fill="#6b7280"
-            style={{ userSelect: "none" }}
-          >
-            GOAL
-          </text>
-          {proved && (
+        {renderDiagram(state, { d, draggedId, alwaysUnfuse })}
+        {puzzle.goal && (
+          <g transform={translate(DIAG_W + 8, 12)}>
+            <rect
+              id="goal-frame"
+              dragologyZIndex={-2}
+              width={GOAL_W - 16}
+              height={goalH + 44}
+              rx={8}
+              fill={proved ? "#ecfdf5" : "#f9fafb"}
+              stroke={proved ? "#10b981" : "#e5e7eb"}
+              strokeWidth={proved ? 2 : 1}
+            />
             <text
-              id="goal-proved"
-              transform={translate(GOAL_W - 26, 18)}
-              textAnchor="end"
+              transform={translate(10, 18)}
               fontSize={11}
-              fontWeight="bold"
               fontFamily="ui-sans-serif, system-ui, sans-serif"
-              fill="#059669"
+              fill="#6b7280"
               style={{ userSelect: "none" }}
             >
-              PROVED ∎
+              GOAL
             </text>
-          )}
-          <g
-            transform={
-              translate((GOAL_W - 16 - DIAG_W * goalScale) / 2, 30) +
-              scale(goalScale)
-            }
-          >
-            {renderDiagram(puzzle.goal, null, "goal-")}
+            {proved && (
+              <text
+                id="goal-proved"
+                transform={translate(GOAL_W - 26, 18)}
+                textAnchor="end"
+                fontSize={11}
+                fontWeight="bold"
+                fontFamily="ui-sans-serif, system-ui, sans-serif"
+                fill="#059669"
+                style={{ userSelect: "none" }}
+              >
+                PROVED ∎
+              </text>
+            )}
+            <g
+              transform={
+                translate((GOAL_W - 16 - DIAG_W * goalScale) / 2, 30) +
+                scale(goalScale)
+              }
+            >
+              {renderDiagram(puzzle.goal, null, "goal-")}
+            </g>
           </g>
-        </g>
-      )}
-    </g>
-  );
-};
+        )}
+      </g>
+    );
+  };
+
+const draggable = makeDraggable();
 
 // ## Puzzles
 //
@@ -1268,6 +1274,22 @@ export default demo(
     );
   },
   {
+    // Every puzzle's start state is a separate fuzz target. (The
+    // fuzzer can't hold Alt, so unfusion isn't reached this way.)
+    fuzz: [
+      ...PUZZLE_ORDER.map((id) => ({
+        name: id,
+        draggable,
+        initialState: PUZZLES[id].start,
+      })),
+      // The fuzzer can't hold Alt, so these variants make every
+      // spider drag an unfusion.
+      ...(["phase", "playground"] as const).map((id) => ({
+        name: `${id} (alt)`,
+        draggable: makeDraggable(true),
+        initialState: PUZZLES[id].start,
+      })),
+    ],
     tags: [
       "d.closest",
       "d.dropTarget",
