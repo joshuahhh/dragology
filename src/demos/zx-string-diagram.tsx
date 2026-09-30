@@ -124,10 +124,12 @@ function relayout(state: State, floatingId?: string): State {
     others.forEach((id, slot) => {
       const collapsedY = TOP + (slot + 1) * ROW_H;
       const node = s.nodes[id] as Spider | Bend;
-      // Is the floater above this collapsed level? Then this node
-      // is pushed down a level.
-      const pushed =
-        floater !== undefined && floater.y < collapsedY + ROW_H / 2;
+      // Nodes below the floater are pushed down a level to make room.
+      // "Below" is judged against the node's *incoming* y (its
+      // position when the drag started), so a node only swaps sides
+      // when the floater passes through where it's drawn – it never
+      // jumps toward a floater that is approaching it.
+      const pushed = floater !== undefined && floater.y < node.y;
       node.y = pushed ? collapsedY + ROW_H : collapsedY;
     });
   });
@@ -465,28 +467,21 @@ function spiderDropTargets(state: State, id: string): [string, State][] {
 const HIT_R = 34;
 
 /**
- * Like `d.dropTarget`, but hit-tests the dragged spider's center
- * against the target node wherever the user might aim: where the
- * target was when the drag began, and where it comes to rest once the
- * dragged spider is out of the way (levels reflow, so these can be a
- * level apart – and the target jumps between them as you cross it).
+ * Like `d.dropTarget`, but hit-tests the dragged spider's *center*
+ * (not the pointer) against the target node's position. Thanks to the
+ * relayout rule, the target stays where it was drawn at drag start
+ * until the dragged spider passes through it, so the start position
+ * is exactly where the user is aiming. (Checking against the result
+ * state instead would be wrong: there the levels have already
+ * collapsed, and the target can sit right where the drag begins.)
  */
 function nearNodeSpec(
   d: DragSpecBuilder<State>,
   state: State,
-  draggedNode: string,
   target: string,
   result: State,
 ): DragSpec<State> {
-  const collapsed = relayout(
-    produce(state, (s) => {
-      delete s.nodes[draggedNode];
-    }),
-  );
-  const spots = [
-    portInfo(state, { node: target }).pos,
-    portInfo(collapsed, { node: target }).pos,
-  ];
+  const spot = portInfo(state, { node: target }).pos;
   return d.custom((ctx) => {
     const inner = dragSpecToBehavior<State>(
       { type: "fixed", state: result },
@@ -494,7 +489,7 @@ function nearNodeSpec(
     );
     return (frame) => {
       const center = frame.pointer.sub(ctx.anchorPos);
-      const near = spots.some((spot) => center.dist(spot) < HIT_R);
+      const near = center.dist(spot) < HIT_R;
       return {
         ...inner(frame),
         gap: near ? 0 : Infinity,
@@ -511,7 +506,7 @@ function spiderSpec(
   opts: { unfusedFrom?: string } = {},
 ): DragSpec<State> {
   const drops = spiderDropTargets(state, id).map(([t, result]) =>
-    nearNodeSpec(d, state, id, t, result),
+    nearNodeSpec(d, state, t, result),
   );
   const move = d
     .vary(state, [param("nodes", id, "x"), param("nodes", id, "y")], {
@@ -697,10 +692,45 @@ function bendSpec(
       },
     })
     .during((s) => relayout(s, id));
-  const spec = partnerId
-    ? move.whenFar(yank(state, id, partnerId), { gapIn: 20, gapOut: 36 })
-    : move;
+  const spec =
+    partnerId && partner
+      ? d.closest([yankSpec(d, state, id, partnerId, partner), move])
+      : move;
   return spec.withBranchTransition(200).onDrop((s) => tidy(s));
+}
+
+/**
+ * The snake branch of a bend drag: fires once the bend's center has
+ * been pulled level with its partner (the cup up to its cap, or the
+ * cap down to its cup). Direction matters – a sideways pull that the
+ * constrained drag can't follow does nothing.
+ */
+function yankSpec(
+  d: DragSpecBuilder<State>,
+  state: State,
+  id: string,
+  partnerId: string,
+  partner: Bend,
+): DragSpec<State> {
+  const result = yank(state, id, partnerId);
+  const isCup = (state.nodes[id] as Bend).dir === "cup";
+  return d.custom((ctx) => {
+    const inner = dragSpecToBehavior<State>(
+      { type: "fixed", state: result },
+      ctx,
+    );
+    return (frame) => {
+      const center = frame.pointer.sub(ctx.anchorPos);
+      const crossed = isCup
+        ? center.y < partner.y + ROW_H / 4
+        : center.y > partner.y - ROW_H / 4;
+      return {
+        ...inner(frame),
+        gap: crossed ? 0 : Infinity,
+        activePath: "yank",
+      };
+    };
+  });
 }
 
 // ## Rendering
