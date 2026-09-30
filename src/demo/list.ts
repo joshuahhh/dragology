@@ -48,7 +48,6 @@ export const demoList: DemoListEntry[] = [
   "spinny",
   "scheduler",
   "graph",
-  "git-graph-surgery",
   "tromino",
   "plane-partition",
   "aztec-diamond",
@@ -114,6 +113,7 @@ export const demoList: DemoListEntry[] = [
       "tableaux",
       "layout-editor",
       "zx-string-diagram",
+      "git-graph-surgery",
     ],
   },
 ];
