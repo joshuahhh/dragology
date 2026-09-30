@@ -93,34 +93,74 @@ describe("substitute", () => {
 });
 
 describe("candidates", () => {
-  it("β-reduces by dragging the argument", () => {
-    const t = parseTerm("(λx. x x) y");
-    const y = byName(t, "y");
+  it("β-reduces by dragging the argument onto the binder", () => {
+    const t = parseTerm("(λx. x x) y") as Term & { type: "app" };
+    const lam = t.fn as Term & { type: "lam" };
+    const [x1, x2] = allNodes(lam.body).filter((n) => n.type === "var");
+    const y = t.arg;
     const cs = candidates(t, y.id, { ...off, beta: true });
-    // one candidate per occurrence; the dragged y lands on a different one each time
-    expect(cs.map((c) => printTerm(c.result))).toEqual(["y y", "y y"]);
-    const roots = cs.map((c) => c.result as Term & { type: "app" });
-    expect(roots[0].fn.id).toBe(y.id);
-    expect(roots[1].arg.id).toBe(y.id);
-    expect(roots[0].arg.emergeFrom).toBe(y.id);
-    expect(roots[1].fn.emergeFrom).toBe(y.id);
-    // waypoints: all occurrences replaced, hole where y came from, and
-    // the substituted subtree shared with the result
-    expect(cs.map((c) => printTerm(c.mid!))).toEqual([
-      "(λx. y y) _",
-      "(λx. y y) _",
-    ]);
-    for (const c of cs) {
-      const mid = c.mid as Term & { type: "app" };
-      expect((mid.fn as Term & { type: "lam" }).body).toBe(c.result);
-      expect(mid.arg).toMatchObject({ type: "hole", of: { id: y.id } });
+    // one candidate per redex, whatever the number of occurrences
+    expect(cs.map((c) => printTerm(c.result))).toEqual(["y y"]);
+    const [c] = cs;
+
+    // every occurrence becomes a fresh copy growing out of that occurrence
+    const result = c.result as Term & { type: "app" };
+    expect(result.fn).toMatchObject({ emergeFrom: x1.id });
+    expect(result.arg).toMatchObject({ emergeFrom: x2.id });
+    expect(result.fn.emergeMode).toBeUndefined();
+    expect(findById(result, y.id)).toBeNull();
+
+    // waypoint: y sits on the binder, the body is already substituted
+    // (sharing the result's nodes), and a hole grows where y was
+    expect(printTerm(c.mid!)).toBe("(λx:=(y). y y) _");
+    const mid = c.mid as Term & { type: "app" };
+    const midLam = mid.fn as Term & { type: "lam" };
+    expect(midLam.body).toBe(c.result);
+    expect(mid.arg).toMatchObject({ type: "hole", emergeFrom: result.arg.id });
+    // ...and on drop merges into the first copy (in base and mid alike)
+    const firstCopy = { emergeFrom: result.fn.id, emergeMode: "clone" };
+    expect(midLam.incoming).toMatchObject({ id: y.id, ...firstCopy });
+    expect((c.base as Term & { type: "app" }).arg).toMatchObject(firstCopy);
+
+    // the λ and application boxes collapse onto the reduced body on drop;
+    // base carries the same annotations (previews take base's props)
+    for (const term of [c.base, c.mid!]) {
+      const app = term as Term & { type: "app" };
+      expect(app.emergeFrom).toBe(result.id);
+      expect(app.fn.emergeFrom).toBe(result.id);
     }
+    expect(printTerm(c.base)).toBe(printTerm(t));
   });
 
-  it("does not β-reduce when the argument would vanish", () => {
+  it("β-reduces even when the argument vanishes", () => {
     const t = parseTerm("(λx. z) y");
     const cs = candidates(t, byName(t, "y").id, { ...off, beta: true });
-    expect(cs).toEqual([]);
+    expect(cs.map((c) => printTerm(c.result))).toEqual(["z"]);
+    expect(printTerm(cs[0].mid!)).toBe("(λx:=(y). z) _");
+    // no copy to merge into: it shrinks away into the body, and the hole
+    // isn't drawn
+    const mid = cs[0].mid as Term & { type: "app" };
+    const z = cs[0].result;
+    expect((mid.fn as Term & { type: "lam" }).incoming).toMatchObject({
+      emergeFrom: z.id,
+      emergeMode: "scale",
+    });
+    expect(mid.arg).toMatchObject({ type: "hole", outline: false });
+  });
+
+  it("β-substitutes compound arguments, every node growing from its occurrence", () => {
+    const t = parseTerm("(λx. f x) (g a)") as Term & { type: "app" };
+    const x = byName(t.fn, "x");
+    const [c] = candidates(t, t.arg.id, { ...off, beta: true });
+    expect(printTerm(c.result)).toBe("f (g a)");
+    const copy = (c.result as Term & { type: "app" }).arg;
+    expect(allNodes(copy).map((n) => n.emergeFrom)).toEqual([x.id, x.id, x.id]);
+  });
+
+  it("β-reduction avoids capture", () => {
+    const t = parseTerm("(λx y. x y) y") as Term & { type: "app" };
+    const [c] = candidates(t, t.arg.id, { ...off, beta: true });
+    expect(printTerm(c.result)).toBe("λy'. y y'");
   });
 
   it("does not β-reduce when dragging the function", () => {
@@ -189,11 +229,11 @@ describe("candidates", () => {
   it("strips stale emerge annotations from base", () => {
     const t = parseTerm("(λx. x x) y");
     const y = byName(t, "y");
-    const reduced = candidates(t, y.id, allOn).find(
-      (c) => c.kind === "beta",
-    )!.result;
+    const reduced = candidates(t, y.id, allOn).find((c) => c.kind === "beta")!
+      .result as Term & { type: "app" };
     expect(allNodes(reduced).some((n) => n.emergeFrom)).toBe(true);
-    const next = candidates(reduced, y.id, allOn);
+    const next = candidates(reduced, reduced.fn.id, allOn);
+    expect(next.length).toBeGreaterThan(0);
     for (const c of next) {
       if (c.kind !== "abstract") {
         expect(allNodes(c.base).some((n) => n.emergeFrom)).toBe(false);

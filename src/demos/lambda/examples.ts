@@ -1,9 +1,4 @@
 // Start states for the lambda-beta demo.
-//
-// Every redex along these reductions uses its bound variable at least once,
-// because the demo can't yet offer a β-step whose argument would vanish
-// (the dragged element has to survive into the target state). So: no
-// Church booleans, no K, no zero.
 
 const ONE = "(λf x. f x)";
 const TWO = "(λf x. f (f x))";
@@ -11,6 +6,8 @@ const PLUS = "(λm n f x. m f (n f x))";
 const TIMES = "(λm n f. m (n f))";
 const SUCC = "(λn f x. f (n f x))";
 const OMEGA_HALF = "(λx. f (x x))";
+const TRUE = "(λt e. t)";
+const IF = "(λb t e. b t e)";
 
 export type Example = {
   src: string;
@@ -31,6 +28,16 @@ export const examples = {
     src: "(λx. x) ((λy. y) z)",
     blurb:
       "Two redexes. Drag z into λy first, or drag the whole inner term into λx.",
+  },
+  K: {
+    src: "(λx y. x) a b",
+    blurb:
+      "Feed in a, then b. The second λ never uses its parameter, so b is thrown away.",
+  },
+  "if true": {
+    src: `${IF} ${TRUE} a b`,
+    blurb:
+      "Church booleans: true picks its first argument and discards the second. Reduces to a.",
   },
   "succ 2": {
     src: `${SUCC} ${TWO}`,

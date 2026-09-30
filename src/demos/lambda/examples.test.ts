@@ -68,6 +68,8 @@ describe("examples", () => {
     ["duplicate", "y y"],
     ["flip", "b a"],
     ["nested", "z"],
+    ["K", "a"],
+    ["if true", "a"],
     ["succ 2", "λf x. f (f (f x))"],
     ["1 + 2", "λf x. f (f (f x))"],
     ["2 × 2", "λf x. f (f (f (f x)))"],

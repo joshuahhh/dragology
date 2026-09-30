@@ -6,17 +6,29 @@ type Common = {
   id: string;
   /** For nodes created by a rewrite: the ID of the element they emerge from */
   emergeFrom?: string;
-  /** "clone" for split/merge animation, undefined for default fade */
-  emergeMode?: "clone";
+  /**
+   * "clone" for split/merge, "scale" to shrink/grow from a point, undefined
+   * for the default (grow from the origin's bounds, fading)
+   */
+  emergeMode?: "clone" | "scale";
 };
 
 export type Term = Common &
   (
     | { type: "var"; name: string }
-    | { type: "lam"; param: string; body: Term }
+    | {
+        type: "lam";
+        param: string;
+        body: Term;
+        /**
+         * An argument that has been dragged onto this λ's binder but not yet
+         * substituted; drawn over the binder. Only used in mid-drag states.
+         */
+        incoming?: Term;
+      }
     | { type: "app"; fn: Term; arg: Term }
     /** An empty slot reserving the space of `of`; only used in mid-drag states */
-    | { type: "hole"; of: Term }
+    | { type: "hole"; of: Term; outline?: boolean }
   );
 
 export function newId(): string {
@@ -106,10 +118,13 @@ export function printTerm(t: Term): string {
     case "hole":
       return "_";
     case "lam": {
+      if (t.incoming) {
+        return `λ${t.param}:=(${printTerm(t.incoming)}). ${printTerm(t.body)}`;
+      }
       // collapse nested λs
       const params = [t.param];
       let body = t.body;
-      while (body.type === "lam") {
+      while (body.type === "lam" && !body.incoming) {
         params.push(body.param);
         body = body.body;
       }
@@ -294,18 +309,16 @@ function rename(t: Term, from: string, to: string): Term {
 // # Substitution
 
 /**
- * Capture-avoiding substitution body[x := arg]. The occurrence of x with
- * index `targetIndex` (in left-to-right order) receives `arg` itself
- * (keeping its ids); the other occurrences receive clones that emerge from
- * `arg`. Returns the number of occurrences replaced.
+ * Capture-avoiding substitution: replaces each free occurrence of x in
+ * `body` with `replacement(occurrence, index)`, α-renaming binders that
+ * would capture any of `fvReplacement`. Ids of untouched nodes are kept.
  */
-export function substitute(
+function substituteWith(
   body: Term,
   x: string,
-  arg: Term,
-  targetIndex = 0,
+  fvReplacement: Set<string>,
+  replacement: (occurrence: Term, index: number) => Term,
 ): { term: Term; count: number } {
-  const fvArg = freeVars(arg);
   let count = 0;
 
   function go(t: Term): Term {
@@ -314,13 +327,12 @@ export function substitute(
         return t;
       case "var":
         if (t.name !== x) return t;
-        count++;
-        return count - 1 === targetIndex ? arg : cloneWithEmerge(arg);
+        return replacement(t, count++);
       case "lam": {
         if (t.param === x) return t; // shadowed
-        if (fvArg.has(t.param) && freeVars(t.body).has(x)) {
+        if (fvReplacement.has(t.param) && freeVars(t.body).has(x)) {
           // would capture: α-rename this binder first
-          const avoid = new Set([...fvArg, ...allNames(t.body), x]);
+          const avoid = new Set([...fvReplacement, ...allNames(t.body), x]);
           const fresh = freshName(avoid, t.param);
           return {
             ...t,
@@ -337,6 +349,51 @@ export function substitute(
 
   const term = go(body);
   return { term, count };
+}
+
+/**
+ * Capture-avoiding substitution body[x := arg]. The occurrence of x with
+ * index `targetIndex` (in left-to-right order) receives `arg` itself
+ * (keeping its ids); the other occurrences receive clones that emerge from
+ * `arg`. Returns the number of occurrences replaced.
+ */
+export function substitute(
+  body: Term,
+  x: string,
+  arg: Term,
+  targetIndex = 0,
+): { term: Term; count: number } {
+  return substituteWith(body, x, freeVars(arg), (_occ, i) =>
+    i === targetIndex ? arg : cloneWithEmerge(arg),
+  );
+}
+
+/**
+ * A copy of `t` with fresh ids, every node of which emerges (default mode:
+ * grows out of its bounds, fading in) from the element `originId`.
+ */
+function copyEmergingFrom(t: Term, originId: string): Term {
+  const common = { id: newId(), emergeFrom: originId };
+  switch (t.type) {
+    case "var":
+      return { ...common, type: "var", name: t.name };
+    case "hole":
+      return { ...common, type: "hole", of: t.of };
+    case "lam":
+      return {
+        ...common,
+        type: "lam",
+        param: t.param,
+        body: copyEmergingFrom(t.body, originId),
+      };
+    case "app":
+      return {
+        ...common,
+        type: "app",
+        fn: copyEmergingFrom(t.fn, originId),
+        arg: copyEmergingFrom(t.arg, originId),
+      };
+  }
 }
 
 // # Rewrites triggered by dragging a node
@@ -402,28 +459,65 @@ export function candidates(
     parent.fn.type === "lam"
   ) {
     const lam = parent.fn;
-    // One candidate per occurrence: the dragged argument lands on that
-    // occurrence (keeping its ids) and clones split off for the others.
-    const { count } = substitute(lam.body, lam.param, dragged);
-    for (let i = 0; i < count; i++) {
-      const { term: reduced } = substitute(lam.body, lam.param, dragged, i);
-      // Waypoint: every occurrence already replaced (so the clones emerge
-      // during the drag), but the app/λ boxes still intact and a hole
-      // marking where the argument came from. The same `reduced` subtree is
-      // used in both, so the drop animation only has to collapse the boxes.
-      const mid = replaceById(base, parent.id, {
-        ...parent,
-        fn: { ...lam, body: reduced },
-        arg: { type: "hole", id: newId(), of: dragged },
-      });
-      results.push({
-        kind: "beta",
-        base,
-        mid,
-        result: replaceById(base, parent.id, reduced),
-        description: `β: substitute ${printTerm(dragged)} for ${lam.param} (occurrence ${i + 1} of ${count})`,
-      });
-    }
+    // Every occurrence of the parameter becomes a copy of the argument that
+    // grows out of that occurrence (so during the drag, each x morphs into
+    // a y in place). The dragged argument itself survives only into the
+    // waypoint, where it sits on the binder.
+    let firstCopy: Term | undefined;
+    let lastCopy: Term | undefined;
+    const { term: reducedBody } = substituteWith(
+      lam.body,
+      lam.param,
+      freeVars(dragged),
+      (occ) => {
+        const copy = copyEmergingFrom(dragged, occ.id);
+        firstCopy ??= copy;
+        lastCopy = copy;
+        return copy;
+      },
+    );
+    // On drop, the argument on the binder slides into the first copy and
+    // merges with it. If there are no copies, it's being discarded: it
+    // shrinks away to nothing as the λ dissolves.
+    const incoming = firstCopy
+      ? annotateMerge(dragged, firstCopy)
+      : annotateAll(dragged, {
+          emergeFrom: reducedBody.id,
+          emergeMode: "scale",
+        });
+    // On drop, the λ and application boxes collapse onto the reduced body.
+    // (Annotated in `base` as well as `mid`: mid-drag previews are lerped
+    // from `base`, and they take its dragology* props.)
+    const collapse = { emergeFrom: reducedBody.id, emergeMode: undefined };
+    const betaBase = replaceById(base, parent.id, {
+      ...parent,
+      ...collapse,
+      fn: { ...lam, ...collapse },
+      arg: incoming,
+    });
+    const mid = replaceById(base, parent.id, {
+      ...parent,
+      ...collapse,
+      fn: { ...lam, ...collapse, incoming, body: reducedBody },
+      // Marks where the argument was. On drop it closes up into the last
+      // copy. (That copy exists only in the result, so this has no effect
+      // during the drag, where the hole just fades in.) With no copies,
+      // there's nowhere for it to go, so it's left undrawn.
+      arg: {
+        type: "hole",
+        id: newId(),
+        of: dragged,
+        emergeFrom: lastCopy?.id,
+        outline: lastCopy !== undefined,
+      },
+    });
+    results.push({
+      kind: "beta",
+      base: betaBase,
+      mid,
+      result: replaceById(base, parent.id, reducedBody),
+      description: `β: substitute ${printTerm(dragged)} for ${lam.param}`,
+    });
   }
 
   // Abstraction (reverse β): pull dragged out of an ancestor A, giving
@@ -532,6 +626,27 @@ export function candidates(
   }
 
   return results;
+}
+
+/** Give every node of `t` the same emerge annotation. */
+function annotateAll(
+  t: Term,
+  emerge: Pick<Common, "emergeFrom" | "emergeMode">,
+): Term {
+  switch (t.type) {
+    case "var":
+    case "hole":
+      return { ...t, ...emerge };
+    case "lam":
+      return { ...t, ...emerge, body: annotateAll(t.body, emerge) };
+    case "app":
+      return {
+        ...t,
+        ...emerge,
+        fn: annotateAll(t.fn, emerge),
+        arg: annotateAll(t.arg, emerge),
+      };
+  }
 }
 
 /** Mark each node of `copy` as emerging (clone-style) from the corresponding node of `original`. */

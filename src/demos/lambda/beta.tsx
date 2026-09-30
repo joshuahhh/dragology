@@ -1,3 +1,4 @@
+import { rgb } from "d3-color";
 import { useMemo, useState } from "react";
 import { demo } from "../../demo";
 import {
@@ -57,6 +58,19 @@ function hueFor(name: string): number {
   return hue;
 }
 
+/**
+ * Box fills are translucent, so nesting deepens them. A dragged term is
+ * drawn over the rest of the diagram, though, so its outer box gets the
+ * opaque color it would appear as on the white canvas: it looks the same
+ * but hides whatever it's held over.
+ */
+function boxFill(color: string, alpha: number, opaque: boolean): string {
+  const c = rgb(color);
+  if (!opaque) return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
+  const over = (v: number) => Math.round(alpha * v + (1 - alpha) * 255);
+  return rgb(over(c.r), over(c.g), over(c.b)).formatRgb();
+}
+
 // # Layout
 
 const PAD = 6;
@@ -95,7 +109,9 @@ function renderTerm(
             height={h}
             rx={8}
             fill="none"
-            stroke="rgba(120, 110, 100, 0.4)"
+            stroke={
+              term.outline === false ? "none" : "rgba(120, 110, 100, 0.4)"
+            }
             strokeWidth={1}
             strokeDasharray="4 3"
           />
@@ -145,6 +161,12 @@ function renderTerm(
         draggedId,
         new Set([...bound, term.param]),
       );
+      // An argument dropped on the binder hovers over it, just after the
+      // "λ". It takes up no layout space (it overlaps the body if it's
+      // big), so the body only moves where substitution changes it.
+      const incoming =
+        term.incoming &&
+        renderTerm(state, term.incoming, d, config, draggedId, bound);
       w = PAD + labelW + GAP + body.w + PAD;
       h = body.h + 2 * PAD;
       const hue = hueFor(term.param);
@@ -154,7 +176,7 @@ function renderTerm(
             width={w}
             height={h}
             rx={8}
-            fill={`hsla(${hue}, 75%, 80%, 0.3)`}
+            fill={boxFill(`hsl(${hue}, 75%, 80%)`, 0.3, isDragged)}
             stroke={`hsl(${hue}, 45%, 62%)`}
             strokeWidth={1}
           />
@@ -170,6 +192,11 @@ function renderTerm(
             {label}
           </text>
           <g transform={translate(PAD + labelW + GAP, PAD)}>{body.element}</g>
+          {incoming && (
+            <g transform={translate(PAD + CHAR_W, (h - incoming.h) / 2)}>
+              {incoming.element}
+            </g>
+          )}
         </g>
       );
       break;
@@ -196,7 +223,7 @@ function renderTerm(
             width={w}
             height={h}
             rx={8}
-            fill="rgba(120, 110, 100, 0.06)"
+            fill={boxFill("rgb(120, 110, 100)", 0.06, isDragged)}
             stroke="rgba(120, 110, 100, 0.35)"
             strokeWidth={1}
           />
@@ -249,8 +276,14 @@ function dragSpec(
     return d.between([base, result]);
   });
   // onDrop maps a waypoint to the completed rewrite.
-  return d.closest(branches).onDrop((s) => midToResult.get(s) ?? s);
+  return d
+    .closest(branches)
+    .onDrop((s) => midToResult.get(s) ?? s)
+    .withDropTransition(DROP_MS);
 }
+
+/** Long enough for the post-drop collapse of a β-reduction to read */
+const DROP_MS = 450;
 
 const WIDTH = 680;
 const HEIGHT = 420;
@@ -296,10 +329,11 @@ export default demo(
       <div>
         <DemoNotes>
           λ-terms as nested boxes. <b>β-reduce</b> by dragging an argument onto
-          a bound variable inside the λ it's applied to: copies split off for
-          the other occurrences as you go, and when it lands the boxes collapse.
-          Drag a subterm <b>rightward out</b> of an enclosing box to abstract
-          over it (the reverse).
+          the binder (the <i>x</i> in <i>λx.</i>) of the λ it's applied to: as
+          you go, each <i>x</i> in the body turns into a copy of the argument,
+          and when you drop, the λ dissolves. Drag a subterm{" "}
+          <b>rightward out</b> of an enclosing box to abstract over it (the
+          reverse).
         </DemoNotes>
         <div className="flex flex-col gap-2 max-w-full">
           <div className="flex flex-wrap gap-1.5">
