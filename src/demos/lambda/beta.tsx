@@ -328,6 +328,8 @@ export default demo(
     return (
       <div>
         <DemoNotes>
+          <b>⚠️ Just a seed!</b>
+          <br />
           λ-terms as nested boxes. <b>β-reduce</b> by dragging an argument onto
           the binder (the <i>x</i> in <i>λx.</i>) of the λ it's applied to: as
           you go, each <i>x</i> in the body turns into a copy of the argument,
