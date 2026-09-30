@@ -114,6 +114,7 @@ export const demoList: DemoListEntry[] = [
       "layout-editor",
       "zx-string-diagram",
       "git-graph-surgery",
+      "lambda-beta",
     ],
   },
 ];
