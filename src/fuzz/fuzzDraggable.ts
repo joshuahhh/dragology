@@ -5,7 +5,9 @@
  * element that can be clicked or dragged, and plan actions: clicks
  * call the handler; drags run the element's drag behavior along a
  * short pointer path to a candidate target point, exercising previews
- * and interpolation. Every reached state is explored in turn.
+ * and interpolation. HTML controls inside foreignObjects (buttons,
+ * checkboxes, text inputs) get clicks and changes, too. Every reached
+ * state is explored in turn.
  *
  * Exploration runs in passes: each pass tries a few actions from every
  * known state (oldest first), and states discovered along the way join
@@ -47,7 +49,26 @@ export type FuzzAction =
       from: Vec2;
       to: Vec2;
       targetDescription: string;
+    }
+  | {
+      type: "html";
+      /** Id and path of the foreignObject holding the control. */
+      elementId: string | null;
+      path: string;
+      /** The control's index among the foreignObject's controls. */
+      index: number;
+      tag: string;
+      event: HtmlEvent;
     };
+
+/**
+ * An event fired on an HTML control: a click, or a change to a text
+ * value or a checked state.
+ */
+export type HtmlEvent =
+  | { type: "click" }
+  | { type: "change"; value: string }
+  | { type: "change"; checked: boolean };
 
 export type FuzzError = {
   /** The state the action started from. */
@@ -81,7 +102,10 @@ export type FuzzReport = {
   elapsedMs: number;
   /** Deepest visited state (number of actions from the initial state). */
   maxDepthVisited: number;
-  /** How many actions the initial state offers (clicks + drag targets). */
+  /**
+   * How many actions the initial state offers (clicks, HTML events,
+   * and drag targets).
+   */
   initialStateActions: number;
   /** The single most expensive action, for diagnosing slow runs. */
   slowestAction: { ms: number; action: FuzzAction } | null;
@@ -160,6 +184,61 @@ function collectElements(root: Svgx): Found[] {
   };
   go(root, "");
   return out;
+}
+
+/**
+ * HTML elements inside a foreignObject that handle clicks or changes,
+ * in document order. The library doesn't walk into foreignObjects, so
+ * these have no paths; actions find them again by index.
+ */
+function collectHtmlControls(foreignObject: Svgx): Svgx[] {
+  const out: Svgx[] = [];
+  const go = (el: Svgx) => {
+    const props = el.props as any;
+    if (props.onClick || props.onChange) out.push(el);
+    for (const child of React.Children.toArray(props.children)) {
+      if (React.isValidElement(child)) go(child as Svgx);
+    }
+  };
+  for (const child of React.Children.toArray(foreignObject.props.children)) {
+    if (React.isValidElement(child)) go(child as Svgx);
+  }
+  return out;
+}
+
+/**
+ * Events to try on an HTML control: a click if it handles clicks;
+ * toggling a checkbox or selecting a radio button; clearing a text
+ * field or typing into it.
+ */
+function htmlEvents(control: Svgx): HtmlEvent[] {
+  const props = control.props as any;
+  const events: HtmlEvent[] = [];
+  if (props.onClick) events.push({ type: "click" });
+  if (props.onChange) {
+    if (props.type === "checkbox") {
+      events.push({ type: "change", checked: !props.checked });
+    } else if (props.type === "radio") {
+      events.push({ type: "change", checked: true });
+    } else {
+      events.push(
+        { type: "change", value: "" },
+        { type: "change", value: "fuzz" },
+      );
+    }
+  }
+  return events;
+}
+
+/** A stand-in for the React event a handler would receive. */
+function fakeEvent(props: object, event: HtmlEvent) {
+  const target = { ...props, ...event };
+  return {
+    target,
+    currentTarget: target,
+    stopPropagation() {},
+    preventDefault() {},
+  };
 }
 
 /**
@@ -297,6 +376,13 @@ export function fuzzDraggable<T extends object>(
   type Planned =
     | { type: "click"; found: Found }
     | {
+        type: "html";
+        found: Found;
+        index: number;
+        tag: string;
+        event: HtmlEvent;
+      }
+    | {
         type: "drag";
         found: Found;
         from: Vec2;
@@ -350,6 +436,20 @@ export function fuzzDraggable<T extends object>(
       if ((found.element.props as any).onClick) {
         groups.push([{ type: "click", found }]);
       }
+      if (found.element.type === "foreignObject") {
+        collectHtmlControls(found.element).forEach((control, index) => {
+          const tag = String(control.type);
+          groups.push(
+            htmlEvents(control).map((event) => ({
+              type: "html",
+              found,
+              index,
+              tag,
+              event,
+            })),
+          );
+        });
+      }
       const callback = getOnDragCallbackOnElement<T>(found.element);
       if (!callback || !found.center) continue;
       const from = found.center;
@@ -389,24 +489,44 @@ export function fuzzDraggable<T extends object>(
     const action: FuzzAction =
       planned.type === "click"
         ? { type: "click", elementId: found.id, path: found.path }
-        : {
-            type: "drag",
-            elementId: found.id,
-            path: found.path,
-            from: planned.from,
-            to: planned.target.point,
-            targetDescription: planned.target.description,
-          };
+        : planned.type === "html"
+          ? {
+              type: "html",
+              elementId: found.id,
+              path: found.path,
+              index: planned.index,
+              tag: planned.tag,
+              event: planned.event,
+            }
+          : {
+              type: "drag",
+              elementId: found.id,
+              path: found.path,
+              from: planned.from,
+              to: planned.target.point,
+              targetDescription: planned.target.description,
+            };
     report.actionsTried++;
     const t0 = performance.now();
     try {
-      if (planned.type === "click") {
+      if (planned.type === "click" || planned.type === "html") {
         // Re-render so setState captures relative to a fresh render.
         const r = render(state, null, false);
         const el = findByPath(found.path, r.element);
-        const handler = el && ((el.element.props as any).onClick as any);
+        let handler: ((e: unknown) => void) | undefined;
+        let event: unknown;
+        if (el && planned.type === "click") {
+          handler = (el.element.props as any).onClick;
+          event = { stopPropagation() {}, preventDefault() {} };
+        } else if (el && planned.type === "html") {
+          const control = collectHtmlControls(el.element)[planned.index];
+          const props = (control?.props ?? {}) as any;
+          handler =
+            planned.event.type === "click" ? props.onClick : props.onChange;
+          event = fakeEvent(props, planned.event);
+        }
         if (handler) {
-          handler({ stopPropagation() {}, preventDefault() {} });
+          handler(event);
           const next = r.getCaptured();
           if (next !== null && next !== state) {
             checkLerp(node.layered, layeredInert(next, null));
@@ -539,6 +659,15 @@ export function fuzzDraggable<T extends object>(
 export function describeFuzzAction(a: FuzzAction | { type: "render" }): string {
   if (a.type === "render") return "rendering";
   if (a.type === "click") return `clicking ${a.elementId ?? a.path}`;
+  if (a.type === "html") {
+    const control = `<${a.tag}> #${a.index} in ${a.elementId ?? a.path}`;
+    const e = a.event;
+    if (e.type === "click") return `clicking ${control}`;
+    if ("checked" in e) {
+      return `${e.checked ? "checking" : "unchecking"} ${control}`;
+    }
+    return `setting ${control} to ${JSON.stringify(e.value)}`;
+  }
   return `dragging ${a.elementId ?? a.path} from (${a.from.x.toFixed(0)}, ${a.from.y.toFixed(0)}) to ${a.targetDescription}`;
 }
 
