@@ -76,7 +76,6 @@ export const demoList: DemoListEntry[] = [
   "bluefish-perm",
   "bluefish-lists-2d-sizes",
   "emerge-from",
-  "proof-by-dragging",
   "drag-spec-designer",
   "floating-dynamic-switch",
   "card-piles",
@@ -100,6 +99,7 @@ export const demoList: DemoListEntry[] = [
   "controlled",
   "simple-triangle-custom",
   "with-pointer-delay",
+  { section: "Nursery", demos: ["proof-by-dragging"] },
 ];
 
 /** Every listed demo id, in page order, with sections flattened. */
