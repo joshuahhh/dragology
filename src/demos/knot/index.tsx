@@ -601,23 +601,26 @@ export default demo(
   () => (
     <div>
       <DemoNotes>
-        A knot diagram you can manipulate by{" "}
-        <DemoLink href="https://en.wikipedia.org/wiki/Reidemeister_move">
-          Reidemeister moves
-        </DemoLink>
-        . Each strand between two crossings is a single curve. Grab one by its
-        middle: drag it onto a ring beside it to twist a loop (R1), push it
-        across a neighboring strand (R2; hold <kbd>Alt</kbd> to pass under), or
-        slide it across a crossing (R3; or drag the crossing across the strand).
-        Drag a loop back into the strand or a bigon back across its partner to
-        undo. Drag in other directions to bend the strand, or drag a crossing to
-        move it. The Jones polynomial never changes; crossing number and writhe
-        do. Tangle A is the{" "}
-        <DemoLink href="https://en.wikipedia.org/wiki/Hard_unknot">
-          Culprit
-        </DemoLink>
-        , an unknot that can't be simplified until you first make it worse.
-        Tangle B is a trefoil in disguise.
+        <p className="mb-2 font-bold">⚠️ Just a seed!</p>
+        <p>
+          A knot diagram you can manipulate by{" "}
+          <DemoLink href="https://en.wikipedia.org/wiki/Reidemeister_move">
+            Reidemeister moves
+          </DemoLink>
+          . Each strand between two crossings is a single curve. Grab one by its
+          middle: drag it onto a ring beside it to twist a loop (R1), push it
+          across a neighboring strand (R2; hold <kbd>Alt</kbd> to pass under),
+          or slide it across a crossing (R3; or drag the crossing across the
+          strand). Drag a loop back into the strand or a bigon back across its
+          partner to undo. Drag in other directions to bend the strand, or drag
+          a crossing to move it. The Jones polynomial never changes; crossing
+          number and writhe do. Tangle A is the{" "}
+          <DemoLink href="https://en.wikipedia.org/wiki/Hard_unknot">
+            Culprit
+          </DemoLink>
+          , an unknot that can't be simplified until you first make it worse.
+          Tangle B is a trefoil in disguise.
+        </p>
       </DemoNotes>
       <KnotDemo />
       <MoveLegend />
