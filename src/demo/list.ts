@@ -44,7 +44,6 @@ export const demoList: DemoListEntry[] = [
   "sokoban",
   "spinny",
   "scheduler",
-  "gantt",
   "graph",
   "tromino",
   "angle",
@@ -100,7 +99,10 @@ export const demoList: DemoListEntry[] = [
   "controlled",
   "simple-triangle-custom",
   "with-pointer-delay",
-  { section: "Nursery", demos: ["proof-by-dragging", "regex-nfa-sync"] },
+  {
+    section: "Nursery",
+    demos: ["proof-by-dragging", "regex-nfa-sync", "gantt"],
+  },
 ];
 
 /** Every listed demo id, in page order, with sections flattened. */
