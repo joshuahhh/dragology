@@ -582,6 +582,7 @@ export default demo(
       "d.closest",
       "spec.withFloating [ghost]",
       "spec.withBranchTransition",
+      "spec.whenFar",
       "reordering",
     ],
   },
