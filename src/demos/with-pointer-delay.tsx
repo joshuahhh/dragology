@@ -99,5 +99,16 @@ export default demo(
       </div>
     );
   },
-  { tags: ["d.custom", "d.vary"] },
+  {
+    // The fuzzer's drags take no time, so with any delay every drop
+    // lands where the drag started.
+    fuzz: [
+      {
+        name: "no delay",
+        draggable,
+        initialState: { ...initialState, config: { delayMs: 0 } },
+      },
+    ],
+    tags: ["d.custom", "d.vary"],
+  },
 );

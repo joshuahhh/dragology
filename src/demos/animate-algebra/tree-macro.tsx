@@ -847,6 +847,36 @@ function patternToString(p: Pattern): string {
   return `${trigger}(${p.label} ${children})`;
 }
 
+// # Fuzz targets
+
+/** Rules recorded as the panel would: forward and reverse. */
+function recordRules(before: Tree, after: Tree): Rewrite[] {
+  return [deriveRule(before, after), deriveRule(after, before)].filter(
+    (r): r is Rewrite => r !== null,
+  );
+}
+
+const [leafA, leafB] = state1.tree.children[0].children;
+const leafC = state1.tree.children[1];
+// Demonstrations: (+ A B) ↔ (+ B A) and (+ (+ A B) C) ↔ (+ A (+ B C)).
+const fuzzRules: Rewrite[] = [
+  ...recordRules(
+    state1.tree,
+    swapChildrenAtParent(state1.tree, state1.tree.id, 0, 1),
+  ),
+  ...recordRules(state1.tree, {
+    ...state1.tree,
+    children: [leafA, { ...state1.tree.children[0], children: [leafB, leafC] }],
+  }),
+];
+
+/** Macro-mode dedupe key: node ids are fresh on every pick-up. */
+function macroStateKey(state: State): string {
+  return JSON.stringify([state.tree, state.gutter], (k, v) =>
+    k === "id" ? undefined : v,
+  );
+}
+
 // # Component export
 
 export default demo(
@@ -869,6 +899,25 @@ export default demo(
     );
   },
   {
+    // With no recorded rules (the default), normal mode offers no
+    // moves, so fuzz the configurations the panel leads to instead.
+    fuzz: [
+      {
+        name: "recorded rules",
+        draggable: makeDraggable({ ...defaultConfig, userRules: fuzzRules }),
+        initialState: state1,
+      },
+      {
+        name: "macro mode",
+        draggable: makeDraggable({
+          ...defaultConfig,
+          macroMode: true,
+          beforeTree: state1.tree,
+        }),
+        initialState: state1,
+        options: { stateKey: macroStateKey },
+      },
+    ],
     tags: [
       "d.between",
       "d.closest",
