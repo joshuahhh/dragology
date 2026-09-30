@@ -33,7 +33,6 @@ export const demoList: DemoListEntry[] = [
   "animate-algebra-tree",
   "animate-algebra-stage-builder",
   "animate-algebra-tree-macro",
-  "regex-nfa-sync",
   "outline",
   "braid",
   "todo",
@@ -100,7 +99,7 @@ export const demoList: DemoListEntry[] = [
   "controlled",
   "simple-triangle-custom",
   "with-pointer-delay",
-  { section: "Nursery", demos: ["proof-by-dragging"] },
+  { section: "Nursery", demos: ["proof-by-dragging", "regex-nfa-sync"] },
 ];
 
 /** Every listed demo id, in page order, with sections flattened. */
