@@ -35,7 +35,7 @@ function item(value: number): Item {
   return { id: `h${counter++}-${value}`, value };
 }
 
-const initialState: State = {
+export const initialState: State = {
   heap: INITIAL_HEAP.map(item),
   deck: DECK_VALUES.map(item),
   out: [],

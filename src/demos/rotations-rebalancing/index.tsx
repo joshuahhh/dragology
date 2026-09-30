@@ -1,8 +1,12 @@
 import { demo } from "../../demo";
 import { DemoNotes } from "../../demo/ui";
+import * as balanced from "./balanced";
 import { BalancedPanel } from "./balanced";
+import * as heap from "./heap";
 import { HeapPanel } from "./heap";
+import * as splay from "./splay";
 import { SplayPanel } from "./splay";
+import * as twoThree from "./two-three";
 import { TwoThreePanel } from "./two-three";
 
 // # Rotations & Rebalancing
@@ -105,6 +109,35 @@ export default demo(
       "spec.whenFar",
       "dragologyEmergeFrom",
       "data structures",
+    ],
+    // Explicit targets so red-black mode (not the panel's default) is
+    // covered too.
+    fuzz: [
+      {
+        name: "splay",
+        draggable: splay.splayDraggable,
+        initialState: splay.initialState,
+      },
+      {
+        name: "avl",
+        draggable: balanced.balancedDraggable("avl"),
+        initialState: balanced.initialState,
+      },
+      {
+        name: "red-black",
+        draggable: balanced.balancedDraggable("red-black"),
+        initialState: balanced.initialState,
+      },
+      {
+        name: "2-3",
+        draggable: twoThree.twoThreeDraggable,
+        initialState: twoThree.initialState,
+      },
+      {
+        name: "heap",
+        draggable: heap.heapDraggable,
+        initialState: heap.initialState,
+      },
     ],
   },
 );

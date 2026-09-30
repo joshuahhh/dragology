@@ -29,7 +29,7 @@ type State = {
 
 const ALL_KEYS = [50, 20, 80, 10, 30, 60, 90, 40, 70, 25, 55, 85];
 
-const initialState: State = { root: null, deck: ALL_KEYS };
+export const initialState: State = { root: null, deck: ALL_KEYS };
 
 // ## Insertion
 

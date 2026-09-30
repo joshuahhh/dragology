@@ -38,7 +38,7 @@ type State = {
 
 const ALL_KEYS = [5, 2, 8, 1, 9, 3, 7, 4, 6, 10];
 
-const initialState: State = { root: null, deck: ALL_KEYS };
+export const initialState: State = { root: null, deck: ALL_KEYS };
 
 export const WIDTH = 520;
 export const HEIGHT = 340;

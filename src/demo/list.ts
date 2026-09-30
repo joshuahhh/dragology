@@ -68,7 +68,6 @@ export const demoList: DemoListEntry[] = [
   "chain-of-links",
   "nodes-and-noodles",
   "sprouting-tree",
-  "rotations-rebalancing",
   "weird-floating-vs-fixed",
   "snap-to-islands",
   "snap-to-islands-in-out",
@@ -116,6 +115,7 @@ export const demoList: DemoListEntry[] = [
       "permutation-lab",
       "plane-partition",
       "aztec-diamond",
+      "rotations-rebalancing",
     ],
   },
 ];

@@ -36,7 +36,7 @@ function buildInitial(): State {
   return { root: root!, lastStep: null, lastKey: null };
 }
 
-const initialState: State = buildInitial();
+export const initialState: State = buildInitial();
 
 export const WIDTH = 520;
 export const HEIGHT = 320;
