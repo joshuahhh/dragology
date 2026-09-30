@@ -45,6 +45,14 @@ const defaultConfig: Config = {
   etaReduce: false,
 };
 
+const allRewritesConfig: Config = {
+  beta: true,
+  abstract: true,
+  abstractAllOccurrences: true,
+  etaExpand: true,
+  etaReduce: true,
+};
+
 // # Colors
 
 const hueByName = new Map<string, number>();
@@ -418,6 +426,21 @@ export default demo(
     );
   },
   {
+    // Every example's start state, with the default rewrites; plus a
+    // couple with every rewrite on, so abstraction over all occurrences
+    // and η get exercised too.
+    fuzz: [
+      ...exampleNames.map((name) => ({
+        name,
+        draggable: draggableFactory(defaultConfig),
+        initialState: initialStates[name],
+      })),
+      ...(["duplicate", "1 + 2"] as const).map((name) => ({
+        name: `${name} (all rewrites)`,
+        draggable: draggableFactory(allRewritesConfig),
+        initialState: initialStates[name],
+      })),
+    ],
     tags: ["d.closest", "d.between", "spec.onDrop", "dragologyEmergeFrom"],
   },
 );
