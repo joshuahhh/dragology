@@ -2,6 +2,7 @@ import _ from "lodash";
 import { useMemo, useState } from "react";
 import { demo } from "../demo";
 import {
+  ConfigCheckbox,
   ConfigPanel,
   ConfigSelect,
   DemoDraggable,
@@ -998,6 +999,7 @@ function latticeView(
   d: DragSpecBuilder<State>,
   n: number,
   draggedId: string | null,
+  showColors: boolean,
 ): Svgx {
   const lattice = getLattice(n, LAT_W, latticeHeight(n));
   const miniR = n <= 4 ? 14 : 11;
@@ -1017,39 +1019,41 @@ function latticeView(
             y1={va.y}
             x2={vb.x}
             y2={vb.y}
-            stroke={classColor(cls, lattice.classes)}
+            stroke={showColors ? classColor(cls, lattice.classes) : "#cbd5e1"}
             strokeWidth={1.5}
-            opacity={0.45}
+            opacity={showColors ? 0.45 : 1}
           />
         );
       })}
       {/* legend: edge color = which two operator slots re-associate */}
-      <g transform={translate(LAT_W + 10, 0)}>
-        {lattice.classes.map((cls, k) => {
-          const [i, j] = cls.split("-").map(Number);
-          return (
-            <g transform={translate(0, k * 18)}>
-              <line
-                x1={0}
-                y1={0}
-                x2={18}
-                y2={0}
-                stroke={classColor(cls, lattice.classes)}
-                strokeWidth={3}
-                strokeLinecap="round"
-              />
-              <text
-                transform={translate(24, 0)}
-                dominantBaseline="middle"
-                fontSize={11}
-                fill="#64748b"
-              >
-                {`${LETTERS[i]}·${LETTERS[i + 1]}, ${LETTERS[j]}·${LETTERS[j + 1]}`}
-              </text>
-            </g>
-          );
-        })}
-      </g>
+      {showColors && (
+        <g transform={translate(LAT_W + 10, 0)}>
+          {lattice.classes.map((cls, k) => {
+            const [i, j] = cls.split("-").map(Number);
+            return (
+              <g transform={translate(0, k * 18)}>
+                <line
+                  x1={0}
+                  y1={0}
+                  x2={18}
+                  y2={0}
+                  stroke={classColor(cls, lattice.classes)}
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                />
+                <text
+                  transform={translate(24, 0)}
+                  dominantBaseline="middle"
+                  fontSize={11}
+                  fill="#64748b"
+                >
+                  {`${LETTERS[i]}·${LETTERS[i + 1]}, ${LETTERS[j]}·${LETTERS[j + 1]}`}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      )}
       {lattice.vertices.map((v) => (
         <g transform={translate(v.x, v.y)}>
           {miniTriangulation(v.tree, miniR)}
@@ -1094,7 +1098,10 @@ function label(x: number, y: number, text: string): Svgx {
   );
 }
 
-function makeDraggable(n: number): Draggable<State> {
+function makeDraggable(
+  n: number,
+  showLatticeColors: boolean,
+): Draggable<State> {
   return ({ state, d, draggedId }) => {
     const infos = analyze(state.root);
     return (
@@ -1108,7 +1115,7 @@ function makeDraggable(n: number): Draggable<State> {
         {label(PAREN_ORIGIN.x - 15, PAREN_ORIGIN.y - 24, "parenthesization")}
         {parenView(state, infos, d)}
         {label(20, LAT_ORIGIN.y - 30, "tamari lattice")}
-        {latticeView(state, infos, d, n, draggedId)}
+        {latticeView(state, infos, d, n, draggedId, showLatticeColors)}
       </g>
     );
   };
@@ -1117,7 +1124,11 @@ function makeDraggable(n: number): Draggable<State> {
 export default demo(
   () => {
     const [n, setN] = useState(4);
-    const draggable = useMemo(() => makeDraggable(n), [n]);
+    const [showLatticeColors, setShowLatticeColors] = useState(false);
+    const draggable = useMemo(
+      () => makeDraggable(n, showLatticeColors),
+      [n, showLatticeColors],
+    );
     return (
       <DemoWithConfig>
         <div>
@@ -1131,9 +1142,11 @@ export default demo(
             tree nodes (= triangles = humps); saturated strokes are tree edges
             (= diagonals = paren pairs). Below, the Tamari lattice: drag the
             ring along edges to walk the flip graph (left comb at the bottom,
-            right comb at the top). Lattice edges have fixed colors by which two
-            operator slots the rotation re-associates – in Loday&apos;s
-            associahedron these are exactly the parallel classes of edges.
+            right comb at the top). With &ldquo;Color lattice edges&rdquo; on,
+            edges are colored by which two operator slots the rotation
+            re-associates – in Loday&apos;s associahedron these are exactly the
+            parallel classes of edges. (These colors are unrelated to the ones
+            above.)
           </DemoNotes>
           <DemoDraggable
             key={n}
@@ -1150,6 +1163,12 @@ export default demo(
             onChange={setN}
             options={[3, 4, 5] as const}
           />
+          <ConfigCheckbox
+            value={showLatticeColors}
+            onChange={setShowLatticeColors}
+          >
+            Color lattice edges
+          </ConfigCheckbox>
         </ConfigPanel>
       </DemoWithConfig>
     );
