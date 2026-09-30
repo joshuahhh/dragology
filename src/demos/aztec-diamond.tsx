@@ -12,7 +12,6 @@ import {
   DemoWithConfig,
 } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { inOrder } from "../DragSpec";
 import { Vec2 } from "../math/vec2";
 import { rotateDeg, translate } from "../svgx/helpers";
 import { makeId } from "../utils";
@@ -21,8 +20,9 @@ import { makeId } from "../utils";
 // by "flips": find two parallel dominoes forming a 2×2 block and
 // rotate the block by 90°. Here you grab one domino of such a block
 // and turn the block like a knob: the pair rotates rigidly about the
-// block's center (a `d.vary` on the turn angle), and on release it
-// settles to the nearest quarter turn – either way round, or back.
+// block's center (a `d.vary` on the turn angle), as far round as you
+// like, and on release it settles to the nearest quarter turn. (A
+// half turn gives back the same tiling with the two dominoes swapped.)
 //
 // Overlaid is Thurston's height function on the grid vertices. A flip
 // changes the height at just one vertex (the center of the block) by
@@ -339,8 +339,8 @@ function makeDraggable(config: Config): Draggable<State> {
   // Everything that depends only on the tiling the diagram would
   // settle to if dropped now: colors, flippability, and the height
   // overlay. d.vary re-renders the diagram many times per frame, but
-  // during one drag there are only three settled tilings (turned
-  // -90, 0 or +90), so we cache these per (dominoes object, turn,
+  // during one drag the settled tiling only changes when the turn
+  // passes a 45° mark, so we cache these per (dominoes object, turn,
   // rounded spin) and each render only computes transforms.
   type Derived = {
     colorKey: Record<string, keyof typeof DOMINO_COLORS>;
@@ -453,21 +453,22 @@ function makeDraggable(config: Config): Draggable<State> {
                 flippable &&
                 (() => {
                   const base = settle(state);
+                  // The spin is unconstrained, so you can keep turning
+                  // through full rotations. A domino in two blocks
+                  // offers both; stickiness keeps the drag on one block
+                  // once it's clearly the one you're turning, rather
+                  // than hopping between them mid-turn.
                   return d
                     .closest(
                       blocksOf(base, id).map(({ bx, by, pid }) =>
-                        d.varyFunc(
-                          [0],
-                          ([spin]) => ({
-                            ...base,
-                            turn: { bx, by, ids: [id, pid], spin },
-                          }),
-                          {
-                            constraint: (s) => inOrder([-90, s.turn!.spin, 90]),
-                          },
-                        ),
+                        d.varyFunc([0], ([spin]) => ({
+                          ...base,
+                          turn: { bx, by, ids: [id, pid], spin },
+                        })),
                       ),
+                      { stickiness: 12 },
                     )
+                    .withBranchTransition(120)
                     .onDrop(settle);
                 })
               }
@@ -514,10 +515,10 @@ export default demo(
               Aztec diamond
             </DemoLink>
             . Two parallel dominoes side by side form a 2×2 block; drag one of
-            them to turn the block like a knob, either way round; let go and it
-            settles to the nearest quarter turn. The numbers are Thurston's
-            height function – each flip changes it at exactly one vertex. See
-            also{" "}
+            them to turn the block like a knob, either way and as far round as
+            you like; let go and it settles to the nearest quarter turn. The
+            numbers are Thurston's height function – each flip changes it at
+            exactly one vertex. See also{" "}
             <DemoLink href="#/demos/plane-partition">plane-partition</DemoLink>,
             the lozenge cousin of this demo.
           </DemoNotes>
