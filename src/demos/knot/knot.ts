@@ -636,6 +636,23 @@ function firstValid(
   return first && repairLocal(first, withNeighbors(first, near), seed, 300);
 }
 
+/** Split c into exact pieces at the points nearest `at` (in order). */
+function splitNear(
+  c: Cubic,
+  at: Vec2[],
+): { pieces: Cubic[]; splits: { pos: Vec2; dir: Vec2 }[] } {
+  let prev = 0;
+  const ts = at.map((p) => {
+    prev = Math.min(0.98, Math.max(prev + 0.02, closestOnCubic(c, p).t));
+    return prev;
+  });
+  const bounds = [0, ...ts, 1];
+  return {
+    pieces: ts.concat(1).map((t1, q) => subCubic(c, bounds[q], t1)),
+    splits: ts.map((t) => ({ pos: bez(c, t), dir: bezTan(c, t) })),
+  };
+}
+
 /**
  * If visits i and i+1 are at two different crossings that the strand
  * passes the same way (over both, or under both): i+1, and the other
@@ -1123,7 +1140,8 @@ export function crossingMovesAt(k: Knot, id: string): Move[] {
     .flatMap((_, i) => trianglesAt(k, i))
     .filter((tri) => k.code[tri.a2].n === id)
     .map((tri) => r3With(k, tri, "crossing"))
-    .filter((m): m is Move => m !== null);
+    .filter((m): m is Move => m !== null)
+    .map(conformed);
 }
 
 /** R3 across the crossing C whose visits are a2 (next to oA) and b2 (next to oB). */
@@ -1340,7 +1358,7 @@ export function movesAt(
     want("R2-") ? r2Pull(k, i) : null,
     ...(want("R3") ? r3All(k, i) : []),
   ];
-  return candidates.filter((m): m is Move => m !== null);
+  return candidates.filter((m): m is Move => m !== null).map(conformed);
 }
 
 // # Cleanup
@@ -1458,6 +1476,58 @@ export function cleanup(k0: Knot): Knot {
     if (!progressed) break;
   }
   return k;
+}
+
+/**
+ * A move with its pass nodes moved onto the curves cleanup will merge
+ * them into (with hints that restore those curves exactly), so what
+ * the drag previews is what the drop leaves.
+ */
+function conformed(m: Move): Move {
+  const to = m.to;
+  const done = cleanup(to);
+  if (done === to) return m;
+  const out = clone(to);
+  // visits of `to` that survive cleanup, in order: done.code[r] is
+  // to.code[kept[r]]
+  const kept = to.code.flatMap((v, q) => (v.n in done.nodes ? [q] : []));
+  const doneCubics = edgeCubics(done);
+  const V = to.code.length;
+  kept.forEach((s, r) => {
+    const n = to.code[s].n;
+    out.nodes[n] = done.nodes[n];
+    const run: number[] = [];
+    for (
+      let q = cyc(s + 1, V);
+      !(to.code[q].n in done.nodes);
+      q = cyc(q + 1, V)
+    ) {
+      run.push(q);
+    }
+    const doneE = done.code[r].e;
+    if (run.length === 0) {
+      out.edges[to.code[s].e] = done.edges[doneE];
+      return;
+    }
+    const { pieces, splits } = splitNear(
+      doneCubics[r],
+      run.map((q) => Vec2(to.nodes[to.code[q].n])),
+    );
+    const hint = { ...done.edges[doneE], e: doneE };
+    run.forEach((q, p) => {
+      const nd = to.nodes[to.code[q].n];
+      out.nodes[to.code[q].n] = passNode(
+        splits[p].pos,
+        splits[p].dir,
+        hint,
+        nd.ghostOf,
+      );
+    });
+    [s, ...run].forEach((q, p) => {
+      out.edges[to.code[q].e] = handlesOf(pieces[p]);
+    });
+  });
+  return isValid(out) ? { ...m, to: out } : m;
 }
 
 // # Construction
