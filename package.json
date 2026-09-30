@@ -7,7 +7,7 @@
   "types": "dist-lib/index.d.ts",
   "files": [
     "dist-lib",
-    "AGENTS.md"
+    "docs/AGENTS.md"
   ],
   "scripts": {
     "dev": "vite",
