@@ -328,14 +328,15 @@ export default demo(
     return (
       <div>
         <DemoNotes>
-          <b>⚠️ Just a seed!</b>
-          <br />
-          λ-terms as nested boxes. <b>β-reduce</b> by dragging an argument onto
-          the binder (the <i>x</i> in <i>λx.</i>) of the λ it's applied to: as
-          you go, each <i>x</i> in the body turns into a copy of the argument,
-          and when you drop, the λ dissolves. Drag a subterm{" "}
-          <b>rightward out</b> of an enclosing box to abstract over it (the
-          reverse).
+          <p className="mb-2 font-bold">⚠️ Just a seed!</p>
+          <p>
+            λ-terms as nested boxes. <b>β-reduce</b> by dragging an argument
+            onto the binder (the <i>x</i> in <i>λx.</i>) of the λ it's applied
+            to: as you go, each <i>x</i> in the body turns into a copy of the
+            argument, and when you drop, the λ dissolves. Drag a subterm{" "}
+            <b>rightward out</b> of an enclosing box to abstract over it (the
+            reverse).
+          </p>
         </DemoNotes>
         <div className="flex flex-col gap-2 max-w-full">
           <div className="flex flex-wrap gap-1.5">
