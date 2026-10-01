@@ -35,9 +35,8 @@ function draggableFactory(mode: Mode): Draggable<State> {
   return ({ state, d }) => (
     <g>
       {/* background positions */}
-      {POSITIONS.map((pos, i) => (
+      {POSITIONS.map((pos) => (
         <rect
-          key={i}
           transform={translate(pos)}
           width={SQUARE_SIZE}
           height={SQUARE_SIZE}

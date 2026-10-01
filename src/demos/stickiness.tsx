@@ -25,9 +25,8 @@ const SIZE = 40;
 function makeDraggable(stickiness: number): Draggable<State> {
   return ({ state, d }) => (
     <g>
-      {POSITIONS.map((pos, i) => (
+      {POSITIONS.map((pos) => (
         <rect
-          key={i}
           transform={translate(pos)}
           width={SIZE}
           height={SIZE}

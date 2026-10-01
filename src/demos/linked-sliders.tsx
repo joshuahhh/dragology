@@ -22,7 +22,7 @@ export const initialState: State = {
 const draggable: Draggable<State> = ({ state, d }) => (
   <g>
     {state.values.map((value, i) => (
-      <g key={i} transform={translate(X0, Y0 + i * SPACING)}>
+      <g transform={translate(X0, Y0 + i * SPACING)}>
         {/* Track */}
         <rect width={W} height={H} rx={H / 2} fill="#e5e7eb" y={-H / 2} />
 

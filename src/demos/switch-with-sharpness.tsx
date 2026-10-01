@@ -29,7 +29,7 @@ const draggable: Draggable<State> = ({ state, d }) => (
       const x = padX + col * cellW;
       const y = padY + row * cellH;
       return (
-        <g key={i} transform={translate(x, y)}>
+        <g transform={translate(x, y)}>
           <text y={-6} fontSize={11} fontFamily="monospace" fill="#999">
             sharpness: {sharpness}
           </text>

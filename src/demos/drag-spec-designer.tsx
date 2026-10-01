@@ -551,7 +551,6 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
     return (
       <g
         id={`n-${childId}`}
-        key={childId}
         transform={translate(pos)}
         dragologyZIndex={draggedId === `n-${childId}` ? 10 : 1}
         dragologyOnDrag={() => {
@@ -817,7 +816,6 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
     return (
       <g
         id={`n-${nodeId}`}
-        key={nodeId}
         transform={translate(node)}
         dragologyZIndex={isDragged ? 10 : 0}
         dragologyOnDrag={() => {
@@ -878,14 +876,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
 
       {/* toolbar group labels */}
       {toolbarGroupPositions.map((group) => (
-        <text
-          key={group.title}
-          x={group.x}
-          y={14}
-          fontSize={9}
-          fill="#aaa"
-          fontWeight="500"
-        >
+        <text x={group.x} y={14} fontSize={9} fill="#aaa" fontWeight="500">
           {group.title}
         </text>
       ))}
@@ -894,7 +885,6 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       {toolbarDefs.map((t) => (
         <g
           id={`tb-${t.label}`}
-          key={t.label}
           transform={translate(
             Vec2(t.x, TOOLBAR_H / 2 + 7).add(
               t.makeExpr().type !== "state" ? Vec2(-t.hw, -12) : Vec2(0),
@@ -974,7 +964,7 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
           PREVIEW
         </text>
         {(["A", "B", "C"] as const).map((l) => (
-          <g key={l} transform={translate(PV_DOTS[l])}>
+          <g transform={translate(PV_DOTS[l])}>
             <circle r={PV_DOT_R} fill={STATE_FILL[l]} opacity={0.25} />
             <text
               textAnchor="middle"

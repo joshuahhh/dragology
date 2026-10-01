@@ -59,7 +59,7 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       {state.circles.map((circle, circleIdx) => {
         const isCircleDragged = draggedId === circle.id;
         return (
-          <g key={circle.id}>
+          <g>
             {/* Circle boundary */}
             <circle
               id={circle.id}
@@ -116,7 +116,6 @@ const draggable: Draggable<State> = ({ state, d, draggedId }) => {
 
         return (
           <circle
-            key={point.id}
             id={point.id}
             transform={translate(absPos)}
             r={10}

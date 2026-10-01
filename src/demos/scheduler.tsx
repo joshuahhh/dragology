@@ -61,7 +61,6 @@ export const draggable: Draggable<State> = ({ state, d, draggedId }) => {
       {_.range(NUM_TRACKS).map((t) => (
         <g>
           <line
-            key={t}
             x1={0}
             y1={trackY(t)}
             x2={END_TIME}

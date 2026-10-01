@@ -23,7 +23,7 @@ const draggable: Draggable<State> = ({ state, d }) => (
       const radius =
         state.type === "on-island" && state.island === id ? R_BIG : R_SMALL;
       return (
-        <g key={id} transform={translate(islands[id].x, islands[id].y)}>
+        <g transform={translate(islands[id].x, islands[id].y)}>
           <circle r={radius} fill="none" stroke="#ccc" strokeWidth={2} />
           <text y={radius + 16} textAnchor="middle" fill="#aaa" fontSize={12}>
             {id}
