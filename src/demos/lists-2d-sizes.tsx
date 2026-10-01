@@ -5,7 +5,6 @@ import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
 import { translate } from "../svgx/helpers";
-import { assertDefined } from "../utils/assert";
 
 type State = {
   rows: {
@@ -60,9 +59,8 @@ const draggable: Draggable<State> = ({ state, d }) => {
     <g>
       {state.rows.map((row, rowIdx) => {
         const origY = y;
-        const maxItemHeight = assertDefined(
-          _.max(row.items.map((item) => item.h)),
-        );
+        // An empty row stays as a drop target, at the height of a small tile.
+        const maxItemHeight = _.max(row.items.map((item) => item.h)) ?? 50;
         y += maxItemHeight + ROW_PADDING * 2 + ROW_GAP;
         let x = 0;
         return (
