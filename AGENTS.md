@@ -20,6 +20,8 @@ This repo is the Dragology library (public API: `src/lib.ts`) plus a site of dem
 
 Use the `package.json` scripts; don't improvise your own versions of them. `tsc --noEmit` is wrong!
 
+Fuzzing every demo takes several minutes. Don't block on a full `pnpm fuzz` without checking with the user first; fuzz just the demos your change touches (`-t "^fuzz (a|b|c)$"`) instead.
+
 ## Layout
 
 - `src/lib.ts`: everything the library exports.
