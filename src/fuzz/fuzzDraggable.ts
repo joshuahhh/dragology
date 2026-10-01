@@ -6,8 +6,8 @@
  * call the handler; drags run the element's drag behavior along a
  * short pointer path to a candidate target point, exercising previews
  * and interpolation. Target points are the centers of id'd elements,
- * the drop positions the element's drag spec names (where the
- * element sits in each of its `fixed`/`vary` states), and short
+ * the drop positions the element's drag spec reports in its debug
+ * trace (e.g. where each `fixed` state puts the element), and short
  * nudges, the nudges also from an off-center grab (so drags that
  * rotate or scale the element, leaving its center put, do something).
  * HTML controls inside foreignObjects (buttons, checkboxes, text
@@ -31,6 +31,7 @@ import _ from "lodash";
 import React from "react";
 import { DragInitContext, dragSpecToBehavior } from "../DragBehavior";
 import { DragSpec, DragSpecData } from "../DragSpec";
+import { getTraceInfo } from "../DragSpecTraceInfo";
 import {
   Draggable,
   getOnDragCallbackOnElement,
@@ -213,27 +214,47 @@ function pointInBox(bounds: Bounds & { empty: false }, frac: Vec2): Vec2 {
 }
 
 /**
- * The states a drag spec names as drop candidates: its `fixed`
- * states, and the starting states of its `vary`s, looking through
- * combinators and wrappers. (Specs built at runtime, like `custom` or
- * `react-to`, name none.)
+ * Where the pointer goes to reach each drop candidate of a traced
+ * drag spec (one built with `debug.trace`): the positions of its
+ * `fixed` states, of the states its `between`s and `vary`s rendered,
+ * and the centers of its `dropTarget`s, looking through combinators
+ * and wrappers. Untraced parts (like a `whenFar` background while the
+ * pointer is near) contribute nothing.
  */
-function specDropStates<T extends object>(spec: DragSpecData<T>): T[] {
+function tracedDropPositions(spec: DragSpecData<any>): Vec2[] {
+  const here: Vec2[] = [];
   switch (spec.type) {
-    case "fixed":
-    case "vary":
-      return [spec.state];
-    case "closest":
+    case "fixed": {
+      const position = getTraceInfo(spec)?.position;
+      if (position) here.push(position);
+      break;
+    }
     case "between":
-      return spec.specs.flatMap(specDropStates);
-    case "whenFar":
-      return [
-        ...specDropStates(spec.foreground),
-        ...specDropStates(spec.background),
-      ];
-    default:
-      return "inner" in spec ? specDropStates(spec.inner) : [];
+    case "vary":
+    case "varyFunc":
+      for (const r of getTraceInfo(spec)?.renderedStates ?? []) {
+        here.push(r.position);
+      }
+      break;
+    case "dropTarget": {
+      const bounds = getTraceInfo(spec)?.globalBounds;
+      if (bounds && !bounds.empty) here.push(boundsCenter(bounds));
+      break;
+    }
+    case "switchToStateAndFollow":
+    case "reactTo": {
+      const inner = getTraceInfo(spec)?.tracedInner;
+      if (inner) here.push(...tracedDropPositions(inner));
+      break;
+    }
   }
+  const children: DragSpecData<any>[] = [
+    ...("specs" in spec ? spec.specs : []),
+    ...("inner" in spec ? [spec.inner] : []),
+    ...("foreground" in spec ? [spec.foreground, spec.background] : []),
+    ...("innerSpec" in spec ? [spec.innerSpec] : []),
+  ];
+  return [...here, ...children.flatMap(tracedDropPositions)];
 }
 
 /**
@@ -442,13 +463,12 @@ export function fuzzDraggable<T extends object>(
         grab: Vec2;
         from: Vec2;
         /**
-         * A pointer target, or one of the spec's drop states to aim
-         * for (where the element would sit in it). The spec is only
-         * built when a drop-state action runs, since that can be
-         * expensive, and an action whose slot is past the end of the
-         * (shuffled) drop states is skipped.
+         * A pointer target, or one of the spec's drop positions. The
+         * spec is only built and traced when a drop-position action
+         * runs, since that can be expensive, and an action whose slot
+         * is past the end of the (shuffled) drop positions is skipped.
          */
-        target: { point: Vec2 } | { dropStates: () => T[]; slot: number };
+        target: { point: Vec2 } | { dropPoints: () => Vec2[]; slot: number };
         description: string;
       };
 
@@ -520,11 +540,25 @@ export function fuzzDraggable<T extends object>(
         localToGlobal(found.accumulatedTransform, pointInBox(lb, grab));
       const from = grabFrom(mainGrab);
 
-      // The spec's drop states, other than staying put, shuffled. (If
-      // building the spec throws, the drag itself will report it.)
-      const dropStates = _.once((): T[] => {
+      // The spec's drop positions, other than staying put, deduped and
+      // shuffled. (If building the behavior throws, the drag itself
+      // will report it.)
+      const dropPoints = _.once((): Vec2[] => {
         try {
-          return shuffle(specDropStates(callback()).filter((s) => s !== state));
+          const behavior = dragSpecToBehavior(callback(), {
+            draggable,
+            draggedPath: found.path,
+            draggedId: found.id,
+            anchorPos: pointInBox(lb, mainGrab),
+            startState: state,
+            debug: { varyVisualizer: false, trace: true },
+          });
+          const points = tracedDropPositions(
+            behavior({ pointer: from }).tracedSpec,
+          ).filter((p) => p.dist(from) > 1);
+          return shuffle(
+            _.uniqBy(points, (p) => `${Math.round(p.x)},${Math.round(p.y)}`),
+          );
         } catch {
           return [];
         }
@@ -544,7 +578,7 @@ export function fuzzDraggable<T extends object>(
           found,
           grab: mainGrab,
           from,
-          target: { dropStates, slot },
+          target: { dropPoints, slot },
           description: `drop position (sample ${slot}) of the spec`,
         })),
         ...grabPoints.flatMap((grab) => {
@@ -580,58 +614,38 @@ export function fuzzDraggable<T extends object>(
     }
   };
 
-  /**
-   * Where the pointer must be for `found`, grabbed at `grab`, to sit
-   * where it does in `state`. Null if it isn't there.
-   */
-  const pointerFor = (found: Found, grab: Vec2, state: T): Vec2 | null => {
-    const lb = getLocalBounds(found.element);
-    if (lb.empty) return null;
-    const content = render(state, found.id, true).element;
-    const f =
-      found.id !== null
-        ? findElement(content, (el) => el.props.id === found.id)
-        : findByPath(found.path, content);
-    return f && localToGlobal(f.accumulatedTransform, pointInBox(lb, grab));
-  };
-
-  const dragAction = (
-    { found, from, description }: Planned & { type: "drag" },
-    to: Vec2,
-  ): FuzzAction => ({
-    type: "drag",
-    elementId: found.id,
-    path: found.path,
-    from,
-    to,
-    targetDescription: description,
-  });
-
   const runAction = (node: Node, planned: Planned) => {
     const { state, depth } = node;
     const { found } = planned;
-    // The drop state to aim for, if any. A slot past the end of the
-    // spec's drop states is no action at all.
-    let aimAt: T | null = null;
-    if (planned.type === "drag" && "slot" in planned.target) {
-      const { dropStates, slot } = planned.target;
-      if (slot >= dropStates().length) return;
-      aimAt = dropStates()[slot];
+    let action: FuzzAction = {
+      type: "click",
+      elementId: found.id,
+      path: found.path,
+    };
+    let to: Vec2 | null = null;
+    if (planned.type === "html") {
+      action = {
+        type: "html",
+        elementId: found.id,
+        path: found.path,
+        index: planned.index,
+        tag: planned.tag,
+        event: planned.event,
+      };
+    } else if (planned.type === "drag") {
+      const { target } = planned;
+      to = "point" in target ? target.point : target.dropPoints()[target.slot];
+      // A slot past the end of the spec's drop positions is no action.
+      if (to === undefined) return;
+      action = {
+        type: "drag",
+        elementId: found.id,
+        path: found.path,
+        from: planned.from,
+        to,
+        targetDescription: planned.description,
+      };
     }
-    // For a drop-state target, `to` is filled in once resolved.
-    let action: FuzzAction =
-      planned.type === "click"
-        ? { type: "click", elementId: found.id, path: found.path }
-        : planned.type === "html"
-          ? {
-              type: "html",
-              elementId: found.id,
-              path: found.path,
-              index: planned.index,
-              tag: planned.tag,
-              event: planned.event,
-            }
-          : dragAction(planned, planned.from);
     report.actionsTried++;
     const t0 = performance.now();
     try {
@@ -659,17 +673,9 @@ export function fuzzDraggable<T extends object>(
             enqueue(next, depth + 1);
           }
         }
-      } else {
-        const { target, grab } = planned;
-        const to =
-          "point" in target
-            ? target.point
-            : aimAt && pointerFor(found, grab, aimAt);
-        if (to !== null) {
-          action = dragAction(planned, to);
-          const dropState = simulateDrag(state, found, grab, to);
-          if (dropState !== null) enqueue(dropState, depth + 1);
-        }
+      } else if (to !== null) {
+        const dropState = simulateDrag(state, found, planned.grab, to);
+        if (dropState !== null) enqueue(dropState, depth + 1);
       }
     } catch (error) {
       report.errors.push({ state, depth, action, error });
