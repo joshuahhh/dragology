@@ -310,4 +310,5 @@ const MultiCirclePointsVanilla = () => {
 export default demo(MultiCirclePointsVanilla, {
   tags: ["vanilla"],
   hideByDefault: true,
+  fuzz: false,
 });

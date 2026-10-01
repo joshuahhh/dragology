@@ -20,7 +20,9 @@ import {
 //
 // Targets come from the demo's `fuzz` option if it provides one;
 // otherwise we mount the demo's component and collect whatever it
-// mounts DemoDraggable with (i.e. its default configuration).
+// mounts DemoDraggable with (i.e. its default configuration). A demo
+// that yields no targets either way fails, unless it opts out with
+// `fuzz: false`.
 //
 // This file only runs via `pnpm fuzz` (see vite.config.ts). Each
 // target prints a one-line report of what was explored.
@@ -103,8 +105,12 @@ describe("fuzz", () => {
       if (demoInfo.fuzz === false) return ctx.skip();
       const targets =
         demoInfo.fuzz ?? collectTargetsByMounting(demoInfo.Component);
-      // Demos that don't use DemoDraggable give us nothing to fuzz.
-      if (targets.length === 0) return ctx.skip();
+      if (targets.length === 0) {
+        throw new Error(
+          `${id} yielded no fuzz targets. Give its demo(...) options ` +
+            "explicit `fuzz` targets, or `fuzz: false` to opt out.",
+        );
+      }
       for (const target of targets) {
         const label = `${id}${target.name ? ` / ${target.name}` : ""}`;
         const report = fuzzDraggable(target.draggable, target.initialState, {

@@ -286,6 +286,14 @@ export default demo(
     );
   },
   {
+    fuzz: [
+      {
+        name: "switch",
+        draggable: switchDraggable,
+        initialState: { value: false },
+      },
+      { name: "slider", draggable: sliderDraggable, initialState: { t: 0.5 } },
+    ],
     tags: [
       "d.vary",
       "spec.withDropTransition",

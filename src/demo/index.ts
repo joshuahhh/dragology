@@ -20,7 +20,9 @@ export type DemoOptions = {
   /**
    * Targets for breadth-first fuzz testing (src/fuzz). If omitted,
    * the test mounts the demo and fuzzes whatever it mounts
-   * DemoDraggable with. `false` opts out entirely.
+   * DemoDraggable with. `false` opts out entirely. A demo that
+   * renders DraggableRenderer itself must list its targets here (or
+   * opt out); the fuzz test fails on a demo that yields none.
    */
   fuzz?: FuzzTarget[] | false;
 };

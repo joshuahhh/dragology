@@ -561,4 +561,5 @@ const ListsInListsVanilla = () => {
 export default demo(ListsInListsVanilla, {
   tags: ["vanilla"],
   hideByDefault: true,
+  fuzz: false,
 });
