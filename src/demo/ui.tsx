@@ -886,9 +886,13 @@ function TagNodeView({
 export function DemoWithConfig({ children }: { children: React.ReactNode }) {
   const { showTreeView, showStateViewer, showLayers } = useDemoSettings();
   const debugOpen = showTreeView || showStateViewer || showLayers;
+  // Side by side when there's room for the panel next to the content, else
+  // the panel wraps below. Giving the content a zero basis makes the wrap
+  // decision use its min-content width (the canvas), not the width of its
+  // notes laid out on one line.
   return (
     <div
-      className={`flex flex-col ${debugOpen ? "" : "md:flex-row"} gap-4 items-start max-w-full`}
+      className={`flex gap-4 items-start max-w-full ${debugOpen ? "flex-col" : "flex-wrap [&>:not([data-config-panel])]:grow [&>:not([data-config-panel])]:basis-0"}`}
     >
       {children}
     </div>
@@ -903,7 +907,10 @@ export function ConfigPanel({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="bg-gray-50 rounded p-3 shrink-0 md:sticky md:top-4">
+    <div
+      data-config-panel
+      className="bg-gray-50 rounded p-3 shrink-0 md:sticky md:top-4"
+    >
       <div className="text-xs font-medium text-gray-700 mb-2">{title}</div>
       <div className="flex flex-col gap-2">{children}</div>
     </div>
