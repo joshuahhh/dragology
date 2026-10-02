@@ -1211,7 +1211,7 @@ const INITIAL_PERMS: Record<number, number[]> = {
 export default demo(
   () => {
     const [n, setN] = useState(4);
-    const [mode, setMode] = useState<Mode>("free");
+    const [mode, setMode] = useState<Mode>("adjacent");
     const [resetCount, setResetCount] = useState(0);
     return (
       <div>
