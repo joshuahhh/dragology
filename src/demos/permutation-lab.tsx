@@ -32,25 +32,38 @@ import { translate } from "../svgx/helpers";
 
 type Mode = "free" | "adjacent";
 
-/** A letter s_i, or `null` for a blank column. Blank columns only exist
- * mid-drag: cancelling s_i s_i first empties the two columns (so nothing
- * to the right shifts while you drag), then the drop compacts them. */
-type Letter = number | null;
+/** A letter s_i, or a blank column. Blank columns only exist mid-drag:
+ * cancelling s_i s_i first empties the two columns (so nothing to the
+ * right shifts while you drag), then the drop compacts them. A blank
+ * remembers the letter it stands in for, so the two wires that crossed
+ * there keep a (flat) segment in their paths; see `wirePath`. */
+type Letter = number | { blank: number };
 
 /** What the state's word actually stores: letters, blank columns, and
  * "closed" columns. A closed column is a blank that has been cancelled:
  * it draws with zero width, so the drop animation after a cancel is a
  * plain horizontal slide of everything to its right (the wire paths keep
- * the same column structure). Closed columns are dropped from the
- * logical word as soon as the next interaction builds a new state. */
-type Col = Letter | "closed";
+ * the same structure). Closed columns are dropped from the logical word
+ * as soon as the next interaction builds a new state. They also stand in
+ * for a letter, for the same reason blanks do. */
+type Col = Letter | { closed: number };
 
-const isZeroWidth = (c: Col): c is "closed" => c === "closed";
+const isZeroWidth = (c: Col): c is { closed: number } =>
+  typeof c === "object" && "closed" in c;
+
+/** The generator a column is or stands in for. */
+const colGenerator = (c: Col): number =>
+  typeof c === "number" ? c : "blank" in c ? c.blank : c.closed;
 
 type State = {
   n: number;
   word: Col[];
   mode: Mode;
+  /** Layout hint for the wiring diagram: draw wires with one segment
+   * per column instead of one per crossing (see `wirePath`). Set on
+   * both ends of a braid drag; dropped, like closed columns, as soon as
+   * the next interaction builds a new state. */
+  wiresByColumn?: true;
 };
 
 // ## Permutation math
@@ -58,7 +71,7 @@ type State = {
 function permFromWord(n: number, word: Letter[]): number[] {
   const arr = _.range(1, n + 1);
   for (const i of word) {
-    if (i === null) continue;
+    if (typeof i !== "number") continue;
     [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
   }
   return arr;
@@ -135,7 +148,10 @@ function isBraidAt(word: Letter[], start: number): boolean {
   const a = start >= 0 ? word[start] : null;
   const b = word[start + 1];
   return (
-    a != null && b != null && word[start + 2] === a && Math.abs(a - b) === 1
+    typeof a === "number" &&
+    typeof b === "number" &&
+    word[start + 2] === a &&
+    Math.abs(a - b) === 1
   );
 }
 
@@ -159,24 +175,28 @@ function braidAt(word: Letter[], start: number): Letter[] {
  * dragging that crossing anywhere. (The strand that bumps around the
  * middle crossing can also be dragged across it; see the strand
  * handles.) */
-function crossingMoves(word: Letter[], j: number): Letter[][] {
+function crossingMoves(
+  word: Letter[],
+  j: number,
+): { word: Letter[]; braid: boolean }[] {
   const i = word[j];
-  if (i === null) return [];
-  const at = (k: number): Letter =>
+  if (typeof i !== "number") return [];
+  const at = (k: number): Letter | null =>
     k >= 0 && k < word.length ? word[k] : null;
   const commutes = (k: number) => {
     const l = at(k);
-    return l !== null && Math.abs(l - i) >= 2;
+    return typeof l === "number" && Math.abs(l - i) >= 2;
   };
   const swapped = (a: number, b: number) => {
     const w = word.slice();
     [w[a], w[b]] = [w[b], w[a]];
     return w;
   };
-  const moves: Letter[][] = [];
-  if (commutes(j - 1)) moves.push(swapped(j - 1, j));
-  if (commutes(j + 1)) moves.push(swapped(j, j + 1));
-  if (isBraidAt(word, j - 1)) moves.push(braidAt(word, j - 1));
+  const moves: { word: Letter[]; braid: boolean }[] = [];
+  if (commutes(j - 1)) moves.push({ word: swapped(j - 1, j), braid: false });
+  if (commutes(j + 1)) moves.push({ word: swapped(j, j + 1), braid: false });
+  if (isBraidAt(word, j - 1))
+    moves.push({ word: braidAt(word, j - 1), braid: true });
   return moves;
 }
 
@@ -339,7 +359,8 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
   // specs use, and `state` is the cleaned state they build on.
   const cols = rawState.word;
   const word: Letter[] = cols.filter((c): c is Letter => !isZeroWidth(c));
-  const state: State = { ...rawState, word };
+  const state: State = { n, word, mode };
+  const byColumn = (s: State): State => ({ ...s, wiresByColumn: true });
   const perm = permFromWord(n, word);
   const inv = inversions(perm);
 
@@ -411,7 +432,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
     cols.forEach((i, j) => {
       if (isZeroWidth(i)) return;
       const myJl = jl++;
-      if (i === null) return;
+      if (typeof i !== "number") return;
       const a = arr[i];
       const b = arr[i + 1];
       [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
@@ -500,11 +521,8 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
   const RS = 24; // row spacing
   const wiringOrigin = Vec2(48, 420);
   const rawLen = cols.length; // layout columns (incl. blank and closed)
-  // The diagram always spans COLS column widths (padded with straight
-  // columns), and every column is one cubic segment. So a wire's path keeps the same structure when a crossing
-  // is appended, and path interpolation only bends the new column —
-  // existing crossings stay put mid-drag. Closed columns have zero
-  // width; the last padding column stretches to the right edge.
+  // The diagram always spans COLS column widths. Closed columns have zero
+  // width.
   const CW = (WIDTH - 110) / COLS; // column width
   const wireX0 = 0;
   const wireX1 = wireX0 + COLS * CW;
@@ -514,23 +532,61 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
     wireX0 +
     _.sum(_.range(Math.min(j, rawLen)).map(colW)) +
     Math.max(0, j - rawLen) * CW;
-  const padCols = Math.max(1, COLS - rawLen); // straight columns after the word
 
+  // A wire's path is a fixed number of segments, each a straight run up
+  // to a column and then a cubic across it, so path interpolation
+  // matches segment k with segment k. Which columns get segments decides
+  // what a drag looks like halfway:
+  //
+  // - By crossing (the default): one segment per crossing the wire takes
+  //   part in, in order. When a crossing commutes past its neighbor, its
+  //   segment slides sideways at full height, rather than two columns
+  //   each bending halfway. Blank and closed columns get flat segments,
+  //   so cancelling or inserting s_i s_i keeps the same structure.
+  //   Unused segments are flat and park at the first free column (full
+  //   width there, so an appended crossing bends it in place) and just
+  //   after it.
+  // - By column (`wiresByColumn`): one segment per column. In a braid
+  //   move the crossings stay in their columns and change rows, so
+  //   every column bends at once; halfway, the two outer strands cross
+  //   diagonally with the third passing straight through the triple
+  //   point.
+  const WIRE_SEGS = COLS + 2;
+  const seg = (x: number, w: number, r0: number, r1: number) =>
+    `L ${x} ${rowY(r0)} C ${x + w / 2} ${rowY(r0)} ${x + w / 2} ${rowY(r1)} ${x + w} ${rowY(r1)}`;
+  const rowAfterCol = (r: number, c: Col) => {
+    const i = colGenerator(c);
+    return typeof c !== "number" || (r !== i && r !== i + 1)
+      ? r
+      : r === i
+        ? i + 1
+        : i;
+  };
   const wirePath = (v: number) => {
+    const segs: string[] = [];
     let r = v - 1;
-    let x = wireX0;
-    let dstr = `M ${x - 14} ${rowY(r)} L ${x} ${rowY(r)}`;
-    for (let j = 0; j < rawLen + padCols; j++) {
-      const c: Col = j < rawLen ? cols[j] : null;
-      const w = j === rawLen + padCols - 1 ? wireX1 - x : colW(j);
-      const next =
-        typeof c !== "number" ? r : r === c ? c + 1 : r === c + 1 ? c : r;
-      dstr += ` C ${x + w / 2} ${rowY(r)} ${x + w / 2} ${rowY(next)} ${x + w} ${rowY(next)}`;
-      r = next;
-      x += w;
+    if (rawState.wiresByColumn) {
+      cols.forEach((c, j) => {
+        const next = rowAfterCol(r, c);
+        segs.push(seg(colX(j), colW(j), r, next));
+        r = next;
+      });
+      const xFree = colX(rawLen);
+      segs.push(seg(xFree, wireX1 - xFree, r, r));
+      return `M ${wireX0 - 14} ${rowY(v - 1)} ${segs.join(" ")} L ${wireX1 + 14} ${rowY(r)}`;
     }
-    dstr += ` L ${wireX1 + 14} ${rowY(r)}`;
-    return dstr;
+    cols.forEach((c, j) => {
+      const i = colGenerator(c);
+      if (r !== i && r !== i + 1) return;
+      const next = rowAfterCol(r, c);
+      segs.push(seg(colX(j), colW(j), r, next));
+      r = next;
+    });
+    const xFree = colX(rawLen);
+    const wFree = _.clamp(wireX1 - xFree, 0, CW);
+    segs.push(seg(xFree, wFree, r, r));
+    while (segs.length < WIRE_SEGS) segs.push(seg(xFree + wFree, 0, r, r));
+    return `M ${wireX0 - 14} ${rowY(v - 1)} ${segs.join(" ")} L ${wireX1 + 14} ${rowY(r)}`;
   };
 
   return (
@@ -944,9 +1000,12 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
                   ? d.fixed(state)
                   : d
                       .closest(
-                        moves.map((w) =>
-                          d.between([state, { ...state, word: w }]),
-                        ),
+                        moves.map(({ word: w, braid }) => {
+                          const moved = { ...state, word: w };
+                          return braid
+                            ? d.between([byColumn(state), byColumn(moved)])
+                            : d.between([state, moved]);
+                        }),
                       )
                       .withSnapRadius(3, { chain: true })
               }
@@ -977,8 +1036,8 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
           const realCols = _.range(rawLen).filter((j) => !isZeroWidth(cols[j]));
           const layoutOf = (k: number) => (k < L ? realCols[k] : rawLen);
           const edgeX = (k: number) => colX(layoutOf(k)) + CW;
-          const rowAfter = (r: number, letter: Letter) =>
-            letter === null
+          const rowAfter = (r: number, letter: Letter | null) =>
+            typeof letter !== "number"
               ? r
               : r === letter
                 ? letter + 1
@@ -993,7 +1052,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
             const k = kMut;
             const r = rMut;
             const id = `strand-${v}-${k}`;
-            const letter: Letter = k < L ? word[k] : null;
+            const letter: Letter | null = k < L ? word[k] : null;
             const next = rowAfter(r, letter);
             // Pair up runs of identical letters from the right, so that a
             // pair inserted next to an existing identical crossing is the
@@ -1001,7 +1060,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
             let runLen = 0;
             while (k + runLen < L && word[k + runLen] === letter) runLen++;
             if (
-              letter !== null &&
+              typeof letter === "number" &&
               next !== r &&
               word[k + 1] === letter &&
               runLen % 2 === 0
@@ -1009,7 +1068,9 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               // apex of a double crossing at logical columns k, k+1
               const gapped: State = {
                 ...state,
-                word: word.map((l, m) => (m === k || m === k + 1 ? null : l)),
+                word: word.map((l, m) =>
+                  m === k || m === k + 1 ? { blank: colGenerator(l) } : l,
+                ),
               };
               handles.push(
                 <g
@@ -1021,7 +1082,11 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
                       ...s,
                       // blanks become zero-width closed columns, so the
                       // drop animation is a horizontal slide
-                      word: s.word.map((l) => (l === null ? "closed" : l)),
+                      word: s.word.map((l) =>
+                        typeof l === "object" && "blank" in l
+                          ? { closed: l.blank }
+                          : l,
+                      ),
                     }))
                   }
                   style={{ cursor: "ns-resize" }}
@@ -1041,7 +1106,11 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               kMut += 2;
               continue;
             }
-            if (letter === null && k + 1 < L && word[k + 1] === null) {
+            if (
+              typeof letter === "object" &&
+              letter !== null &&
+              typeof word[k + 1] === "object"
+            ) {
               // two blank columns (mid-cancel): the apex handle lands here
               handles.push(
                 <g id={id} transform={translate(edgeX(k), rowY(r))} />,
@@ -1055,9 +1124,9 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
             // Dragging it across b is the braid move; it lands at the
             // same column, two rows over, so the handle id carries over.
             const braidSide =
-              letter !== null &&
+              typeof letter === "number" &&
               isBraidAt(word, k - 1) &&
-              (r === word[k - 1] || r === word[k - 1]! + 1) &&
+              (r === word[k - 1] || r === colGenerator(word[k - 1]) + 1) &&
               r !== letter &&
               r !== letter + 1
                 ? r < letter
@@ -1072,15 +1141,15 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               // morphing in place. The handle sits at the column's right
               // edge, which is where the new apex ends up, so the drag is
               // purely vertical; the hit rect covers the column.
-              const withClosed: State = {
+              const withClosed = (i: number): State => ({
                 ...state,
                 word: [
                   ...word.slice(0, k),
-                  "closed",
-                  "closed",
+                  { closed: i },
+                  { closed: i },
                   ...word.slice(k),
                 ],
-              };
+              });
               const insert = (i: number): State => ({
                 ...state,
                 word: [...word.slice(0, k), i, i, ...word.slice(k)],
@@ -1091,18 +1160,21 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
                   transform={translate(edgeX(k), rowY(r))}
                   dragologyZIndex={1}
                   dragologyOnDrag={() => {
-                    const braided = { ...state, word: braidAt(word, k - 1) };
+                    const braided = d.between([
+                      byColumn(state),
+                      byColumn({ ...state, word: braidAt(word, k - 1) }),
+                    ]);
                     return d.closest([
                       braidSide === "above"
-                        ? d.between([state, braided])
+                        ? braided
                         : r > 0 &&
                           canAppend(2) &&
-                          d.between([withClosed, insert(r - 1)]),
+                          d.between([withClosed(r - 1), insert(r - 1)]),
                       braidSide === "below"
-                        ? d.between([state, braided])
+                        ? braided
                         : r < n - 1 &&
                           canAppend(2) &&
-                          d.between([withClosed, insert(r)]),
+                          d.between([withClosed(r), insert(r)]),
                     ]);
                   }}
                   style={{ cursor: "ns-resize" }}
