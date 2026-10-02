@@ -121,6 +121,7 @@ export const demoList: DemoListEntry[] = [
       "aztec-diamond",
       "rotations-rebalancing",
       "knot",
+      "stock-and-flow",
     ],
   },
 ];

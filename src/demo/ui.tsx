@@ -469,12 +469,15 @@ export function DemoDraggable<T extends object>({
   height,
   stateRef,
   stateOverride,
+  onDragState,
 }: {
   draggable: Draggable<T>;
   width: number;
   height: number;
   stateRef?: React.RefObject<T | null>;
   stateOverride?: Partial<T>;
+  /** Called with the preview state on every frame of a drag. */
+  onDragState?: (state: T) => void;
 } & (
   | { initialState: T; state?: undefined; onDropState?: undefined }
   /** Controlled: the caller owns the state. */
@@ -557,6 +560,7 @@ export function DemoDraggable<T extends object>({
               trace={showDebugOverlay || showTreeView}
               showVaryVisualizer={showVaryVisualizer}
               onDropState={handleDropState}
+              onDragState={onDragState}
             />
             {hoveredLayerBounds && (
               <LayerHighlight
