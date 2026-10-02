@@ -130,12 +130,35 @@ function permFromCycles(n: number, cycles: number[][]): number[] {
   return perm;
 }
 
+/** Is `word[start..start+2]` a braid s_i s_k s_i with |i−k| = 1? */
+function isBraidAt(word: Letter[], start: number): boolean {
+  const a = start >= 0 ? word[start] : null;
+  const b = word[start + 1];
+  return (
+    a != null && b != null && word[start + 2] === a && Math.abs(a - b) === 1
+  );
+}
+
+/** Apply the braid move s_i s_k s_i = s_k s_i s_k at `word[start..]`. */
+function braidAt(word: Letter[], start: number): Letter[] {
+  const w = word.slice();
+  [w[start], w[start + 1], w[start + 2]] = [
+    word[start + 1],
+    word[start],
+    word[start + 1],
+  ];
+  return w;
+}
+
 /** Words reachable from `word` by one Coxeter relation that moves the
  * crossing at column `j`: a commutation s_i s_k = s_k s_i (|i−k| ≥ 2)
  * with a neighbor, or a braid move s_i s_k s_i = s_k s_i s_k (|i−k| = 1).
- * In a braid move the dragged crossing is either an end (it jumps two
- * columns across the third strand) or the middle (it moves one row
- * vertically). */
+ * A braid move is only offered from the middle crossing, which moves one
+ * row vertically. The end crossings also change places in a braid move,
+ * but each would jump two columns and a row, which doesn't read as
+ * dragging that crossing anywhere. (The strand that bumps around the
+ * middle crossing can also be dragged across it; see the strand
+ * handles.) */
 function crossingMoves(word: Letter[], j: number): Letter[][] {
   const i = word[j];
   if (i === null) return [];
@@ -145,33 +168,15 @@ function crossingMoves(word: Letter[], j: number): Letter[][] {
     const l = at(k);
     return l !== null && Math.abs(l - i) >= 2;
   };
-  const isBraid = (start: number) => {
-    const a = at(start);
-    const b = at(start + 1);
-    return (
-      a !== null && b !== null && at(start + 2) === a && Math.abs(a - b) === 1
-    );
-  };
   const swapped = (a: number, b: number) => {
     const w = word.slice();
     [w[a], w[b]] = [w[b], w[a]];
     return w;
   };
-  const braidAt = (start: number) => {
-    const a = word[start];
-    const b = word[start + 1];
-    const w = word.slice();
-    w[start] = b;
-    w[start + 1] = a;
-    w[start + 2] = b;
-    return w;
-  };
   const moves: Letter[][] = [];
   if (commutes(j - 1)) moves.push(swapped(j - 1, j));
-  if (isBraid(j - 2)) moves.push(braidAt(j - 2)); // dragged = right end
   if (commutes(j + 1)) moves.push(swapped(j, j + 1));
-  if (isBraid(j)) moves.push(braidAt(j)); // dragged = left end
-  if (isBraid(j - 1)) moves.push(braidAt(j - 1)); // dragged = middle
+  if (isBraidAt(word, j - 1)) moves.push(braidAt(word, j - 1));
   return moves;
 }
 
@@ -955,7 +960,9 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
         })}
         {/* Strand handles: drag a straight bit of strand across its
             neighbor to write s_i s_i; drag the apex of such a double
-            crossing back across to cancel it (s_i s_i = e). */}
+            crossing back across to cancel it (s_i s_i = e); drag the
+            strand that bumps around the middle of a braid s_i s_k s_i
+            across that crossing to get s_k s_i s_k. */}
         {_.range(1, n + 1).map((v) => {
           // Walk the logical word (zero-width closed columns are skipped;
           // `layoutOf` maps a logical index to its layout column). Handle
@@ -1039,7 +1046,22 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               kMut += 2;
               continue;
             }
-            if (next === r && canAppend(2)) {
+            // In a braid s_a s_b s_a at logical columns k-1..k+1, one
+            // strand crosses both a's and passes straight by the middle
+            // crossing (in the row of crossing a that b doesn't touch).
+            // Dragging it across b is the braid move; it lands at the
+            // same column, two rows over, so the handle id carries over.
+            const braidSide =
+              letter !== null &&
+              isBraidAt(word, k - 1) &&
+              (r === word[k - 1] || r === word[k - 1]! + 1) &&
+              r !== letter &&
+              r !== letter + 1
+                ? r < letter
+                  ? "below"
+                  : "above"
+                : null;
+            if (next === r && (canAppend(2) || braidSide)) {
               // straight segment. The drag starts from a state with two
               // zero-width columns here (drawn identically to the current
               // state), so the double crossing widens from nothing and
@@ -1065,12 +1087,21 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
                   id={id}
                   transform={translate(edgeX(k), rowY(r))}
                   dragologyZIndex={1}
-                  dragologyOnDrag={() =>
-                    d.closest([
-                      r > 0 && d.between([withClosed, insert(r - 1)]),
-                      r < n - 1 && d.between([withClosed, insert(r)]),
-                    ])
-                  }
+                  dragologyOnDrag={() => {
+                    const braided = { ...state, word: braidAt(word, k - 1) };
+                    return d.closest([
+                      braidSide === "above"
+                        ? d.between([state, braided])
+                        : r > 0 &&
+                          canAppend(2) &&
+                          d.between([withClosed, insert(r - 1)]),
+                      braidSide === "below"
+                        ? d.between([state, braided])
+                        : r < n - 1 &&
+                          canAppend(2) &&
+                          d.between([withClosed, insert(r)]),
+                    ]);
+                  }}
                   style={{ cursor: "ns-resize" }}
                 >
                   <rect
@@ -1117,13 +1148,15 @@ export default demo(
           its length equals the inversion count). Drag a node in the cycle
           diagram into any cycle at any position. Drag a dot in the matrix
           within its column. Drag a crossing in the wiring diagram past its
-          neighbor: commutations slide it one column, braid moves jump it across
-          the third strand (or drag the middle crossing of a braid vertically) —
-          the word changes, π doesn't. Drag a straight bit of strand over its
-          neighbor to write s<sub>i</sub>s<sub>i</sub>; drag the apex of such a
-          double crossing back to cancel it. The permutohedron (n ≤ 4) maps
-          every permutation to a vertex, with edges for adjacent transpositions;
-          drag the token along edges to walk (and write) a word.
+          neighbor to commute them. In a braid s<sub>i</sub>s<sub>j</sub>s
+          <sub>i</sub>, drag the middle crossing vertically, or drag the strand
+          that bends around it across it, to get s<sub>j</sub>s<sub>i</sub>s
+          <sub>j</sub>. Either way the word changes, π doesn't. Drag a straight
+          bit of strand over its neighbor to write s<sub>i</sub>s<sub>i</sub>;
+          drag the apex of such a double crossing back to cancel it. The
+          permutohedron (n ≤ 4) maps every permutation to a vertex, with edges
+          for adjacent transpositions; drag the token along edges to walk (and
+          write) a word.
         </DemoNotes>
         <div className="flex flex-wrap items-start gap-6 bg-gray-50 rounded p-3 mb-3 text-xs">
           <ConfigSelect
