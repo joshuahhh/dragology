@@ -475,7 +475,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
       [p[row], p[r]] = [p[r], p[row]];
       return { ...state, word: wordFromPerm(p) };
     });
-    return d.closest(states).withFloating();
+    return d.between(states);
   };
 
   // ### Permutohedron
@@ -755,7 +755,7 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
               transform={translate((v - 0.5) * CS, (row + 0.5) * CS)}
               dragologyZIndex={isDragged ? "/1" : false}
               dragologyOnDrag={() => matrixDragSpec(v)}
-              style={{ cursor: "grab" }}
+              style={{ cursor: "ns-resize" }}
             >
               <circle r={CS / 2 - 2} fill="transparent" />
               <circle r={7} fill={c.stroke} />
