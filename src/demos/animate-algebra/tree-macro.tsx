@@ -401,7 +401,24 @@ function renderMacroTree(
   // Pick-up drag for freeform rearrangement
   const pickUpDrag: OnDragCallback<State> = () => {
     const nodeId = tree.id;
-    const parentInfo = findParentAndIndex(fullState.tree, nodeId);
+
+    // The node's home is the main tree or, if it's inside a gutter
+    // item, that item. Gutter-item roots have their own rootDragology.
+    const gutterIdx = fullState.gutter.findIndex(
+      (g) => findParentAndIndex(g, nodeId) !== null,
+    );
+    const homeTree =
+      gutterIdx === -1 ? fullState.tree : fullState.gutter[gutterIdx];
+    const updateHome = (f: (home: Tree) => Tree): State =>
+      gutterIdx === -1
+        ? { ...fullState, tree: f(fullState.tree) }
+        : {
+            ...fullState,
+            gutter: fullState.gutter.map((g, i) =>
+              i === gutterIdx ? f(g) : g,
+            ),
+          };
+    const parentInfo = findParentAndIndex(homeTree, nodeId);
 
     // Root node: can't remove root, only offer gutter
     if (!parentInfo) {
@@ -418,10 +435,7 @@ function renderMacroTree(
     }
 
     // Remove from parent
-    const stateWithout: State = {
-      ...fullState,
-      tree: removeNode(fullState.tree, nodeId),
-    };
+    const stateWithout = updateHome((home) => removeNode(home, nodeId));
 
     // All possible insertion points (tree-macro uses isOp predicate)
     const insertionPoints = allInsertionPoints(stateWithout.tree, (t) =>
@@ -434,15 +448,12 @@ function renderMacroTree(
 
     // Swap targets
     const swapTargets: State[] = [];
-    if (parentInfo) {
-      const { parent, index } = parentInfo;
-      for (let i = 0; i < parent.children.length; i++) {
-        if (i !== index) {
-          swapTargets.push({
-            ...fullState,
-            tree: swapChildrenAtParent(fullState.tree, parent.id, index, i),
-          });
-        }
+    const { parent, index } = parentInfo;
+    for (let i = 0; i < parent.children.length; i++) {
+      if (i !== index) {
+        swapTargets.push(
+          updateHome((home) => swapChildrenAtParent(home, parent.id, index, i)),
+        );
       }
     }
 
