@@ -30,7 +30,14 @@ export type { Transition, TransitionLike } from "./transition";
 
 // SVG helpers
 export type { Svgx } from "./svgx";
-export { path, rotateDeg, rotateRad, scale, translate } from "./svgx/helpers";
+export {
+  draggableLine,
+  path,
+  rotateDeg,
+  rotateRad,
+  scale,
+  translate,
+} from "./svgx/helpers";
 
 // Math
 export { Vec2 } from "./math/vec2";

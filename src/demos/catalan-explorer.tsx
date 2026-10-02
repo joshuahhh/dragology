@@ -12,7 +12,7 @@ import {
 import { Draggable } from "../draggable";
 import { DragSpecBuilder } from "../DragSpec";
 import { Svgx } from "../svgx";
-import { translate } from "../svgx/helpers";
+import { draggableLine, translate } from "../svgx/helpers";
 
 // # Catalan objects
 //
@@ -521,7 +521,6 @@ const W = 700;
 
 const POLY_C = { x: 125, y: 150 };
 const POLY_R = 95;
-const DIAG_SEGMENTS = 10;
 
 const TREE_ORIGIN = { x: 270, y: 60 };
 const TREE_W = 200;
@@ -622,15 +621,11 @@ function polygonView(
       {nodes
         .filter(({ parent }) => parent !== null)
         .map(({ node, lo, hi }) => {
-          // The library tracks a dragged element through its transform,
-          // so the grab area is split into short invisible segments,
-          // each positioned by a translate to its own point along the
-          // diagonal. Under interpolation a segment moves straight to
-          // the same fraction along the new diagonal – exactly where
-          // that point of the line goes – and the two ways of pairing
-          // the ends give different targets, so `d.closest` can tell
-          // which way the user is swinging it. Segment centers avoid the
-          // exact midpoint, which can coincide before and after a flip.
+          // The grab line is drawn by `draggableLine`, so a point grabbed
+          // partway along the diagonal goes to the same fraction along
+          // the flipped one. The two ways of pairing the ends then give
+          // different targets, so `d.closest` can tell which way the
+          // user is swinging it.
           const [pa, pb] = node.edgeReversed
             ? [V[hi + 1], V[lo]]
             : [V[lo], V[hi + 1]];
@@ -638,8 +633,6 @@ function polygonView(
             const { from, to } = flipVariants(state, node.id);
             return d.closest(to.map((t) => d.between([from, t])));
           };
-          const K = DIAG_SEGMENTS;
-          const step = { x: (pb.x - pa.x) / K, y: (pb.y - pa.y) / K };
           return (
             <g id={`diag-${node.edgeId}`}>
               <line
@@ -651,26 +644,14 @@ function polygonView(
                 strokeWidth={3.5}
                 strokeLinecap="round"
               />
-              {_.range(K).map((k) => (
-                <g
-                  id={`diag-${node.edgeId}-seg-${k}`}
-                  transform={translate(
-                    pa.x + (k + 0.5) * step.x,
-                    pa.y + (k + 0.5) * step.y,
-                  )}
-                  style={{ cursor: "grab" }}
-                  dragologyOnDrag={onDrag}
-                >
-                  <line
-                    x1={-step.x / 2}
-                    y1={-step.y / 2}
-                    x2={step.x / 2}
-                    y2={step.y / 2}
-                    stroke="transparent"
-                    strokeWidth={16}
-                  />
-                </g>
-              ))}
+              <line
+                id={`diag-${node.edgeId}-grab`}
+                {...draggableLine(pa, pb)}
+                stroke="transparent"
+                strokeWidth={16}
+                strokeLinecap="round"
+                dragologyOnDrag={onDrag}
+              />
             </g>
           );
         })}

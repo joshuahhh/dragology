@@ -14,7 +14,7 @@ import { param } from "../DragSpec";
 import { inOrder } from "../math/optimization";
 import { Vec2 } from "../math/vec2";
 import { Svgx } from "../svgx";
-import { translate } from "../svgx/helpers";
+import { draggableLine, translate } from "../svgx/helpers";
 
 type State = {
   from: { x: number; y: number };
@@ -46,8 +46,7 @@ function makeDraggable(levels: number, tiltEnabled: boolean): Draggable<State> {
         return [
           <line
             id={id}
-            transform={translate(p1)}
-            {...p2.sub(p1).xy2()}
+            {...draggableLine(p1, p2)}
             stroke="black"
             strokeWidth={4}
             strokeLinecap="round"

@@ -83,6 +83,18 @@ Position elements with `transform={translate(x, y)}`, **not** with `x`/`y` attri
 <circle cx={state.x} cy={state.y} r={10} />
 ```
 
+**Dragging a line whose ends move?** Grab it by a line drawn with `draggableLine(a, b)`, which positions a unit line by its transform. Then a point grabbed partway along the line is followed to the same fraction along it in other states. Mid-drag, though, a `draggableLine` line swings along a curve (its angle and length are blended separately), so under `d.between` keep it invisible and draw what the user sees with `x1`/`y1`/`x2`/`y2`, which blends in straight lines and keeps the grabbed point under the pointer:
+
+```tsx
+<g id="edge">
+  <line {...a.xy1()} {...b.xy2()} stroke="black" strokeWidth={3} />
+  <line id="edge-grab" {...draggableLine(a, b)} stroke="transparent" strokeWidth={16}
+    dragologyOnDrag={() => d.between([state, flipped])} />
+</g>
+```
+
+Under `d.vary`, which only renders real states, a visible `draggableLine` line works fine on its own.
+
 ## Drag Spec Primitives
 
 ### `d.between()` — Interpolated Preview
