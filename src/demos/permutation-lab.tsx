@@ -830,6 +830,9 @@ const draggable: Draggable<State> = ({ state: rawState, d, draggedId }) => {
                           { ...state, word: applyGenerator(word, i) },
                         ]),
                       ),
+                      // commit to an edge once out on it; the shortest
+                      // edges are only ~20px, so lock early
+                      { lockPast: 10 },
                     )
                     // targets are close together, so snap late
                     .withSnapRadius(3, { chain: true })

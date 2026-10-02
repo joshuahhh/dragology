@@ -96,6 +96,7 @@ export const demoList: DemoListEntry[] = [
   "lerping-keys",
   "between-with-vary",
   "stickiness",
+  "lock-past",
   "controlled",
   "simple-triangle-custom",
   "with-pointer-delay",

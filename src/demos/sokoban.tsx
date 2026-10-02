@@ -148,6 +148,7 @@ function draggableFactory(config: Config): Draggable<State> {
                             ]);
                           })
                           .filter(defined),
+                        { lockPast: 20 },
                       )
                       .withSnapRadius(3, { transition: true, chain: true })
                 : undefined
@@ -233,6 +234,7 @@ function draggableFactory(config: Config): Draggable<State> {
                     ]);
                   })
                   .filter(defined),
+                { lockPast: 20 },
               )
               .withSnapRadius(3, { transition: true, chain: true })
           }

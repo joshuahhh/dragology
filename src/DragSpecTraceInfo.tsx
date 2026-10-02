@@ -21,7 +21,7 @@ export type DragSpecTraceInfoByType = {
      */
     elementPos?: Vec2 | null;
   };
-  closest: { bestIndex: number };
+  closest: { bestIndex: number; locked: boolean };
   whenFar: { inForeground: boolean };
   during: { outputPreview: LayeredSvgx };
   vary: {

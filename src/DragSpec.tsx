@@ -26,7 +26,12 @@ export type DragSpecData<T extends object> = {
       ghost: SvgxProps | undefined;
       tether: ((dist: number) => number) | undefined;
     }
-  | { type: "closest"; specs: DragSpecData<T>[]; stickiness: number }
+  | {
+      type: "closest";
+      specs: DragSpecData<T>[];
+      stickiness: number;
+      lockPast: number | undefined;
+    }
   | {
       type: "whenFar";
       foreground: DragSpecData<T>;
@@ -481,12 +486,24 @@ export class DragSpecBuilder<T extends object> {
        * next-best option.
        */
       stickiness?: number;
+      /**
+       * Once the active option has carried the dragged element more
+       * than `lockPast` pixels from where it started, `d.closest`
+       * locks onto that option, ignoring the others, until it brings
+       * the element back within `lockPast` pixels. Use this for
+       * options that all start from the current state (like
+       * `d.between([state, target])` for several targets), so that a
+       * drag heading out toward one target can't jump partway onto
+       * another.
+       */
+      lockPast?: number;
     },
   ): DragSpec<T> {
     return attachMethods({
       type: "closest",
       specs: manyToArray(specs).map(resolveDragSpecLike),
       stickiness: options?.stickiness ?? 0,
+      lockPast: options?.lockPast,
     });
   }
 

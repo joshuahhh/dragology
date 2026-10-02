@@ -77,6 +77,14 @@ export type DragResult<T extends object> = {
   dropTransition?: Transition | false;
   activePathTransition?: Transition | false;
   gap: number;
+  /**
+   * Where this behavior puts the grab point (the point on the dragged
+   * element that the pointer grabbed), in canvas coordinates. `gap` is
+   * usually the pointer's distance to it. If it's missing, find it by
+   * rendering `preview`. For `between`, it's where the blend aims the
+   * grab point; a blend that rotates things can bow away from that.
+   */
+  grabPos?: Vec2;
   activePath: string;
   chainNow?: Chaining<T>;
   /**
@@ -190,6 +198,7 @@ function fixedBehavior<T extends object>(
       preview: getPreview,
       dropState: spec.state,
       gap,
+      grabPos: elementPos ?? undefined,
       activePath: "fixed",
       tracedSpec: ctx.debug.trace ? getTracedSpec() : spec,
     };
@@ -308,6 +317,8 @@ function withFloatingBehavior<T extends object>(
       preview: () => computePreview().preview,
       dropState: innerResult.dropState,
       gap: innerResult.gap,
+      // without a tether, the float sits right at the pointer
+      grabPos: spec.tether ? undefined : frame.pointer,
       activePath: `withFloating/${innerResult.activePath}`,
       tracedSpec: ctx.debug.trace
         ? setTraceInfo(
@@ -343,27 +354,61 @@ function closestBehavior<T extends object>(
 
   const subBehaviors = spec.specs.map((s) => dragSpecToBehavior(s, ctx));
 
+  // For `lockPast`: where the dragged element starts out, and whether
+  // a branch's preview has carried it far enough away to lock on.
+  const { lockPast } = spec;
+  let isPastLock: ((result: DragResult<T>) => boolean) | undefined;
+  if (lockPast !== undefined) {
+    const home = getElementPositionCheap(ctx, ctx.startState);
+    assert(home !== null, "closest: dragged element not found in start state");
+    isPastLock = (result) => {
+      // A preview without the dragged element counts as far from home.
+      const pos = result.grabPos ?? getElementPosition(ctx, result.preview());
+      return pos === null || pos.dist(home) > lockPast;
+    };
+  }
+
   // This is actual memory!
   let lastBestIndex: number | null = null;
+  let lockedIndex: number | null = null;
 
   return (frame) => {
     if (fixedResult) {
       return fixedResult;
     }
 
-    const subResults = subBehaviors.map((b) => b(frame));
-    const [bestIndex, best] = _.minBy(
-      Array.from(subResults.entries()),
-      ([idx, r]) => r.gap - (idx === lastBestIndex ? spec.stickiness : 0),
-    )!;
+    // Branches are evaluated lazily, so a locked frame only evaluates
+    // the locked branch.
+    const resultAt = _.memoize((idx: number) => subBehaviors[idx](frame));
+
+    if (lockedIndex !== null && !isPastLock!(resultAt(lockedIndex))) {
+      lockedIndex = null;
+    }
+    let bestIndex = lockedIndex;
+    if (bestIndex === null) {
+      bestIndex = _.minBy(
+        _.range(subBehaviors.length),
+        (idx) =>
+          resultAt(idx).gap - (idx === lastBestIndex ? spec.stickiness : 0),
+      )!;
+      if (isPastLock?.(resultAt(bestIndex))) lockedIndex = bestIndex;
+    }
+
     lastBestIndex = bestIndex;
+    const best = resultAt(bestIndex);
     return {
       ...best,
       activePath: `closest/${bestIndex}/${best.activePath}`,
       tracedSpec: ctx.debug.trace
         ? setTraceInfo(
-            { ...spec, specs: subResults.map((r) => r.tracedSpec) },
-            { bestIndex },
+            {
+              ...spec,
+              // branches skipped while locked keep their untraced specs
+              specs: spec.specs.map((s, idx) =>
+                resultAt.cache.has(idx) ? resultAt(idx).tracedSpec : s,
+              ),
+            },
+            { bestIndex, locked: lockedIndex !== null },
           )
         : spec,
     };
@@ -433,12 +478,13 @@ function duringBehavior<T extends object>(
     const result = subBehavior(frame);
     const transformedState = spec.duringFn(result.dropState);
     const preview = renderStateReadOnly(ctx, transformedState);
-    const elementPos = getElementPosition(ctx, preview) ?? Infinity;
+    const elementPos = getElementPosition(ctx, preview);
     return {
       ...result,
       preview: () => preview,
       dropState: transformedState,
-      gap: frame.pointer.dist(elementPos),
+      gap: elementPos ? frame.pointer.dist(elementPos) : Infinity,
+      grabPos: elementPos ?? undefined,
       activePath: `during/${result.activePath}`,
       tracedSpec: ctx.debug.trace
         ? setTraceInfo(
@@ -582,6 +628,7 @@ function varyFuncBehavior<T extends object>(
       preview: () => previewLayered,
       dropState: newState,
       gap,
+      grabPos: achievedPos,
       activePath: `vary${activePathSuffix}`,
       // Not gated on ctx.debug.trace: varyBehavior reads this
       // traceInfo (and it only references already-computed values).
@@ -605,8 +652,15 @@ function changeResultBehaviorBase<T extends object>(
   return (frame) => {
     const result = subBehavior(frame);
     const changed = readerToValue(f, result);
+    // A new preview may have moved the grab point, so unless `f` says
+    // where it is now, it's unknown.
+    const grabPos =
+      "preview" in changed && !("grabPos" in changed)
+        ? undefined
+        : result.grabPos;
     return {
       ...result,
+      grabPos,
       activePath: `${spec.type}/${result.activePath}`,
       tracedSpec: ctx.debug.trace
         ? { ...spec, inner: result.tracedSpec }
@@ -656,26 +710,24 @@ function withSnapRadiusBehavior<T extends object>(
 ): DragBehavior<T> {
   const subBehavior = dragSpecToBehavior(spec.inner, ctx);
   const radiusSq = spec.radius ** 2;
-  // Cache drop-state renders by reference identity — for `between` sub-behaviors
-  // the drop state cycles through a small fixed set, so this avoids redundant
-  // full render passes on every frame.
-  const dropRenderedCache = new Map<T, LayeredSvgx>();
-  const getDropRendered = (state: T): LayeredSvgx => {
-    let cached = dropRenderedCache.get(state);
-    if (!cached) {
-      cached = renderStateReadOnly(ctx, state);
-      dropRenderedCache.set(state, cached);
-    }
-    return cached;
-  };
+  // Cache drop-state renders and grab positions by reference identity —
+  // for `between` sub-behaviors the drop state cycles through a small
+  // fixed set, so this avoids redundant render passes on every frame.
+  const getDropRendered = _.memoize((state: T) =>
+    renderStateReadOnly(ctx, state),
+  );
+  const getDropGrabPos = _.memoize((state: T) =>
+    assertDefined(getElementPositionCheap(ctx, state)),
+  );
   return (frame) => {
     const result = subBehavior(frame);
-    const resultPreview = result.preview();
-    const elementPos = getElementPositionOrThrow(ctx, resultPreview);
-    const dropRendered = getDropRendered(result.dropState);
-    const dropElementPos = getElementPositionOrThrow(ctx, dropRendered);
-    const snapped = dropElementPos.dist2(elementPos) <= radiusSq;
-    const previewLayered = snapped ? dropRendered : resultPreview;
+    const grabPos =
+      result.grabPos ?? getElementPositionOrThrow(ctx, result.preview());
+    const dropGrabPos = getDropGrabPos(result.dropState);
+    const snapped = dropGrabPos.dist2(grabPos) <= radiusSq;
+    const preview = snapped
+      ? () => getDropRendered(result.dropState)
+      : result.preview;
     const snapSegment = spec.transition
       ? snapped
         ? "snapped/"
@@ -684,7 +736,8 @@ function withSnapRadiusBehavior<T extends object>(
     const activePath = `withSnapRadius/${snapSegment}${result.activePath}`;
     return {
       ...result,
-      preview: () => previewLayered,
+      preview,
+      grabPos: snapped ? dropGrabPos : grabPos,
       activePath,
       activePathTransition: spec.transition || undefined,
       chainNow:
@@ -692,7 +745,7 @@ function withSnapRadiusBehavior<T extends object>(
       tracedSpec: ctx.debug.trace
         ? setTraceInfo(
             { ...spec, inner: result.tracedSpec },
-            { snapped, outputPreview: previewLayered },
+            { snapped, outputPreview: preview() },
           )
         : spec,
     };
@@ -719,6 +772,7 @@ function withOverlayBehavior<T extends object>(
   );
   return changeResultBehaviorBase(spec, ctx, (result) => ({
     preview: () => layeredMerge(result.preview(), layer),
+    grabPos: result.grabPos,
   }));
 }
 
@@ -927,6 +981,13 @@ function betweenProjectAndRender<T extends object>(
       weights,
     ));
 
+  // Where the blend aims the grab point: the same weighted average of
+  // its positions in the rendered states
+  let grabPos = Vec2(0);
+  for (const [idx, weight] of weights.entries()) {
+    grabPos = grabPos.add(renderedStates[idx].position.mul(weight));
+  }
+
   // Drop state: closest rendered state by pointer distance
   const closest = _.minBy(renderedStates, (rs) =>
     rs.position.dist(frame.pointer),
@@ -937,6 +998,7 @@ function betweenProjectAndRender<T extends object>(
     preview,
     dropState: closest.state,
     gap: projection.dist,
+    grabPos,
     activePath: "between",
     tracedSpec: ctx.debug.trace
       ? setTraceInfo(spec, {
