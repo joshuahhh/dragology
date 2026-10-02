@@ -12,7 +12,7 @@ import {
 import { Draggable } from "../draggable";
 import { DragSpecBuilder } from "../DragSpec";
 import { Svgx } from "../svgx";
-import { draggableLine, translate } from "../svgx/helpers";
+import { draggableLine, scale, translate } from "../svgx/helpers";
 
 // # Catalan objects
 //
@@ -324,26 +324,33 @@ function parenTokens(root: Node): Token[] {
 }
 
 // # Colors
+//
+// Only nodes are colored (pastel triangles, tree nodes, Dyck bands).
+// Edges (diagonals, tree edges, paren pairs) are all one neutral color:
+// a node's color is canonical, while an edge's identity isn't (going
+// around a cycle of flips permutes them), so coloring edges makes them
+// shift hue or shuffle.
 
-const EDGE_COLORS = ["#e11d48", "#2563eb", "#16a34a", "#d97706", "#9333ea"];
 const NODE_FILLS = ["#fde68a", "#bbf7d0", "#bfdbfe", "#fbcfe8", "#ddd6fe"];
 const NODE_STROKES = ["#ca8a04", "#15803d", "#1d4ed8", "#be185d", "#6d28d9"];
+const EDGE_COLOR = "#334155";
 
 const idNum = (id: string) => parseInt(id.slice(1), 10);
-const edgeColor = (edgeId: string) =>
-  EDGE_COLORS[(idNum(edgeId) - 1) % EDGE_COLORS.length];
 const nodeFill = (id: string) => NODE_FILLS[idNum(id) % NODE_FILLS.length];
 const nodeStroke = (id: string) =>
   NODE_STROKES[idNum(id) % NODE_STROKES.length];
 
 // # The Tamari lattice
 //
-// Drawn as a layered Hasse diagram. Levels come from the linear
-// functional Σ i·c_i on Loday's realization of the associahedron (node
-// i in in-order ↦ c_i = |left leaves|·|right leaves|), which is strictly
-// monotone along rotations, so every edge points up: the left comb is
-// at the bottom, the right comb at the top. Within a level, vertices
-// are ordered by barycenter sweeps.
+// Drawn as a linear projection of Loday's realization of the
+// associahedron (node i in in-order ↦ c_i = |left leaves|·|right
+// leaves|), so drawn edges are shadows of the polytope's edges and each
+// edge class stays parallel. Height is a functional Σ w_i·c_i with w
+// increasing, which is strictly monotone along rotations, so every edge
+// points up: the left comb is at the bottom, the right comb at the top.
+// The projection is chosen to keep every vertex well clear of the other
+// vertices and of edges it isn't on – a layered layout can't, because
+// the lattice isn't graded and some edges skip levels.
 
 type LatticeVertex = { key: string; tree: Node; x: number; y: number };
 type Lattice = {
@@ -426,10 +433,26 @@ function lodayCoords(root: Node): number[] {
   return coords;
 }
 
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 const latticeCache = new Map<string, Lattice>();
 
-function getLattice(n: number, width: number, height: number): Lattice {
-  const cacheKey = `${n}-${width}-${height}`;
+function getLattice(
+  n: number,
+  width: number,
+  height: number,
+  vertexR: number,
+): Lattice {
+  const cacheKey = `${n}-${width}-${height}-${vertexR}`;
   const cached = latticeCache.get(cacheKey);
   if (cached) return cached;
 
@@ -438,8 +461,6 @@ function getLattice(n: number, width: number, height: number): Lattice {
   const coords = trees.map(lodayCoords);
   const keyIndex = new Map(keys.map((k, i) => [k, i]));
   const edges: [string, string, string][] = [];
-  const neighbors: number[][] = trees.map(() => []);
-  const ups: number[][] = trees.map(() => []);
   trees.forEach((tree, i) => {
     const infos = analyze(tree);
     for (const info of infos.values()) {
@@ -451,51 +472,179 @@ function getLattice(n: number, width: number, height: number): Lattice {
         keys[j],
         edgeClass(info, infos.get(info.parent!.id)!),
       ]);
-      neighbors[i].push(j);
-      neighbors[j].push(i);
-      ups[i].push(j);
     }
   });
 
-  // f is strictly monotone along edges, so processing vertices in
-  // decreasing-f order is a topological order (left comb first).
-  const f = coords.map((c) => _.sum(c.map((v, i) => v * (i + 1))));
-  const order = _.sortBy(_.range(trees.length), (i) => -f[i]);
-  // rank = length of the longest chain from the bottom
-  const rank = trees.map(() => 0);
-  for (const i of order) {
-    for (const j of ups[i]) rank[j] = Math.max(rank[j], rank[i] + 1);
-  }
-  const numLevels = Math.max(...rank) + 1;
-  const levelOf = rank;
-  const levels: number[][] = _.range(numLevels).map(() => []);
-  // initial order within a level: a mirror-antisymmetric functional
-  const g = coords.map((c) => _.sum(c.map((v, i) => v * (i - (n - 1) / 2))));
-  trees.forEach((_t, i) => levels[levelOf[i]].push(i));
-  for (const level of levels) level.sort((a, b) => g[a] - g[b]);
+  const ends = edges.map(([a, b]) => [keyIndex.get(a)!, keyIndex.get(b)!]);
 
-  const maxCount = Math.max(...levels.map((l) => l.length));
-  const gap = Math.min(width / maxCount, 110);
-  const xs = trees.map(() => 0);
-  const place = () => {
-    for (const level of levels) {
-      level.forEach((i, k) => {
-        xs[i] = width / 2 + (k - (level.length - 1) / 2) * gap;
-      });
-    }
+  // Project onto functionals wx (horizontal) and wy (vertical), scaled
+  // to fill the box. Every edge points up for any strictly increasing
+  // wy: a rotation moves Loday's point along e_j − e_i with i < j.
+  const project = (w: number[], size: number) => {
+    const raw = coords.map((c) => _.sum(c.map((v, i) => v * w[i])));
+    const [lo, hi] = [_.min(raw)!, _.max(raw)!];
+    return raw.map((v) => ((v - lo) / (hi - lo || 1)) * size);
   };
-  place();
-  for (let sweep = 0; sweep < 12; sweep++) {
-    const order = sweep % 2 === 0 ? levels : [...levels].reverse();
-    for (const level of order) {
-      const bary = new Map(
-        level.map((i) => {
-          const others = neighbors[i].filter((j) => levelOf[j] !== levelOf[i]);
-          return [i, others.length ? _.mean(others.map((j) => xs[j])) : xs[i]];
-        }),
-      );
-      level.sort((a, b) => bary.get(a)! - bary.get(b)! || g[a] - g[b]);
-      place();
+  // Don't stretch small lattices across the whole width.
+  const drawnWidth = Math.min(width, 1.5 * height);
+  const layout = (wx: number[], wy: number[]) => ({
+    xs: project(wx, drawnWidth).map((x) => x + (width - drawnWidth) / 2),
+    ys: project(wy, height).map((y) => height - y),
+  });
+
+  // Room around the tightest vertex: its distance to the nearest edge
+  // it isn't on, or half its distance to the nearest other vertex.
+  const clearance = ({ xs, ys }: { xs: number[]; ys: number[] }) => {
+    let min = Infinity;
+    for (let i = 0; i < trees.length; i++) {
+      for (let j = i + 1; j < trees.length; j++) {
+        min = Math.min(min, Math.hypot(xs[i] - xs[j], ys[i] - ys[j]) / 2);
+      }
+      for (const [a, b] of ends) {
+        if (a === i || b === i) continue;
+        const dx = xs[b] - xs[a];
+        const dy = ys[b] - ys[a];
+        const t = _.clamp(
+          ((xs[i] - xs[a]) * dx + (ys[i] - ys[a]) * dy) / (dx * dx + dy * dy),
+          0,
+          1,
+        );
+        min = Math.min(
+          min,
+          Math.hypot(xs[a] + t * dx - xs[i], ys[a] + t * dy - ys[i]),
+        );
+      }
+    }
+    return min;
+  };
+
+  // Edges run from lower to upper vertex. Score how steep the flattest
+  // one is alongside clearance, so none lies nearly flat.
+  const minRise = ({ ys }: { ys: number[] }) =>
+    Math.min(...ends.map(([a, b]) => ys[a] - ys[b]));
+
+  // Mirroring a tree reverses its Loday coordinates and turns the
+  // lattice upside down. A palindromic wx, and a wy whose steps are
+  // palindromic, make the drawing mirror-symmetric top to bottom, with
+  // both combs on one vertical. So search over the free halves.
+  const half = Math.ceil(n / 2);
+  const stepHalf = Math.ceil((n - 1) / 2);
+  const palindrome = (h: number[], len: number) =>
+    _.range(len).map((i) => h[Math.min(i, len - 1 - i)]);
+  const weights = (xh: number[], yh: number[]) => {
+    const steps = palindrome(yh, n - 1);
+    return {
+      wx: palindrome(xh, n),
+      wy: _.range(n).map((i) => _.sum(steps.slice(0, i))),
+    };
+  };
+
+  // Random search, then hill-climb from the roomiest. Seeded, so the
+  // layout is the same every time.
+  const rand = mulberry32(n);
+  let bestX = _.range(half).map((i) => i * i);
+  let bestY = _.range(stepHalf).map(() => 1);
+  let best = -Infinity;
+  const consider = (xh: number[], yh: number[]) => {
+    if (yh.some((v) => v <= 0.02)) return;
+    const { wx, wy } = weights(xh, yh);
+    const l = layout(wx, wy);
+    const score = Math.min(clearance(l), minRise(l));
+    if (score > best) [best, bestX, bestY] = [score, xh, yh];
+  };
+  for (let trial = 0; trial < 1500; trial++) {
+    consider(
+      _.range(half).map(() => rand() - 0.5),
+      _.range(stepHalf).map(() => 0.05 + rand()),
+    );
+  }
+  for (let step = 0; step < 1500; step++) {
+    const size = 0.2 * (1 - step / 1500);
+    consider(
+      bestX.map((v) => v + (rand() - 0.5) * size),
+      bestY.map((v) => v + (rand() - 0.5) * size),
+    );
+  }
+  const { wx, wy } = weights(bestX, bestY);
+  const { xs, ys } = layout(wx, wy);
+
+  // A flat projection can't always leave enough room (n = 5 is a 4D
+  // polytope), so then nudge vertices off whatever they crowd, keeping
+  // every edge pointing up. Vertices move in mirror pairs, reflected
+  // across the middle, to keep the symmetry.
+  const coordIndex = new Map(coords.map((c, i) => [c.join(), i]));
+  const mirror = coords.map((c) => coordIndex.get([...c].reverse().join())!);
+  const needVE = vertexR + 5;
+  const needVV = 2 * vertexR + 8;
+  const incident = trees.map((_t, i) =>
+    ends.filter(([a, b]) => a === i || b === i),
+  );
+  const segDist = (i: number, a: number, b: number) => {
+    const dx = xs[b] - xs[a];
+    const dy = ys[b] - ys[a];
+    const t = _.clamp(
+      ((xs[i] - xs[a]) * dx + (ys[i] - ys[a]) * dy) / (dx * dx + dy * dy),
+      0,
+      1,
+    );
+    return Math.hypot(xs[a] + t * dx - xs[i], ys[a] + t * dy - ys[i]);
+  };
+  const hinge = (need: number, d: number) => Math.max(0, need - d) ** 2;
+  // the penalty terms that involve vertex v
+  const crowding = (v: number) => {
+    let p = 0;
+    for (let j = 0; j < trees.length; j++) {
+      if (j !== v) p += hinge(needVV, Math.hypot(xs[v] - xs[j], ys[v] - ys[j]));
+    }
+    for (const [a, b] of ends) {
+      if (a !== v && b !== v) p += hinge(needVE, segDist(v, a, b));
+    }
+    for (const [a, b] of incident[v]) {
+      for (let j = 0; j < trees.length; j++) {
+        if (j !== a && j !== b) p += hinge(needVE, segDist(j, a, b));
+      }
+    }
+    return p;
+  };
+  const riseFloor = minRise({ ys });
+  const pointsUp = (v: number) =>
+    incident[v].every(([a, b]) => ys[a] - ys[b] >= riseFloor);
+  const dirs = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+  ];
+  for (let step = 8; step >= 0.5; step /= 2) {
+    for (let pass = 0; pass < 40; pass++) {
+      let moved = false;
+      for (let v = 0; v < trees.length; v++) {
+        const m = mirror[v];
+        if (m < v) continue;
+        const pairCrowding = () => crowding(v) + (m === v ? 0 : crowding(m));
+        let current = pairCrowding();
+        if (current === 0) continue;
+        for (const [dx, dy] of dirs) {
+          // a self-mirror vertex stays on the middle line
+          if (m === v && dy !== 0) continue;
+          const saved = [xs[v], ys[v], xs[m], ys[m]];
+          xs[v] = xs[m] = _.clamp(saved[0] + dx * step, 0, width);
+          ys[v] = _.clamp(saved[1] + dy * step, 0, height);
+          if (m !== v) ys[m] = height - ys[v];
+          const next = pointsUp(v) && pointsUp(m) ? pairCrowding() : Infinity;
+          if (next < current) {
+            current = next;
+            moved = true;
+          } else {
+            [xs[v], ys[v], xs[m], ys[m]] = saved;
+          }
+        }
+      }
+      if (!moved) break;
     }
   }
 
@@ -503,7 +652,7 @@ function getLattice(n: number, width: number, height: number): Lattice {
     key: keys[i],
     tree,
     x: xs[i],
-    y: height - (levelOf[i] / (numLevels - 1)) * height,
+    y: ys[i],
   }));
   const lattice: Lattice = {
     vertices,
@@ -529,10 +678,13 @@ const TREE_DY = 30;
 const DYCK_ORIGIN = { x: 510, y: 180 };
 const DYCK_W = 170;
 
-const PAREN_ORIGIN = { x: 275, y: 270 };
-const PAREN_ADV = 20;
+const PAIR_ORIGIN = { x: 520, y: 305 };
+const PAIR_W = 170;
 
-const LAT_ORIGIN = { x: 40, y: 340 };
+const PAREN_ORIGIN = { x: 265, y: 270 };
+const PAREN_ADV = 18;
+
+const LAT_ORIGIN = { x: 40, y: 350 };
 const LAT_W = 560;
 const LEVEL_DY = 46;
 const latticeHeight = (n: number) => ((n * (n - 1)) / 2) * LEVEL_DY;
@@ -640,7 +792,7 @@ function polygonView(
                 y1={pa.y}
                 x2={pb.x}
                 y2={pb.y}
-                stroke={edgeColor(node.edgeId)}
+                stroke={EDGE_COLOR}
                 strokeWidth={3.5}
                 strokeLinecap="round"
               />
@@ -696,7 +848,7 @@ function treeView(
               y1={a.y}
               x2={b.x}
               y2={b.y}
-              stroke={edgeColor(node.edgeId)}
+              stroke={EDGE_COLOR}
               strokeWidth={3}
               strokeLinecap="round"
             />
@@ -751,7 +903,11 @@ function treeView(
             parent !== null &&
             (() => {
               const m = flipMove(state, node.id);
-              return d.between([m.from, m.to]);
+              // On completing the rotation, chain into a new drag from
+              // there, so one drag can rotate a node up several levels.
+              return d
+                .between([m.from, m.to])
+                .withSnapRadius(1, { chain: true });
             })
           }
         >
@@ -767,11 +923,36 @@ function treeView(
   );
 }
 
+/**
+ * The rotations that move a node's Dyck hump (equivalently, its arc in
+ * the pairing). At most one each way, so the pointer's direction picks
+ * one.
+ */
+function humpMoves(state: State, info: NodeInfo): Move[] {
+  const moves: Move[] = [];
+  // hump slides down-right: this node is a right child
+  if (info.side === "right") moves.push(flipMove(state, info.node.id));
+  // hump slides up-left: this node's left child is internal
+  if (info.node.left.type === "node")
+    moves.push(flipMove(state, info.node.left.id));
+  return moves;
+}
+
+/** Drag through `moves`, chaining into the next drag on completing one. */
+function slideSpec(d: DragSpecBuilder<State>, moves: Move[]) {
+  return d
+    .closest(moves.map((m) => d.between([m.from, m.to])))
+    .withSnapRadius(1, { chain: true });
+}
+
+type DyckTiles = "strips" | "bands";
+
 function dyckView(
   state: State,
   infos: Map<string, NodeInfo>,
   d: DragSpecBuilder<State>,
   n: number,
+  tiles: DyckTiles,
 ): Svgx {
   const u = DYCK_W / (2 * n);
   const steps = dyckSteps(state.root);
@@ -785,15 +966,10 @@ function dyckView(
     if (!segsById.has(s.id)) segsById.set(s.id, []);
     segsById.get(s.id)!.push({ a: i, b: i + 1 });
   });
-  const humps = [...infos.values()].map((info) => {
-    const moves: Move[] = [];
-    // hump slides down-right: this node is a right child
-    if (info.side === "right") moves.push(flipMove(state, info.node.id));
-    // hump slides up-left: this node's left child is internal
-    if (info.node.left.type === "node")
-      moves.push(flipMove(state, info.node.left.id));
-    return { info, moves };
-  });
+  const humps = [...infos.values()].map((info) => ({
+    info,
+    moves: humpMoves(state, info),
+  }));
   return (
     <g transform={translate(DYCK_ORIGIN.x, DYCK_ORIGIN.y)}>
       {/* grid */}
@@ -829,17 +1005,41 @@ function dyckView(
       {humps.map(({ info, moves }) => {
         const segs = segsById.get(info.node.id)!;
         const anchor = pts[segs[0].a];
+        // The area under the path tiles into one piece per node, either:
+        // - a strip along the axis its hump slides on, from its up-step
+        //   diagonally down to the baseline (a down-step keeps
+        //   x + height fixed and an up-step adds 2, so each diagonal
+        //   band of width 2 holds exactly one up-step), or
+        // - a unit-high band from its up-step to its down-step, with
+        //   nested humps sitting on top of it.
+        const h = -anchor.y;
+        const w = pts[segs[1].b].x - anchor.x;
+        const tile =
+          tiles === "strips"
+            ? [
+                [0, 0],
+                [u, -u],
+                [h + 2 * u, h],
+                [h, h],
+              ]
+            : [
+                [0, 0],
+                [w, 0],
+                [w - u, -u],
+                [u, -u],
+              ];
         return (
           <g
             id={`dyck-${info.node.id}`}
             transform={translate(anchor)}
             style={{ cursor: moves.length > 0 ? "grab" : "default" }}
-            dragologyOnDrag={
-              moves.length > 0 &&
-              (() => d.closest(moves.map((m) => d.between([m.from, m.to]))))
-            }
+            dragologyOnDrag={moves.length > 0 && (() => slideSpec(d, moves))}
           >
-            {segs.map(({ a, b }, k) => {
+            <polygon
+              points={tile.map(([x, y]) => `${x},${y}`).join(" ")}
+              fill={nodeFill(info.node.id)}
+            />
+            {segs.map(({ a, b }) => {
               const line = (stroke: string, strokeWidth: number) => (
                 <line
                   x1={pts[a].x - anchor.x}
@@ -852,15 +1052,64 @@ function dyckView(
                 />
               );
               return (
-                <g id={`dyck-${info.node.id}-${k}`}>
+                <g>
                   {line("transparent", 16)}
-                  {line(nodeStroke(info.node.id), 4)}
+                  {line("#475569", 2.5)}
                 </g>
               );
             })}
           </g>
         );
       })}
+    </g>
+  );
+}
+
+// The pairing matches each up-step of the Dyck path with its down-step:
+// one arc per node, nested like the humps.
+function pairingView(
+  state: State,
+  infos: Map<string, NodeInfo>,
+  d: DragSpecBuilder<State>,
+  n: number,
+): Svgx {
+  const u = PAIR_W / (2 * n);
+  const steps = dyckSteps(state.root);
+  const pointX = (k: number) => (k + 0.5) * u;
+  let depth = 0;
+  const depthAt = steps.map((s) => (s.dir === "U" ? depth++ : --depth));
+  return (
+    <g transform={translate(PAIR_ORIGIN.x, PAIR_ORIGIN.y)}>
+      {[...infos.values()].map((info) => {
+        const id = info.node.id;
+        const i = steps.findIndex((s) => s.id === id && s.dir === "U");
+        const j = steps.findIndex((s) => s.id === id && s.dir === "D");
+        const radius = (pointX(j) - pointX(i)) / 2;
+        const moves = humpMoves(state, info);
+        return (
+          <g
+            id={`arc-${id}`}
+            // a unit semicircle, placed and sized by the transform so a
+            // grabbed point follows the arc as it moves and resizes
+            transform={translate(pointX(i) + radius, 0) + scale(radius)}
+            // nested arcs draw over the ones around them
+            dragologyZIndex={depthAt[i]}
+            style={{ cursor: moves.length > 0 ? "grab" : "default" }}
+            dragologyOnDrag={moves.length > 0 && (() => slideSpec(d, moves))}
+          >
+            <path
+              d="M -1 0 A 1 1 0 0 1 1 0 Z"
+              fill={nodeFill(id)}
+              stroke={nodeStroke(id)}
+              strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        );
+      })}
+      {_.range(2 * n).map((k) => (
+        <circle transform={translate(pointX(k), 0)} r={2.5} fill={EDGE_COLOR} />
+      ))}
     </g>
   );
 }
@@ -932,7 +1181,7 @@ function parenView(
       )}
       {[...byEdge.entries()].map(([edgeId, { open, close }]) => {
         const node = nodeByEdge.get(edgeId)!;
-        const color = edgeColor(edgeId);
+        const color = EDGE_COLOR;
         const onDrag = () => {
           const m = flipMove(state, node.id);
           return d.between([m.from, m.to]);
@@ -993,8 +1242,8 @@ function latticeView(
   draggedId: string | null,
   showColors: boolean,
 ): Svgx {
-  const lattice = getLattice(n, LAT_W, latticeHeight(n));
   const miniR = n <= 4 ? 14 : 11;
+  const lattice = getLattice(n, LAT_W, latticeHeight(n), miniR);
   const currentKey = shapeKey(state.root);
   const current = lattice.byKey.get(currentKey)!;
   const moves = [...infos.values()]
@@ -1093,6 +1342,7 @@ function label(x: number, y: number, text: string): Svgx {
 function makeDraggable(
   n: number,
   showLatticeColors: boolean,
+  dyckTiles: DyckTiles,
 ): Draggable<State> {
   return ({ state, d, draggedId }) => {
     const infos = analyze(state.root);
@@ -1103,7 +1353,9 @@ function makeDraggable(
         {label(TREE_ORIGIN.x - 10, 30, "binary tree")}
         {treeView(state, infos, d, n, draggedId)}
         {label(DYCK_ORIGIN.x - 10, 30, "dyck path")}
-        {dyckView(state, infos, d, n)}
+        {dyckView(state, infos, d, n, dyckTiles)}
+        {label(PAIR_ORIGIN.x - 10, 215, "pairing")}
+        {pairingView(state, infos, d, n)}
         {label(PAREN_ORIGIN.x - 15, PAREN_ORIGIN.y - 24, "parenthesization")}
         {parenView(state, infos, d)}
         {label(20, LAT_ORIGIN.y - 30, "tamari lattice")}
@@ -1117,28 +1369,29 @@ export default demo(
   () => {
     const [n, setN] = useState(4);
     const [showLatticeColors, setShowLatticeColors] = useState(false);
+    const [dyckTiles, setDyckTiles] = useState<DyckTiles>("strips");
     const draggable = useMemo(
-      () => makeDraggable(n, showLatticeColors),
-      [n, showLatticeColors],
+      () => makeDraggable(n, showLatticeColors, dyckTiles),
+      [n, showLatticeColors, dyckTiles],
     );
     return (
       <DemoWithConfig>
         <div>
           <DemoNotes>
-            Five views of one Catalan object, all drawn from a single state.
-            Drag a <b>diagonal</b> to flip it, drag a <b>tree node</b> up to
-            rotate it, slide a <b>hump</b> of the Dyck path diagonally (a
-            rotation moves a whole excursion past a down-step – the Tamari move,
-            not a single peak flip), or slide a <b>parenthesis</b>. Every view
-            animates the same move. Colors follow identity: pastel fills are
-            tree nodes (= triangles = humps); saturated strokes are tree edges
-            (= diagonals = paren pairs). Below, the Tamari lattice: drag the
-            ring along edges to walk the flip graph (left comb at the bottom,
-            right comb at the top). With &ldquo;Color lattice edges&rdquo; on,
-            edges are colored by which two operator slots the rotation
-            re-associates – in Loday&apos;s associahedron these are exactly the
-            parallel classes of edges. (These colors are unrelated to the ones
-            above.)
+            Six views of one Catalan object, all drawn from a single state. Drag
+            a <b>diagonal</b> to flip it, drag a <b>tree node</b> up to rotate
+            it, slide a <b>hump</b> of the Dyck path diagonally (a rotation
+            moves a whole excursion past a down-step – the Tamari move, not a
+            single peak flip) or its <b>arc</b> in the pairing, or slide a{" "}
+            <b>parenthesis</b>. Every view animates the same move. Colors follow
+            identity: each tree node shares its color with its triangle, its
+            tile of the Dyck path, and its arc in the pairing. Below, the Tamari
+            lattice: drag the ring along edges to walk the flip graph (left comb
+            at the bottom, right comb at the top). With &ldquo;Color lattice
+            edges&rdquo; on, edges are colored by which two operator slots the
+            rotation re-associates – in Loday&apos;s associahedron these are
+            exactly the parallel classes of edges. (These colors are unrelated
+            to the ones above.)
           </DemoNotes>
           <DemoDraggable
             key={n}
@@ -1161,11 +1414,26 @@ export default demo(
           >
             Color lattice edges
           </ConfigCheckbox>
+          <ConfigSelect
+            label="Dyck tiles"
+            value={dyckTiles}
+            onChange={setDyckTiles}
+            options={["strips", "bands"] as const}
+            stringifyOption={(t) =>
+              t === "strips" ? "diagonal strips" : "horizontal bands"
+            }
+          />
         </ConfigPanel>
       </DemoWithConfig>
     );
   },
   {
+    // The band tiling is only reachable from the config panel.
+    fuzz: (["strips", "bands"] as const).map((tiles) => ({
+      name: tiles,
+      draggable: makeDraggable(4, false, tiles),
+      initialState: initialState(4),
+    })),
     tags: [
       "d.between",
       "d.closest",
