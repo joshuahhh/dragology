@@ -44,9 +44,26 @@ function extractSvgContentsAsJsx(container: HTMLElement): Svgx {
 
   const transform = calculateViewBoxTransform(svg);
   const svgContent = svg.innerHTML;
-  const parsed = parse(svgContent);
+  const parsed = stripKeys(parse(svgContent));
 
   return React.createElement("g", transform ? { transform } : {}, parsed);
+}
+
+/**
+ * html-react-parser keys the elements of every list ("0", "1", …), but
+ * draggables don't allow keys; Dragology matches elements by id and
+ * position.
+ */
+function stripKeys(node: ReactNode): ReactNode {
+  if (Array.isArray(node)) return node.map(stripKeys);
+  if (!React.isValidElement(node)) return node;
+  const { children, ...props } = node.props as { children?: ReactNode };
+  const stripped = stripKeys(children);
+  return React.createElement(
+    node.type,
+    props,
+    ...(Array.isArray(stripped) ? stripped : [stripped]),
+  );
 }
 
 function applyAttributesById(
