@@ -170,6 +170,57 @@ function computeLinkLengths(notes: StickyNote[]): number[] {
   return lengths;
 }
 
+function NoteContent({ html }: { html: string }) {
+  return (
+    <div
+      style={{
+        width: NOTE_W,
+        height: NOTE_H,
+        padding: 8,
+        fontSize: 22,
+        fontWeight: 600,
+        fontFamily: `${shantellSans}, system-ui, sans-serif`,
+        color: "#374151",
+        overflow: "hidden",
+        boxSizing: "border-box",
+        pointerEvents: "none",
+        userSelect: "none",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+      }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+function ChainingToggle({
+  checked,
+  onToggle,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        fontSize: 11,
+        fontFamily: "system-ui, sans-serif",
+        color: "#64748b",
+        cursor: "pointer",
+        userSelect: "none",
+      }}
+    >
+      <input type="checkbox" checked={checked} onChange={onToggle} />
+      chaining
+    </label>
+  );
+}
+
 export const draggable: Draggable<State> = ({
   state,
   d,
@@ -321,51 +372,17 @@ export const draggable: Draggable<State> = ({
           }}
         />
         <foreignObject width={NOTE_W} height={NOTE_H}>
-          <div
-            style={{
-              width: NOTE_W,
-              height: NOTE_H,
-              padding: 8,
-              fontSize: 22,
-              fontWeight: 600,
-              fontFamily: `${shantellSans}, system-ui, sans-serif`,
-              color: "#374151",
-              overflow: "hidden",
-              boxSizing: "border-box",
-              pointerEvents: "none",
-              userSelect: "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              textAlign: "center",
-            }}
-            dangerouslySetInnerHTML={{ __html: note.content }}
-          />
+          <NoteContent html={note.content} />
         </foreignObject>
       </g>
     ))}
     <foreignObject x={880} y={10} width={70} height={30}>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          fontSize: 11,
-          fontFamily: "system-ui, sans-serif",
-          color: "#64748b",
-          cursor: "pointer",
-          userSelect: "none",
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={state.showLinks}
-          onChange={() =>
-            setState((prev) => ({ ...prev, showLinks: !prev.showLinks }))
-          }
-        />
-        chaining
-      </label>
+      <ChainingToggle
+        checked={state.showLinks}
+        onToggle={() =>
+          setState((prev) => ({ ...prev, showLinks: !prev.showLinks }))
+        }
+      />
     </foreignObject>
   </g>
 );

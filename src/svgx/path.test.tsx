@@ -517,3 +517,28 @@ describe("component elements", () => {
     ).toThrow(/<Widget> has a dragologyKey/);
   });
 });
+
+describe("foreignObject", () => {
+  function Widget() {
+    return null;
+  }
+
+  it("may hold component elements", () => {
+    const result = assignPaths(
+      <foreignObject>
+        <Widget />
+      </foreignObject>,
+    );
+    expect(findByPath("/0/", result)?.element.type).toBe(Widget);
+  });
+
+  it("rejects inline HTML", () => {
+    expect(() =>
+      assignPaths(
+        <foreignObject>
+          <div />
+        </foreignObject>,
+      ),
+    ).toThrow(/<foreignObject> contains <div>/);
+  });
+});

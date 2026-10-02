@@ -212,10 +212,22 @@ function fadeElement(element: Svgx, factor: number): Svgx | null {
 }
 
 /**
+ * Which side of a lerp supplies what can't be blended: text content,
+ * event handlers, component props, and so on. A spring passes "a",
+ * its target; `d.between` passes the side holding its nearest state.
+ */
+export type UnblendedFrom = "a" | "b";
+
+/**
  * Lerps between two SVG JSX nodes.
  * Interpolates transforms and recursively lerps children.
  */
-export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
+export function lerpSvgx(
+  a: Svgx,
+  b: Svgx,
+  t: number,
+  unblendedFrom: UnblendedFrom = "a",
+): Svgx {
   // Elements should be the same type
   if (a.type !== b.type) {
     throw new ErrorWithJSX(
@@ -243,10 +255,13 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
     );
   }
 
-  if (isComponentElement(a)) return lerpComponentElement(a, b, t);
+  if (isComponentElement(a)) {
+    return lerpComponentElement(a, b, t, unblendedFrom);
+  }
 
   const propsA = a.props;
   const propsB = b.props;
+  const fromB = unblendedFrom === "b";
 
   // Lerp transform if present
   const transformA = propsA.transform || "";
@@ -260,11 +275,14 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
   for (const key of allPropKeys) {
     if (key === "children" || key === "transform") continue;
     // TODO: audit handling of data- props
-    if (key.startsWith("data-")) continue;
-    if (key.startsWith("dragology")) continue;
-    if (/^on[A-Z]/.test(key)) continue;
-    if (NO_LERP_PROPS.has(key)) {
-      lerpedProps[key] = propsB[key] as any; // too hard to type
+    if (
+      key.startsWith("data-") ||
+      key.startsWith("dragology") ||
+      /^on[A-Z]/.test(key) ||
+      NO_LERP_PROPS.has(key)
+    ) {
+      // Not blended. (Unset, they come from `a` via cloneElement.)
+      if (fromB) lerpedProps[key] = propsB[key] as any; // too hard to type
       continue;
     }
 
@@ -287,7 +305,7 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
 
       for (const styleKey of allStyleKeys) {
         if (NO_LERP_PROPS.has(styleKey)) {
-          lerpedStyle[styleKey] = styleB[styleKey];
+          lerpedStyle[styleKey] = (fromB ? styleB : styleA)[styleKey];
           continue;
         }
 
@@ -305,12 +323,12 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
     }
   }
 
-  // For foreignObject and other opaque elements, just use children
-  // from A, untouched.
+  // For defs and dragologyOpaque elements, take the children whole.
   if (!shouldRecurseIntoChildren(a)) {
     return React.cloneElement(a, {
       ...lerpedProps,
       ...(lerpedTransform ? { transform: lerpedTransform } : {}),
+      children: (fromB ? propsB : propsA).children,
     });
   }
 
@@ -345,10 +363,10 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
   for (const { a: childA, b: childB } of slots.values()) {
     if (childA !== undefined && childB !== undefined) {
       if (isValidSvgx(childA) && isValidSvgx(childB)) {
-        lerpedChildren.push(lerpSvgx(childA, childB, t));
+        lerpedChildren.push(lerpSvgx(childA, childB, t, unblendedFrom));
       } else {
-        // Non-element (e.g. text node) — just use A
-        lerpedChildren.push(childA);
+        // Non-element (e.g. text node)
+        lerpedChildren.push(fromB ? childB : childA);
       }
     } else if (childA !== undefined && isValidSvgx(childA)) {
       const faded = fadeElement(childA, 1 - t);
@@ -370,21 +388,28 @@ export function lerpSvgx(a: Svgx, b: Svgx, t: number): Svgx {
 
 /**
  * A component's props mean whatever the component says they mean, so
- * by default we take them all from the nearer side. Props named in
- * `dragologyLerpProps` (or all of them, for `true`) are blended with
- * `lerpData`.
+ * by default we take them all from the `unblendedFrom` side. Props
+ * named in `dragologyLerpProps` (or all of them, for `true`) are
+ * blended with `lerpData`.
  */
-function lerpComponentElement(a: Svgx, b: Svgx, t: number): Svgx {
-  const near = t < 0.5 ? a : b;
+function lerpComponentElement(
+  a: Svgx,
+  b: Svgx,
+  t: number,
+  unblendedFrom: UnblendedFrom,
+): Svgx {
+  const fromB = unblendedFrom === "b";
+  // Keep `a`'s key either way, so React sees the same element.
+  const base = fromB ? cloneElement(b, { key: a.key ?? undefined }) : a;
   const { dragologyLerpProps: lerpProps } =
-    near.props as React.JSX.IntrinsicAttributes;
-  if (!lerpProps) return near;
+    base.props as React.JSX.IntrinsicAttributes;
+  if (!lerpProps) return base;
 
   const keys =
     lerpProps === true
       ? new Set([...objectKeys(a.props), ...objectKeys(b.props)])
       : lerpProps;
-  if (lerpProps !== true) warnAboutUnknownLerpProps(near, keys, a, b);
+  if (lerpProps !== true) warnAboutUnknownLerpProps(keys, a, b);
   const lerped: Record<string, unknown> = {};
   for (const key of keys) {
     if (
@@ -400,27 +425,27 @@ function lerpComponentElement(a: Svgx, b: Svgx, t: number): Svgx {
       a.props[key as keyof SvgxProps],
       b.props[key as keyof SvgxProps],
       t,
+      fromB,
     );
   }
-  return cloneElement(near, lerped);
+  return cloneElement(base, lerped);
 }
 
 const warnedLerpProps = new Set<string>();
 
 /** Catches typos in dragologyLerpProps. Warns once per component & prop. */
 function warnAboutUnknownLerpProps(
-  near: Svgx,
   keys: Iterable<string>,
   a: Svgx,
   b: Svgx,
 ): void {
   for (const key of keys) {
     if (key in a.props || key in b.props) continue;
-    const id = `${elementName(near)}.${key}`;
+    const id = `${elementName(a)}.${key}`;
     if (warnedLerpProps.has(id)) continue;
     warnedLerpProps.add(id);
     console.warn(
-      `dragologyLerpProps on <${elementName(near)}> lists "${key}", ` +
+      `dragologyLerpProps on <${elementName(a)}> lists "${key}", ` +
         `but it has no prop by that name.`,
     );
   }
@@ -429,18 +454,21 @@ function warnAboutUnknownLerpProps(
 /**
  * Lerps plain data: numbers, colors, and anything `lerpValue` handles,
  * recursing into same-length arrays and same-keyed plain objects.
- * Anything else snaps to the nearer side rather than throwing.
+ * Anything else comes from one side (`b` if `fromB`) rather than
+ * throwing.
  */
 function lerpData(
   key: string,
   valA: unknown,
   valB: unknown,
   t: number,
+  fromB: boolean,
 ): unknown {
   if (valA === valB) return valA;
+  const unblended = fromB ? valB : valA;
   if (Array.isArray(valA) && Array.isArray(valB)) {
-    if (valA.length !== valB.length) return t < 0.5 ? valA : valB;
-    return valA.map((v, i) => lerpData(key, v, valB[i], t));
+    if (valA.length !== valB.length) return unblended;
+    return valA.map((v, i) => lerpData(key, v, valB[i], t, fromB));
   }
   if (isPlainObject(valA) && isPlainObject(valB)) {
     const keysA = Object.keys(valA);
@@ -449,10 +477,10 @@ function lerpData(
       keysA.length !== keysB.length ||
       !keysA.every((k) => Object.hasOwn(valB, k))
     ) {
-      return t < 0.5 ? valA : valB;
+      return unblended;
     }
     return Object.fromEntries(
-      keysA.map((k) => [k, lerpData(k, valA[k], valB[k], t)]),
+      keysA.map((k) => [k, lerpData(k, valA[k], valB[k], t, fromB)]),
     );
   }
   if (
@@ -466,7 +494,7 @@ function lerpData(
   try {
     return lerpValue(key, valA, valB, t);
   } catch {
-    return t < 0.5 ? valA : valB;
+    return unblended;
   }
 }
 
@@ -675,6 +703,7 @@ export function lerpLayered(
   a: LayeredSvgx,
   b: LayeredSvgx,
   t: number,
+  unblendedFrom: UnblendedFrom,
 ): LayeredSvgx {
   // Preprocess: inject synthetic versions of emerging elements in BOTH directions.
   // Bidirectional handling is needed because Delaunay interpolation can flip direction.
@@ -693,8 +722,8 @@ export function lerpLayered(
 
     if (aVal && bVal) {
       result.set(key, {
-        element: lerpSvgx(aVal.element, bVal.element, t),
-        stackingPath: aVal.stackingPath,
+        element: lerpSvgx(aVal.element, bVal.element, t, unblendedFrom),
+        stackingPath: (unblendedFrom === "b" ? bVal : aVal).stackingPath,
       });
     } else if (aVal) {
       const faded = fadeElement(aVal.element, 1 - t);
@@ -746,6 +775,12 @@ export function lerpLayeredWeighted(
   if (entries.length === 0) return items[0];
   if (entries.length === 1) return items[entries[0][0]];
 
+  // What can't be blended comes from the nearest (heaviest) state;
+  // ties go to the earlier one.
+  const nearestIdx = entries.reduce((best, e) =>
+    e[1] > best[1] ? e : best,
+  )[0];
+
   // Fold pairwise: accumulate = lerp(accumulate, next, next_weight / remaining_weight)
   let acc = items[entries[0][0]];
   let accWeight = entries[0][1];
@@ -753,7 +788,8 @@ export function lerpLayeredWeighted(
   for (let i = 1; i < entries.length; i++) {
     const [idx, w] = entries[i];
     const t = w / (accWeight + w);
-    acc = lerpLayered(acc, items[idx], t);
+    // `acc` holds the nearest state once it's been folded in.
+    acc = lerpLayered(acc, items[idx], t, idx === nearestIdx ? "b" : "a");
     accWeight += w;
   }
 

@@ -117,9 +117,9 @@ export default demo(
           select it. Drag the knob. Mid-drag, Dragology draws a blend of states,
           and the left chart has{" "}
           <code>dragologyLerpProps={'{["data", "color"]}'}</code>, so its props
-          are blended too. The right chart gets the nearer state's props, so it
-          jumps halfway. On drop, the knob and the left chart's bars overshoot
-          and settle.
+          are blended too. The right chart isn't blended: it shows the nearest
+          preset. On drop, the knob and the left chart's bars overshoot and
+          settle.
         </p>
       </DemoNotes>
       <DemoDraggable

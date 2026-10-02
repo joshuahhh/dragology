@@ -271,7 +271,7 @@ Often, the state will contain entities with IDs. If a state transition involves 
 
 ### Use `id` for Element Identity — Never `key`
 
-**Do not use React `key` props.** Dragology does its own reconciliation using `id` attributes, not React's. Adding `key` will interfere. Anywhere you'd normally reach for `key` (e.g. rendering a list of elements), use `id` instead.
+**Do not use React `key` props.** Dragology does its own reconciliation using `id` attributes, not React's, and a `key` on an element in a draggable's tree is an error. Anywhere you'd normally reach for `key` (e.g. rendering a list of elements), use `id` instead. (Inside a React component used in a draggable, keys are fine; see [React Components Inside a Draggable](#react-components-inside-a-draggable).)
 
 IDs must be **globally unique** across the entire SVG tree (unlike React keys, which only need to be unique among siblings).
 
@@ -418,4 +418,54 @@ const point = center.add(offset);
 
 9. **Variable-length lists need `id` attributes.** In any .map() where the array length can change between states, the outermost element returned from the callback must have a stable id — even if it's just a wrapper <g>. Without this, the interpolation engine can't reconcile which elements correspond across states and will fail. Use the mapped item's identity for the id, not the array index. Remember, no React-style `key` attributes!
 
-10. **No React components inside a `Draggable`.** The SVG tree returned from your `Draggable` function must consist entirely of plain SVG elements (`<g>`, `<rect>`, `<circle>`, `<path>`, `<text>`, etc.). Do **not** use custom React components (like `<GearShape gear={g} />`) anywhere in the tree — the library bypasses React's rendering and walks the element tree directly for interpolation and reconciliation, so custom components will not be expanded and will break. If you want to factor out reusable SVG snippets, use plain functions that return JSX, and call them as functions.
+10. **React components are opaque.** Dragology never expands a component element like `<GearShape gear={g} />`: React renders it, and Dragology can't interpolate, layer, or measure anything inside it. That's what you want for a stateful widget (see [React Components Inside a Draggable](#react-components-inside-a-draggable)). To factor out a reusable SVG snippet that should still interpolate, write a plain function that returns JSX and call it: `{gearShape(g)}`.
+
+## React Components Inside a Draggable
+
+The tree a `Draggable` returns is Dragology's: it calls your render function on many hypothetical states, then walks, interpolates, and measures the results. Plain SVG elements (`<g>`, `<rect>`, `<text>`) are what it understands. A **component element** (`<NoteWidget />`) is different: Dragology never calls the component. React mounts it once and keeps it mounted through drags, so its hooks and state work as usual, and each frame it gets the props from whatever Dragology is drawing.
+
+So there are two ways to factor out a piece of a draggable:
+
+- **Call a function** (`{drawCard(card)}`): Dragology sees inside it. Ids, layers, interpolation, and `dragologyOnDrag` all work.
+- **Render a component** (`<NoteWidget card={card} />`): React owns it. Its contents are opaque to Dragology: not interpolated, not layered, not counted in the dragged element's bounds.
+
+**HTML always lives in a component.** A `<foreignObject>` may only contain component elements; inline HTML in one is an error. SVG components can go anywhere in the tree.
+
+```tsx
+function NoteWidget({ name }: { name: string }) {
+  const [count, setCount] = useState(0); // survives drags and reorders
+  return (
+    <div>
+      {name}
+      <button
+        onPointerDown={(e) => e.stopPropagation()} // a control, not a grab
+        onClick={() => setCount((c) => c + 1)}
+      >
+        {count}
+      </button>
+    </div>
+  );
+}
+
+const draggable: Draggable<State> = ({ state, d }) => (
+  <g>
+    {state.order.map((name, idx) => (
+      <g id={`card-${name}`} transform={translate(0, idx * 70)} dragologyOnDrag={() => ...}>
+        <rect width={300} height={60} fill="white" />
+        <foreignObject width={300} height={60}>
+          <NoteWidget name={name} />
+        </foreignObject>
+      </g>
+    ))}
+  </g>
+);
+```
+
+- **Pointer events bubble to the enclosing drag.** Pressing anywhere in a component starts the drag of the nearest enclosing element with `dragologyOnDrag`, as with any other child. Controls that shouldn't start drags (buttons, inputs) call `e.stopPropagation()` in `onPointerDown`.
+- **Identity comes from position in the tree.** On a component element, `id` is just the component's own prop. To make a component a layer, or to pin its position among siblings, wrap it: `<g id="…">` or `<g dragologyKey="…">`. (`dragologyKey` on a component is an error.)
+- **Props aren't blended by default.** When Dragology blends two renders, a component gets the props of one of them: during an animation (a drop, or an animated `setState`), the state being animated toward; mid-`d.between`, the nearest state. List props in `dragologyLerpProps` to blend them instead: numbers, colors, and same-shaped arrays and objects of them blend; anything else isn't. `true` means all props.
+- **Updates from controls shouldn't animate.** `setState` animates by default, which is pointless for a keystroke or a checkbox. Pass `{ transition: false }`: `setState(next, { transition: false })`.
+
+  ```tsx
+  <BarChart data={preset.data} color={preset.color} dragologyLerpProps={["data", "color"]} />
+  ```

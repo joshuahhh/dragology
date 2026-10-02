@@ -513,7 +513,8 @@ function runSpring(
   if (!springOrigin) return target;
   const elapsed = performance.now() - springOrigin.time;
   const t = applyEasing(springOrigin.transition, elapsed);
-  const lerped = lerpLayered(target, springOrigin.layered, 1 - t);
+  // What can't be blended comes from the target.
+  const lerped = lerpLayered(target, springOrigin.layered, 1 - t, "a");
   // Replace non-transitioning layers with the target's version so they
   // track the cursor without spring lag.
   for (const [key, layer] of lerped.byId.entries()) {

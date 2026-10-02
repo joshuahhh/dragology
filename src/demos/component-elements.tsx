@@ -4,7 +4,6 @@ import { createContext, useContext, useState } from "react";
 import { demo } from "../demo";
 import { DemoDraggable, DemoNotes } from "../demo/ui";
 import { Draggable } from "../draggable";
-import { useDragHandle } from "../svgx/componentHost";
 import { translate } from "../svgx/helpers";
 
 const AccentContext = createContext("#3b82f6");
@@ -29,21 +28,17 @@ function NoteWidget({ name }: { name: string }) {
   const [count, setCount] = useState(0);
   const [note, setNote] = useState("");
   const [mountedAt] = useState(() => new Date().toLocaleTimeString());
-  const grab = useDragHandle();
 
   return (
     <div className="flex flex-col gap-1 h-full justify-center pr-2 text-sm">
       <div className="flex flex-row items-center gap-2">
-        <span
-          className="font-semibold w-12 cursor-grab"
-          style={{ color: accent }}
-          onPointerDown={grab}
-        >
+        <span className="font-semibold w-12" style={{ color: accent }}>
           {name}
         </span>
         <button
           className="px-2 rounded text-white"
           style={{ background: accent }}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => setCount((c) => c + 1)}
         >
           +1
@@ -53,6 +48,7 @@ function NoteWidget({ name }: { name: string }) {
           className="border border-gray-300 rounded px-1 flex-1 min-w-0"
           value={note}
           placeholder="type a note"
+          onPointerDown={(e) => e.stopPropagation()}
           onChange={(e) => setNote(e.target.value)}
         />
       </div>
@@ -123,8 +119,10 @@ export default demo(
             reordering the cards.
           </p>
           <p className="mt-2">
-            Clicks and typing inside the widget don't start drags. The name
-            label is a drag handle, via <code>useDragHandle()</code>.
+            Pointer events in the widget bubble to the card's{" "}
+            <code>dragologyOnDrag</code> as usual, so you can drag a card by its
+            widget. The button and the input stop propagation, so they work as
+            controls instead.
           </p>
         </DemoNotes>
         <div className="flex flex-row items-center gap-2 text-sm">
@@ -157,7 +155,7 @@ export default demo(
       "d.closest",
       "spec.whenFar",
       "spec.withFloating",
-      "component elements [useDragHandle]",
+      "component elements",
       "reordering",
     ],
   },

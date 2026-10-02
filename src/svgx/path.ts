@@ -1,4 +1,5 @@
 import {
+  assertForeignObjectHoldsComponents,
   assertNoDragologyKeyOnComponent,
   findElement,
   FindElementResult,
@@ -42,6 +43,8 @@ function assignPathsRecursive(element: Svgx, currentPath: string): Svgx {
     !(typeof element.key === "string" && !element.key.startsWith(".")),
     `Element with path "${elementPath}" has a key prop (${element.key}), which is not allowed.`,
   );
+
+  assertForeignObjectHoldsComponents(element);
 
   const usedSteps = new Set<string>();
   let unkeyedIndex = 0;

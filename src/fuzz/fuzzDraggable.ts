@@ -10,9 +10,8 @@
  * trace (e.g. where each `fixed` state puts the element), and short
  * nudges, the nudges also from an off-center grab (so drags that
  * rotate or scale the element, leaving its center put, do something).
- * HTML controls inside foreignObjects (buttons, checkboxes, text
- * inputs) get clicks and changes, too. Every reached state is explored
- * in turn.
+ * (HTML controls in components aren't exercised yet.) Every reached
+ * state is explored in turn.
  *
  * Exploration runs in passes: each pass tries a few actions from every
  * known state (oldest first), and states discovered along the way join
@@ -259,8 +258,10 @@ function tracedDropPositions(spec: DragSpecData<any>): Vec2[] {
 
 /**
  * HTML elements inside a foreignObject that handle clicks or changes,
- * in document order. The library doesn't walk into foreignObjects, so
- * these have no paths; actions find them again by index.
+ * in document order; actions find them again by index. Only sees
+ * inline HTML, which draggables can no longer contain (HTML now lives
+ * in components, which the fuzzer doesn't render), so this currently
+ * finds nothing. See Prusik task 60f2dd.
  */
 function collectHtmlControls(foreignObject: Svgx): Svgx[] {
   const out: Svgx[] = [];
@@ -444,7 +445,7 @@ export function fuzzDraggable<T extends object>(
 
   /** Exercise the interpolation between two renderings. */
   const checkLerp = (a: LayeredSvgx, b: LayeredSvgx) => {
-    lerpLayered(a, b, 0.5);
+    lerpLayered(a, b, 0.5, "a");
   };
 
   type Planned =

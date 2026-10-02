@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { lerpSvgx } from "./lerp";
+import { layerSvg } from "./layers";
+import { lerpLayeredWeighted, lerpSvgx } from "./lerp";
 
 describe("lerpSvgNode", () => {
   it("lerps numeric props", () => {
@@ -634,6 +635,21 @@ describe("component elements", () => {
     expect(mid.props).toMatchObject({ value: 3, label: "a" });
   });
 
+  it("blends a component inside a foreignObject", () => {
+    const a = (
+      <foreignObject>
+        <Gauge value={0} label="a" dragologyLerpProps={["value"]} />
+      </foreignObject>
+    );
+    const b = (
+      <foreignObject>
+        <Gauge value={10} label="b" dragologyLerpProps={["value"]} />
+      </foreignObject>
+    );
+    const mid = lerpSvgx(a as any, b as any, 0.3);
+    expect((mid.props.children as any)[0].props.value).toBe(3);
+  });
+
   it("warns once about a listed prop that doesn't exist", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const a = <Gauge value={0} label="a" dragologyLerpProps={["valeu"]} />;
@@ -643,5 +659,45 @@ describe("component elements", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0][0]).toMatch(/<Gauge> lists "valeu"/);
     warn.mockRestore();
+  });
+});
+
+describe("what can't be blended", () => {
+  it("comes from the side named by unblendedFrom", () => {
+    const a = <text x={0}>A</text>;
+    const b = <text x={10}>B</text>;
+    expect(lerpSvgx(a, b, 0.8, "a").props).toMatchObject({ x: 8 });
+    expect(lerpSvgx(a, b, 0.8, "a").props.children).toEqual(["A"]);
+    expect(lerpSvgx(a, b, 0.2, "b").props.children).toEqual(["B"]);
+  });
+
+  it("includes component props", () => {
+    function Label(_props: { text: string }) {
+      return null;
+    }
+    const a = <Label text="A" />;
+    const b = <Label text="B" />;
+    expect(lerpSvgx(a as any, b as any, 0.5, "b").props).toMatchObject({
+      text: "B",
+    });
+  });
+
+  it("comes from the nearest state in a weighted blend", () => {
+    const render = (label: string) =>
+      layerSvg(
+        <g>
+          <text id="label">{label}</text>
+        </g>,
+      );
+    const items = [render("A"), render("B"), render("C")];
+    // Folding pairwise in order and keeping the nearer side would end
+    // up with B; C is nearest overall.
+    const weights = new Map([
+      [0, 0.2],
+      [1, 0.35],
+      [2, 0.45],
+    ]);
+    const label = lerpLayeredWeighted(items, weights).byId.get("label")!;
+    expect(label.element.props.children).toEqual(["C"]);
   });
 });

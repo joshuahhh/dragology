@@ -1,15 +1,9 @@
-import React, {
-  cloneElement,
-  createContext,
-  createElement,
-  ReactNode,
-  useContext,
-} from "react";
+import React, { cloneElement, createElement, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
-  assertNoDragologyKeyOnComponent,
   isComponentElement,
   isValidSvgx,
+  shouldRecurseIntoChildren,
   Svgx,
 } from ".";
 import { LayeredSvgx } from "./layers";
@@ -36,23 +30,6 @@ type HostedComponent = {
   grab: GrabHandler | undefined;
 };
 
-type HostedComponentContextValue = { grab: GrabHandler | undefined };
-
-const HostedComponentContext =
-  createContext<HostedComponentContextValue | null>(null);
-
-/**
- * For a component rendered inside a draggable. Returns a pointerdown
- * handler that starts a drag on the nearest enclosing element with
- * `dragologyOnDrag`, so part of the component can act as a drag
- * handle. (Pointer events inside a component don't otherwise reach
- * the draggable.) Does nothing during a drag or outside a draggable.
- */
-export function useDragHandle(): GrabHandler {
-  const ctx = useContext(HostedComponentContext);
-  return (e) => ctx?.grab?.(e);
-}
-
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 export class ComponentHost {
@@ -76,7 +53,7 @@ export class ComponentHost {
         id,
         {
           ...layer,
-          element: this.walk(layer.element, "", false, undefined, current),
+          element: this.walk(layer.element, false, undefined, current),
         },
       ]),
     );
@@ -92,15 +69,18 @@ export class ComponentHost {
       }
     }
 
-    const portals = [...hosted.values()].map((component) =>
-      createPortal(
-        <HostedComponentContext.Provider value={{ grab: component.grab }}>
-          {stripDragologyProps(component.element)}
-        </HostedComponentContext.Provider>,
-        this.container(component),
-        component.key,
-      ),
-    );
+    // React events bubble through the React tree, not the DOM, so a
+    // pointerdown inside a portal reaches the portal's parent here and
+    // never the placeholder's ancestors. The parent passes it on to the
+    // drag the component sits inside, as if it had bubbled there.
+    const portals = [...hosted.values()].map((component) => (
+      <g key={component.key} onPointerDown={component.grab}>
+        {createPortal(
+          stripDragologyProps(component.element),
+          this.container(component),
+        )}
+      </g>
+    ));
     return { layered: { ...layered, byId }, portals };
   }
 
@@ -135,17 +115,15 @@ export class ComponentHost {
 
   private walk(
     node: Svgx,
-    pathHere: string,
     html: boolean,
     grab: GrabHandler | undefined,
     out: Map<string, HostedComponent>,
   ): Svgx {
-    // Paths match assignPaths where it went; inside foreignObjects
-    // (where it doesn't go) we continue the same scheme.
-    const path = getPath(node) ?? pathHere;
-
     if (isComponentElement(node)) {
-      const key = path;
+      // Inside defs or dragologyOpaque, assignPaths never assigned a
+      // path, so there's no identity to keep; render it in place.
+      const key = getPath(node);
+      if (key === undefined) return node;
       out.set(key, { key, element: node, html, grab });
       return html
         ? createElement("div", {
@@ -157,18 +135,16 @@ export class ComponentHost {
     }
 
     const { children, onPointerDown, dragologyOnDrag } = node.props;
-    if (children === undefined) return node;
+    if (children === undefined || !shouldRecurseIntoChildren(node)) {
+      return node;
+    }
     // Only a handler that DraggableRenderer attached for a drag, not
     // one the author wrote.
     const childGrab =
       dragologyOnDrag && onPointerDown ? (onPointerDown as GrabHandler) : grab;
-    const childHtml = html || node.type === "foreignObject";
+    const childHtml = node.type === "foreignObject";
 
-    let unkeyedIndex = 0;
     let changed = false;
-    // Number elements across nested arrays in order, like
-    // React.Children.toArray does, so paths are the same whether or not
-    // an earlier pass flattened these children.
     const walkChild = (child: ReactNode): ReactNode => {
       if (Array.isArray(child)) {
         const mapped = child.map(walkChild);
@@ -176,15 +152,7 @@ export class ComponentHost {
         return child;
       }
       if (!isValidSvgx(child)) return child;
-      assertNoDragologyKeyOnComponent(child);
-      const step = child.props.dragologyKey ?? String(unkeyedIndex++);
-      const result = this.walk(
-        child,
-        path + step + "/",
-        childHtml,
-        childGrab,
-        out,
-      );
+      const result = this.walk(child, childHtml, childGrab, out);
       if (result !== child) changed = true;
       return result;
     };

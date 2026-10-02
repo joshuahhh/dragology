@@ -11,8 +11,9 @@ declare module "react" {
        * On a component element: props to interpolate when Dragology
        * blends two renders (e.g. mid-`d.between`, or a drop animation).
        * Numbers, colors, and same-shaped arrays/objects of them blend;
-       * anything else snaps. `true` means all props. Unlisted props come
-       * from whichever render is nearer.
+       * anything else isn't. `true` means all props. Props that aren't
+       * blended come from the render being animated toward (mid-
+       * `d.between`, from the nearest state).
        */
       dragologyLerpProps?: readonly string[] | boolean;
     }

@@ -52,39 +52,7 @@ function draggableFactory(config: Config): Draggable<State> {
         height={60}
         style={{ overflow: "visible" }}
       >
-        <div className="flex flex-row gap-2">
-          <input
-            type="text"
-            value={state.todoDraft.text}
-            onChange={(e) => {
-              setState(
-                produce(state, (s) => {
-                  s.todoDraft.text = e.target.value;
-                }),
-              );
-            }}
-            placeholder="What needs to be done?"
-            className="border-2 border-gray-200 rounded-lg px-4 py-2 flex-1 text-gray-700 placeholder-gray-400 focus:outline-none focus:border-blue-400 transition-colors"
-          />
-          <button
-            className="px-5 py-2 bg-blue-500 text-white rounded-lg whitespace-nowrap hover:bg-blue-600 active:bg-blue-700 transition-colors font-medium shadow-sm"
-            onClick={() => {
-              if (state.todoDraft.text === "") return;
-              setState(
-                produce(state, (s) => {
-                  s.todos.unshift(s.todoDraft);
-                  s.todoDraft = {
-                    id: `todo-${Date.now()}`,
-                    completed: false,
-                    text: "",
-                  };
-                }),
-              );
-            }}
-          >
-            Add
-          </button>
-        </div>
+        <DraftInput draft={state.todoDraft} setState={setState} />
       </foreignObject>
       {drawTodoItem({
         todo: state.todoDraft,
@@ -146,34 +114,92 @@ function drawTodoItem({
       height={45}
       {...otherProps}
     >
-      <div className="flex flex-row items-center gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-300 hover:shadow-sm transition-all cursor-move">
-        <input
-          type="checkbox"
-          checked={todo.completed}
-          onPointerDown={(e) => e.stopPropagation()}
-          onChange={(e) => {
-            e.stopPropagation();
-            setState(
-              produce((s: State) => {
-                const t = s.todos.find((td) => td.id === todo.id);
-                if (t) {
-                  t.completed = e.target.checked;
-                }
-              }),
-            );
-          }}
-          className="w-5 h-5 rounded border-2 border-gray-300 text-blue-500 focus:ring-2 focus:ring-blue-400 focus:ring-offset-0 cursor-pointer"
-        />
-
-        <span
-          className={`flex-1 text-gray-700 ${
-            todo.completed ? "line-through text-gray-400" : ""
-          }`}
-        >
-          {todo.text}
-        </span>
-      </div>
+      <TodoCard todo={todo} setState={setState} />
     </foreignObject>
+  );
+}
+
+function DraftInput({
+  draft,
+  setState,
+}: {
+  draft: TodoItem;
+  setState: SetState<State>;
+}) {
+  return (
+    <div className="flex flex-row gap-2">
+      <input
+        type="text"
+        value={draft.text}
+        onChange={(e) => {
+          setState(
+            produce((s: State) => {
+              s.todoDraft.text = e.target.value;
+            }),
+            { transition: false },
+          );
+        }}
+        placeholder="What needs to be done?"
+        className="border-2 border-gray-200 rounded-lg px-4 py-2 flex-1 text-gray-700 placeholder-gray-400 focus:outline-none focus:border-blue-400 transition-colors"
+      />
+      <button
+        className="px-5 py-2 bg-blue-500 text-white rounded-lg whitespace-nowrap hover:bg-blue-600 active:bg-blue-700 transition-colors font-medium shadow-sm"
+        onClick={() => {
+          if (draft.text === "") return;
+          setState(
+            produce((s: State) => {
+              s.todos.unshift(s.todoDraft);
+              s.todoDraft = {
+                id: `todo-${Date.now()}`,
+                completed: false,
+                text: "",
+              };
+            }),
+          );
+        }}
+      >
+        Add
+      </button>
+    </div>
+  );
+}
+
+function TodoCard({
+  todo,
+  setState,
+}: {
+  todo: TodoItem;
+  setState: SetState<State>;
+}) {
+  return (
+    <div className="flex flex-row items-center gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-300 hover:shadow-sm transition-all cursor-move">
+      <input
+        type="checkbox"
+        checked={todo.completed}
+        onPointerDown={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          e.stopPropagation();
+          setState(
+            produce((s: State) => {
+              const t = s.todos.find((td) => td.id === todo.id);
+              if (t) {
+                t.completed = e.target.checked;
+              }
+            }),
+            { transition: false },
+          );
+        }}
+        className="w-5 h-5 rounded border-2 border-gray-300 text-blue-500 focus:ring-2 focus:ring-blue-400 focus:ring-offset-0 cursor-pointer"
+      />
+
+      <span
+        className={`flex-1 text-gray-700 ${
+          todo.completed ? "line-through text-gray-400" : ""
+        }`}
+      >
+        {todo.text}
+      </span>
+    </div>
   );
 }
 
@@ -213,6 +239,7 @@ export default demo(
       "spec.whenFar",
       "spec.withFloating [while missing]",
       "setState",
+      "component elements",
     ],
   },
 );

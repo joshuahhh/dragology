@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
 import { Draggable } from "../draggable";
 import { DraggableRenderer } from "../DraggableRenderer";
 
@@ -28,4 +28,44 @@ it("a component element gets its own props, minus Dragology's", () => {
   );
 
   expect(received).toEqual({ id: "x", value: 1 });
+});
+
+it("pointer events in a component bubble to the enclosing drag", () => {
+  // jsdom has no SVG lengths; the pointer math reads this.
+  Object.defineProperty(SVGSVGElement.prototype, "width", {
+    configurable: true,
+    get: () => ({ baseVal: { value: 0 } }),
+  });
+
+  function Widget() {
+    return <div data-testid="widget">hi</div>;
+  }
+  const onDrag = vi.fn();
+  const draggable: Draggable<{ n: number }> = ({ state, d }) => (
+    <g>
+      <foreignObject
+        id="card"
+        width={50}
+        height={50}
+        dragologyOnDrag={() => {
+          onDrag();
+          return d.fixed(state);
+        }}
+      >
+        <Widget />
+      </foreignObject>
+    </g>
+  );
+
+  const { getByTestId } = render(
+    <DraggableRenderer
+      draggable={draggable}
+      initialState={{ n: 0 }}
+      width={100}
+      height={100}
+    />,
+  );
+  fireEvent.pointerDown(getByTestId("widget"));
+
+  expect(onDrag).toHaveBeenCalledTimes(1);
 });

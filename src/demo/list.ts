@@ -94,6 +94,7 @@ export const demoList: DemoListEntry[] = [
   "error-study-reorderable-list",
   "linked-sliders",
   "lerping-keys",
+  "lerping-text",
   "between-with-vary",
   "stickiness",
   "lock-past",

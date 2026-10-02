@@ -40,6 +40,26 @@ export function assertNoDragologyKeyOnComponent(element: Svgx): void {
   }
 }
 
+/**
+ * Dragology owns SVG; HTML belongs to React. So a foreignObject may
+ * only hold component elements, which render their HTML themselves.
+ */
+export function assertForeignObjectHoldsComponents(element: Svgx): void {
+  if (element.type !== "foreignObject") return;
+  for (const child of React.Children.toArray(element.props.children)) {
+    if (React.isValidElement(child) && isComponentElement(child as Svgx)) {
+      continue;
+    }
+    const what = React.isValidElement(child)
+      ? `<${elementName(child as Svgx)}>`
+      : JSON.stringify(child);
+    throw new Error(
+      `<foreignObject> contains ${what}, but it may only contain ` +
+        `component elements. Move the HTML into a component.`,
+    );
+  }
+}
+
 /** "NoteWidget" for <NoteWidget />, "g" for <g>; for error messages. */
 export function elementName(element: Svgx): string {
   const type = element.type as any;
@@ -54,7 +74,6 @@ export function elementName(element: Svgx): string {
 export function shouldRecurseIntoChildren(element: Svgx): boolean {
   return (
     !isComponentElement(element) &&
-    element.type !== "foreignObject" &&
     element.type !== "defs" &&
     !element.props.dragologyOpaque
   );
