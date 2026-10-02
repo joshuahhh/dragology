@@ -10,6 +10,7 @@ export type {
   DraggableRendererBaseProps,
   DraggableRendererProps,
 } from "./DraggableRenderer";
+export { useDragHandle } from "./svgx/componentHost";
 
 // Draggable type & helpers
 export type { Draggable, DraggableProps, SetState } from "./draggable";

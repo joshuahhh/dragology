@@ -17,16 +17,84 @@ export function isValidSvgx(element: unknown): element is Svgx {
 }
 
 /**
+ * Is this a component element (`<NoteWidget />`) rather than an
+ * intrinsic one (`<g>`, `<div>`)? Dragology never calls components:
+ * React mounts them once and DraggableRenderer keeps them mounted
+ * (see svgx/componentHost.tsx).
+ */
+export function isComponentElement(element: Svgx): boolean {
+  return typeof element.type !== "string" && element.type !== React.Fragment;
+}
+
+/**
+ * On a component element, only `dragologyLerpProps` is Dragology's;
+ * every other prop, `id` included, is the component's own. To give a
+ * component an id or dragologyKey, wrap it in a <g>.
+ */
+export function assertNoDragologyKeyOnComponent(element: Svgx): void {
+  if (isComponentElement(element) && element.props.dragologyKey !== undefined) {
+    throw new Error(
+      `<${elementName(element)}> has a dragologyKey, which only works on ` +
+        `intrinsic elements. Wrap it in a <g dragologyKey=…> instead.`,
+    );
+  }
+}
+
+/** "NoteWidget" for <NoteWidget />, "g" for <g>; for error messages. */
+export function elementName(element: Svgx): string {
+  const type = element.type as any;
+  return typeof type === "string" ? type : (type.displayName ?? type.name);
+}
+
+/**
  * Determines if we should recurse into an element's children when
  * walking the tree. Returns false for stuff that shouldn't get
  * processed or layered.
  */
 export function shouldRecurseIntoChildren(element: Svgx): boolean {
   return (
+    !isComponentElement(element) &&
     element.type !== "foreignObject" &&
     element.type !== "defs" &&
     !element.props.dragologyOpaque
   );
+}
+
+type ChildNode = Exclude<React.ReactNode, boolean | null | undefined>;
+
+/**
+ * Like `React.Children.toArray` (flattens nested arrays, drops
+ * nullish and boolean children, keys elements by position), except
+ * that a key from an earlier call is kept unchanged. `toArray` adds a
+ * prefix to existing keys on every call, so a tree rebuilt twice
+ * would get different keys than one rebuilt once, and React would
+ * remount everything whose key changed.
+ *
+ * Keys we assign start with "."; any other key came from the author,
+ * which isn't allowed.
+ */
+export function childrenToArray(children: React.ReactNode): ChildNode[] {
+  const out: ChildNode[] = [];
+  const visit = (node: React.ReactNode, prefix: string) => {
+    if (Array.isArray(node)) {
+      node.forEach((child, i) =>
+        visit(child, prefix === "" ? `.${i}` : `${prefix}:${i}`),
+      );
+    } else if (node == null || typeof node === "boolean") {
+      return;
+    } else if (React.isValidElement(node) && node.key == null) {
+      out.push(React.cloneElement(node, { key: prefix || ".0" }));
+    } else if (React.isValidElement(node) && !node.key!.startsWith(".")) {
+      throw new Error(
+        `<${elementName(node as Svgx)}> has a key prop (${node.key}). ` +
+          `Draggables match elements by id or dragologyKey, not key.`,
+      );
+    } else {
+      out.push(node as ChildNode);
+    }
+  };
+  visit(children, "");
+  return out;
 }
 
 /**
@@ -46,7 +114,7 @@ export function updateElement(
   const { children } = element.props;
 
   if (childFn && children && shouldRecurseIntoChildren(element)) {
-    const childrenArray = React.Children.toArray(children);
+    const childrenArray = childrenToArray(children);
     let someChildChanged = false;
     const newChildren = childrenArray.map((child, index) => {
       if (React.isValidElement(child)) {

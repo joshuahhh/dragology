@@ -488,3 +488,32 @@ describe("findByPath", () => {
     expect(found.accumulatedTransform).toBe("");
   });
 });
+
+describe("component elements", () => {
+  function Widget(_props: { id?: string }) {
+    return null;
+  }
+
+  it("treats a component's id as its own prop", () => {
+    const result = assignPaths(
+      <g>
+        <Widget id="x" />
+      </g>,
+    );
+    const found = findByPath("/0/", result);
+    expect(found?.element.type).toBe(Widget);
+    expect(found?.element.props.id).toBe("x");
+    expect(findByPath("x/", result)).toBeNull();
+  });
+
+  it("rejects dragologyKey on a component", () => {
+    const Untyped = Widget as any;
+    expect(() =>
+      assignPaths(
+        <g>
+          <Untyped dragologyKey="w" />
+        </g>,
+      ),
+    ).toThrow(/<Widget> has a dragologyKey/);
+  });
+});

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { lerpSvgx } from "./lerp";
 
 describe("lerpSvgNode", () => {
@@ -619,5 +619,29 @@ describe("lerpSvgNode", () => {
     const result = lerpSvgx(a, b, 0.5);
 
     expect(result).toMatchInlineSnapshot(`<text />`);
+  });
+});
+
+describe("component elements", () => {
+  function Gauge(_props: { value: number; label: string }) {
+    return null;
+  }
+
+  it("blends listed props and snaps the rest", () => {
+    const a = <Gauge value={0} label="a" dragologyLerpProps={["value"]} />;
+    const b = <Gauge value={10} label="b" dragologyLerpProps={["value"]} />;
+    const mid = lerpSvgx(a as any, b as any, 0.3);
+    expect(mid.props).toMatchObject({ value: 3, label: "a" });
+  });
+
+  it("warns once about a listed prop that doesn't exist", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const a = <Gauge value={0} label="a" dragologyLerpProps={["valeu"]} />;
+    const b = <Gauge value={10} label="b" dragologyLerpProps={["valeu"]} />;
+    lerpSvgx(a as any, b as any, 0.3);
+    lerpSvgx(a as any, b as any, 0.6);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/<Gauge> lists "valeu"/);
+    warn.mockRestore();
   });
 });

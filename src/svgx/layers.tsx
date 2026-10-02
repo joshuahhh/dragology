@@ -1,6 +1,7 @@
 import { cloneElement, Fragment } from "react";
 import {
   FindElementResult,
+  isComponentElement,
   Svgx,
   SvgxProps,
   updateElement,
@@ -96,7 +97,9 @@ function extractIdNodes(
     );
   }
 
-  const currentId = props.id;
+  // On a component element, `id` is the component's own prop (see
+  // assertNoDragologyKeyOnComponent).
+  const currentId = isComponentElement(element) ? undefined : props.id;
   const newAncestorId = currentId || ancestorId;
   const elementTransform = props.transform || "";
   const newAccumulatedTransform = combineTransforms(
@@ -153,6 +156,9 @@ function extractIdNodes(
     }
 
     const layerElement = cloneElement(newElement, {
+      // However many tree passes produced this element (each one
+      // re-keys children), it should reconcile as the same layer.
+      key: currentId,
       transform: newAccumulatedTransform || undefined,
       opacity: newAccumulatedOpacity !== 1 ? newAccumulatedOpacity : undefined,
     });

@@ -30,6 +30,7 @@ import {
 } from "./renderDraggable";
 import { Svgx, findElement, updatePropsDownTree } from "./svgx";
 import { boundsCenter, getLocalBounds } from "./svgx/bounds";
+import { ComponentHost } from "./svgx/componentHost";
 import { LayeredSvgx, drawLayered, layerSvg } from "./svgx/layers";
 import { lerpLayered } from "./svgx/lerp";
 import { assignPaths, findByPath, getPath } from "./svgx/path";
@@ -43,8 +44,7 @@ import {
 import { useAnimationLoop } from "./useAnimationLoop";
 import { CatchToRenderError, useCatchToRenderError } from "./useRenderError";
 import { useStateWithRef } from "./useStateWithRef";
-import { memoGeneric } from "./utils";
-import { assert, assertNever } from "./utils/assert";
+import { assert } from "./utils/assert";
 import { pipe } from "./utils/pipe";
 
 // # Engine state machine
@@ -445,6 +445,23 @@ function DraggableRendererControlled<T extends object>({
     ],
   );
 
+  // Both modes draw into the same place with the same structure, so
+  // React keeps each layer (keyed by id) mounted when a drag starts or
+  // ends. Memoized so an unrelated re-render while idle doesn't call
+  // the draggable again.
+  const componentHost = useRef<ComponentHost | null>(null);
+  componentHost.current ??= new ComponentHost();
+  const drawn = useMemo(() => {
+    const { layered, portals } = componentHost.current!.frame(
+      status.type === "idle"
+        ? renderIdleMode(status, renderCtx)
+        : runSpring(status.springOrigin, status.result.preview()),
+      status.type === "dragging",
+    );
+    return { layers: drawLayered(layered), portals };
+  }, [status, renderCtx]);
+  const pointer = getPointer();
+
   return (
     <svg
       ref={setSvgElem}
@@ -458,16 +475,12 @@ function DraggableRendererControlled<T extends object>({
         ...(simulateDrag ? { pointerEvents: "none" } : {}),
       }}
     >
-      {status.type === "idle" ? (
-        <DrawIdleMode status={status} ctx={renderCtx} />
-      ) : status.type === "dragging" ? (
-        <DrawDraggingMode
-          status={status}
-          showDebugOverlay={showDebugOverlay}
-          pointer={getPointer()}
-        />
-      ) : (
-        assertNever(status)
+      {drawn.layers}
+      {drawn.portals}
+      {status.type === "dragging" && showDebugOverlay && pointer && (
+        <ErrorBoundary>
+          <OverlayVis spec={status.result.tracedSpec} pointer={pointer} />
+        </ErrorBoundary>
       )}
       {simulateDrag && pointerOverrideRef.current && (
         <circle
@@ -775,67 +788,38 @@ function postProcessForInteraction<T extends object>(
 
 // # Render modes
 
-const DrawIdleMode = memoGeneric(
-  <T extends object>({
-    status,
-    ctx,
-  }: {
-    status: DragStatus<T> & { type: "idle" };
-    ctx: RenderContext<T>;
-  }) => {
-    const content = ctx.draggable(
-      makeDraggableProps({
-        state: status.state,
-        draggedId: null,
-        setState: ctx.catchToRenderError(
-          (
-            newState: SetStateAction<T>,
-            { transition }: { transition?: TransitionLike } = {},
-          ) => {
-            const resolved =
-              typeof newState === "function"
-                ? (newState as (prev: T) => T)(status.state)
-                : newState;
-            const newStatus: DragStatus<T> = {
-              type: "idle",
-              state: resolved,
-              springOrigin: makeSpringOrigin(transition, () =>
-                renderDraggableInert(ctx.draggable, status.state, null, false),
-              ),
-            };
-            ctx.setStatus(newStatus);
-            ctx.onDropState?.(resolved);
-          },
-        ),
-        isTracking: false,
-      }),
-    );
+function renderIdleMode<T extends object>(
+  status: DragStatus<T> & { type: "idle" },
+  ctx: RenderContext<T>,
+): LayeredSvgx {
+  const content = ctx.draggable(
+    makeDraggableProps({
+      state: status.state,
+      draggedId: null,
+      setState: ctx.catchToRenderError(
+        (
+          newState: SetStateAction<T>,
+          { transition }: { transition?: TransitionLike } = {},
+        ) => {
+          const resolved =
+            typeof newState === "function"
+              ? (newState as (prev: T) => T)(status.state)
+              : newState;
+          const newStatus: DragStatus<T> = {
+            type: "idle",
+            state: resolved,
+            springOrigin: makeSpringOrigin(transition, () =>
+              renderDraggableInert(ctx.draggable, status.state, null, false),
+            ),
+          };
+          ctx.setStatus(newStatus);
+          ctx.onDropState?.(resolved);
+        },
+      ),
+      isTracking: false,
+    }),
+  );
 
-    const layered = postProcessForInteraction(content, status.state, ctx);
-    return drawLayered(runSpring(status.springOrigin, layered));
-  },
-);
-
-const DrawDraggingMode = memoGeneric(
-  <T extends object>({
-    status,
-    showDebugOverlay,
-    pointer,
-  }: {
-    status: DragStatusDragging<T>;
-    showDebugOverlay?: boolean;
-    pointer?: Vec2;
-  }) => {
-    const rendered = runSpring(status.springOrigin, status.result.preview());
-    return (
-      <>
-        {drawLayered(rendered)}
-        {showDebugOverlay && pointer && (
-          <ErrorBoundary>
-            <OverlayVis spec={status.result.tracedSpec} pointer={pointer} />
-          </ErrorBoundary>
-        )}
-      </>
-    );
-  },
-);
+  const layered = postProcessForInteraction(content, status.state, ctx);
+  return runSpring(status.springOrigin, layered);
+}

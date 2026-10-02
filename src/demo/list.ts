@@ -99,6 +99,8 @@ export const demoList: DemoListEntry[] = [
   "controlled",
   "simple-triangle-custom",
   "with-pointer-delay",
+  "component-elements",
+  "component-elements-lerp",
   {
     section: "Nursery",
     demos: [

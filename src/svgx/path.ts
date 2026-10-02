@@ -1,4 +1,11 @@
-import { findElement, FindElementResult, Svgx, updateElement } from ".";
+import {
+  assertNoDragologyKeyOnComponent,
+  findElement,
+  FindElementResult,
+  isComponentElement,
+  Svgx,
+  updateElement,
+} from ".";
 import { assert } from "../utils/assert";
 
 const pathPropName = "data-path";
@@ -20,7 +27,9 @@ export function assignPaths(element: Svgx): Svgx {
 }
 
 function assignPathsRecursive(element: Svgx, currentPath: string): Svgx {
-  const { id } = element.props;
+  // On a component element, `id` is the component's own prop (see
+  // assertNoDragologyKeyOnComponent).
+  const id = isComponentElement(element) ? undefined : element.props.id;
 
   assert(
     !id || !id.includes("/"),
@@ -39,6 +48,7 @@ function assignPathsRecursive(element: Svgx, currentPath: string): Svgx {
   return updateElement(
     element,
     (child) => {
+      assertNoDragologyKeyOnComponent(child);
       let step: string;
       const { dragologyKey } = child.props;
       if (dragologyKey !== undefined) {

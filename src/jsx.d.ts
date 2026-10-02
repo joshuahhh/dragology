@@ -2,6 +2,22 @@ import "react";
 import { DragSpecBrand } from "./DragSpec";
 
 declare module "react" {
+  namespace JSX {
+    // The one prop Dragology reads off component elements like
+    // <NoteWidget /> (intrinsic elements don't get it). Everything else
+    // on a component, `id` included, is the component's own.
+    interface IntrinsicAttributes {
+      /**
+       * On a component element: props to interpolate when Dragology
+       * blends two renders (e.g. mid-`d.between`, or a drop animation).
+       * Numbers, colors, and same-shaped arrays/objects of them blend;
+       * anything else snaps. `true` means all props. Unlisted props come
+       * from whichever render is nearer.
+       */
+      dragologyLerpProps?: readonly string[] | boolean;
+    }
+  }
+
   interface SVGAttributes<T> {
     /**
      * Custom attribute for attaching drag specifications to SVG elements.

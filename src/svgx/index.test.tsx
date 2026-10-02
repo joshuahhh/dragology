@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findElement } from ".";
+import { childrenToArray, findElement, updatePropsDownTree } from ".";
 
 describe("findElement", () => {
   it("accumulates transforms through nested groups", () => {
@@ -58,5 +58,27 @@ describe("findElement", () => {
     const found = findElement(tree, (el) => el.type === "g");
     expect.assert(found);
     expect(found.accumulatedTransform).toBe("translate(5, 5)");
+  });
+});
+
+describe("childrenToArray", () => {
+  it("keeps keys from an earlier pass", () => {
+    const once = childrenToArray([<rect />, [<circle />, <g />]]);
+    expect(once.map((el: any) => el.key)).toEqual([".0", ".1:0", ".1:1"]);
+    const twice = childrenToArray(once);
+    expect(twice.map((el: any) => el.key)).toEqual([".0", ".1:0", ".1:1"]);
+  });
+
+  it("rejects author keys", () => {
+    expect(() =>
+      updatePropsDownTree(
+        <g>
+          {["a", "b"].map((k) => (
+            <rect key={k} />
+          ))}
+        </g>,
+        () => ({}),
+      ),
+    ).toThrow(/key prop \(a\)/);
   });
 });
