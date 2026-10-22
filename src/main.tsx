@@ -14,6 +14,7 @@ import { SlideshowSnapshotPage } from "./slideshow/SlideshowSnapshotPage";
 import { StudioPage } from "./studio/StudioPage";
 import { SingleStudyPage } from "./study/SingleStudyPage";
 import { StudyPage } from "./study/StudyPage";
+import { LiveCodePage } from "./talk/LiveCodePage";
 
 const HIDE_REACT_PROD = true;
 
@@ -54,6 +55,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         {autoRoute("/studio", StudioPage)}
         {autoRoute("/studio/:filter", StudioPage)}
         {autoRoute("/retro", RetroPage)}
+        {autoRoute("/talk/livecode", LiveCodePage)}
       </Routes>
     </HashRouter>
   </React.StrictMode>,
