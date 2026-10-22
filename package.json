@@ -41,11 +41,15 @@
     "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.13.1",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
     "@eslint/js": "^9.39.1",
+    "@lezer/common": "^1.5.3",
     "@lezer/highlight": "^1.2.5",
     "@tailwindcss/vite": "^4.2.2",
     "@testing-library/react": "^16.3.2",
@@ -81,6 +85,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.5",
+    "sucrase": "^3.35.1",
     "tailwindcss": "^4.1.17",
     "ts-pegjs": "^4.2.1",
     "typescript": "^5.2.2",
