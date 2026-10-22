@@ -15,6 +15,12 @@ import "../studio/shantell-sans";
 import { CodeEditor, CodeEditorApi } from "./CodeEditor";
 import { Compiled, compileLiveCode } from "./compile";
 import {
+  ControlsPanel,
+  ControlValues,
+  HelpButton,
+  PANEL_CODE,
+} from "./ControlsPanel";
+import {
   diagramHighlightCss,
   HALO_FILTER_ID,
   HIGHLIGHT_COLOR,
@@ -25,25 +31,17 @@ import { snippets } from "./snippets";
 import { syntaxThemes } from "./syntaxThemes";
 
 /*
-Shortcuts (all with Option/Alt):
-  [ / ]   previous / next snippet
-  O       turn code <-> diagram highlighting on / off
-  H       cycle highlight style
-  K       cycle highlight color
-  L       cycle the diagram's letter font
-  C       cycle syntax colors
-  B       toggle bright / original look (where a snippet has one)
-  F       reformat code to fit
-  Z       fold / unfold styling attributes (fill, stroke, ...)
-  P       copy the current settings (as JSON) to the clipboard
-  R       reset diagram state
-  S       show / hide state
-  T       show / hide spec tree (while dragging)
-  D       show / hide debug overlay (it draws only during a drag)
-  - / =   smaller / larger code
+Shortcuts are all Option/Alt plus a key; ⌥/ (or the ? in the corner)
+opens a panel listing them, where each one is also a control. The list
+is SHORTCUTS in ControlsPanel.tsx.
 */
 
 const COMPILE_DELAY_MS = 250;
+/** How long the ? stays up after the page loads. */
+const HELP_INTRO_MS = 4000;
+/** How close (px, from each edge) the pointer must come to the
+ * bottom-right corner to show the ?. */
+const HELP_CORNER_PX = 140;
 
 /**
  * Fonts for text in the diagram, applied by CSS so the code doesn't
@@ -186,8 +184,9 @@ export function LiveCodePage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // Shortcuts. Indices live in a ref that the handler updates
-  // eagerly, so key repeats don't read stale values between renders.
+  // Shortcuts. Indices live in a ref that `perform` updates eagerly, so
+  // key repeats don't read stale values between renders. The keyboard
+  // and the controls panel both act through `perform`.
   const shortcutState = {
     snippetIdx,
     highlightOn,
@@ -205,13 +204,14 @@ export function LiveCodePage() {
   };
   const shortcutRef = useRef(shortcutState);
   shortcutRef.current = shortcutState;
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!e.altKey || e.metaKey || e.ctrlKey) return;
+  const perform = useCallback(
+    (code: string, delta = 1) => {
       const cur = shortcutRef.current;
-      const go = (delta: number) => {
+      const cycle = (idx: number, length: number) =>
+        (((idx + delta) % length) + length) % length;
+      const go = (step: number) => {
         const next = Math.min(
-          Math.max(cur.snippetIdx + delta, 0),
+          Math.max(cur.snippetIdx + step, 0),
           snippets.length - 1,
         );
         cur.snippetIdx = next;
@@ -254,25 +254,25 @@ export function LiveCodePage() {
           showToast(`highlighting: ${cur.highlightOn ? "on" : "off"}`);
         },
         KeyH: () => {
-          const next = (cur.styleIdx + 1) % highlightStyles.length;
+          const next = cycle(cur.styleIdx, highlightStyles.length);
           cur.styleIdx = next;
           setStyleIdx(next);
           showToast(`highlight: ${highlightStyles[next].name}`);
         },
         KeyC: () => {
-          const next = (cur.syntaxIdx + 1) % syntaxThemes.length;
+          const next = cycle(cur.syntaxIdx, syntaxThemes.length);
           cur.syntaxIdx = next;
           setSyntaxIdx(next);
           showToast(`colors: ${syntaxThemes[next].name}`);
         },
         KeyK: () => {
-          const next = (cur.colorIdx + 1) % highlightColors.length;
+          const next = cycle(cur.colorIdx, highlightColors.length);
           cur.colorIdx = next;
           setColorIdx(next);
           showToast(`highlight color: ${highlightColors[next].name}`);
         },
         KeyL: () => {
-          const next = (cur.fontIdx + 1) % letterFonts.length;
+          const next = cycle(cur.fontIdx, letterFonts.length);
           cur.fontIdx = next;
           setFontIdx(next);
           showToast(`letter font: ${letterFonts[next].name}`);
@@ -305,20 +305,78 @@ export function LiveCodePage() {
             `debug overlay: ${cur.showDebug ? "on (while dragging)" : "off"}`,
           );
         },
-        Minus: () => setFontSize((s) => Math.max(s - 2, 10)),
-        Equal: () => setFontSize((s) => Math.min(s + 2, 48)),
+        Minus: () => {
+          cur.fontSize = Math.max(cur.fontSize - 2, 10);
+          setFontSize(cur.fontSize);
+        },
+        Equal: () => {
+          cur.fontSize = Math.min(cur.fontSize + 2, 48);
+          setFontSize(cur.fontSize);
+        },
       };
+      const action = actions[code];
+      if (!action) return false;
+      action();
+      return true;
+    },
+    [setSearchParams, showToast],
+  );
+
+  // The controls panel, and the corner button that opens it.
+  const [panelOpen, setPanelOpen] = useState(false);
+  const panelOpenRef = useRef(panelOpen);
+  panelOpenRef.current = panelOpen;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && panelOpenRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        setPanelOpen(false);
+        return;
+      }
+      if (!e.altKey || e.metaKey || e.ctrlKey) return;
       // `code` is unaffected by Option on macOS; fall back to `key` for
       // synthetic events that lack one.
-      const action = actions[e.code || codeForKey(e.key)];
-      if (!action) return;
+      const code = e.code || codeForKey(e.key);
+      if (code === PANEL_CODE) {
+        e.preventDefault();
+        e.stopPropagation();
+        setPanelOpen((open) => !open);
+        return;
+      }
+      if (!perform(code)) return;
       e.preventDefault();
       e.stopPropagation();
-      action();
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [setSearchParams, showToast]);
+  }, [perform]);
+
+  // When the ? shows: for a few seconds after the page loads (so people
+  // learn where it is), and after that only while the pointer is near
+  // its corner or the panel is open. Never during a drag, so it can't
+  // appear on stage mid-demo.
+  const [introOver, setIntroOver] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setIntroOver(true), HELP_INTRO_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  const [nearCorner, setNearCorner] = useState(false);
+  useEffect(() => {
+    const onMove = (e: globalThis.PointerEvent) =>
+      setNearCorner(
+        window.innerWidth - e.clientX < HELP_CORNER_PX &&
+          window.innerHeight - e.clientY < HELP_CORNER_PX,
+      );
+    const onLeave = () => setNearCorner(false);
+    window.addEventListener("pointermove", onMove);
+    document.documentElement.addEventListener("pointerleave", onLeave);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      document.documentElement.removeEventListener("pointerleave", onLeave);
+    };
+  }, []);
 
   // Highlighting: hover wins over the editor cursor.
   const style = highlightStyles[styleIdx];
@@ -364,9 +422,31 @@ export function LiveCodePage() {
   const dragging = dragStatus?.type === "dragging" ? dragStatus : null;
   const shownState = dragging ? dragging.result.dropState : state;
 
+  const helpVisible = !dragging && (panelOpen || nearCorner || !introOver);
+  const controlValues: ControlValues = {
+    snippetTitle: baseSnippet.title,
+    snippetIdx,
+    snippetCount: snippets.length,
+    swatches: highlightColors,
+    swatchIdx: colorIdx,
+    byCode: {
+      KeyO: highlightOn,
+      KeyB: baseSnippet.bright ? bright : null,
+      KeyZ: foldStyling,
+      KeyS: showState,
+      KeyT: showTree,
+      KeyD: showDebug,
+      KeyH: highlightStyles[styleIdx].name,
+      KeyC: syntaxThemes[syntaxIdx].name,
+      KeyL: letterFonts[fontIdx].name,
+      Minus: fontSize,
+    },
+  };
+
   return (
     <div
       data-talk-root
+      onPointerDown={() => panelOpen && setPanelOpen(false)}
       style={{
         display: "flex",
         height: "100vh",
@@ -520,8 +600,8 @@ export function LiveCodePage() {
           key={toast.key}
           style={{
             position: "fixed",
-            bottom: 16,
-            right: 16,
+            bottom: 22,
+            right: 70,
             padding: "4px 10px",
             borderRadius: 6,
             background: "rgba(0,0,0,0.65)",
@@ -533,6 +613,21 @@ export function LiveCodePage() {
         >
           {toast.text}
         </div>
+      )}
+
+      <div style={{ position: "fixed", right: 22, bottom: 22, zIndex: 10 }}>
+        <HelpButton
+          visible={helpVisible}
+          open={panelOpen}
+          onClick={() => setPanelOpen((open) => !open)}
+        />
+      </div>
+      {panelOpen && (
+        <ControlsPanel
+          values={controlValues}
+          perform={perform}
+          style={{ position: "fixed", right: 22, bottom: 68, zIndex: 10 }}
+        />
       )}
     </div>
   );
