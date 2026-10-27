@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useTitle } from "../useTitle";
 import { type Slide } from "./slide";
-import { slides } from "./slides";
+import { outline } from "./slides";
 
 // Content slides are too heavy to render live in a grid, so they're shown from
 // snapshots taken by snapshot-slides.sh, which the dev server runs on changes
@@ -47,6 +47,14 @@ function Thumb({ slide, num }: { slide: Slide; num: number }) {
   );
 }
 
+// Each slide with its number in the slideshow, which skips headings.
+const numbered = (() => {
+  let num = 0;
+  return outline.map((item) =>
+    "heading" in item ? item : { slide: item, num: ++num },
+  );
+})();
+
 export function SlideshowOutlinePage() {
   useTitle("Dragology — Slideshow outline");
   useEffect(() => {
@@ -55,32 +63,50 @@ export function SlideshowOutlinePage() {
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="grid gap-6 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
-        {slides.map((slide, i) => (
-          <div key={i} className="flex flex-col gap-2">
-            <Link
-              to={`/slideshow/${i + 1}`}
-              className="block bg-white aspect-video shadow-sm ring-1 ring-gray-200 hover:ring-2 hover:ring-blue-400"
+        {numbered.map((item, i) =>
+          "heading" in item ? (
+            <h2
+              key={i}
+              className={
+                item.level === 1
+                  ? "col-span-full text-2xl font-bold mt-4 first:mt-0 border-b border-gray-300 pb-1"
+                  : "col-span-full text-lg font-semibold text-gray-600 -mb-2"
+              }
             >
-              <Thumb slide={slide} num={i + 1} />
-            </Link>
-            <div className="text-sm">
-              <div className="flex items-baseline gap-2">
-                <span className="text-gray-400 tabular-nums">{i + 1}</span>
-                <span className="font-semibold">{slide.title}</span>
-                <span className="ml-auto text-xs text-gray-400">
-                  {"video" in slide &&
-                    `video ${slide.video.start}–${slide.video.end}s`}
-                  {"video" in slide && slide.transition && " · "}
-                  {slide.transition}
-                </span>
-              </div>
-              {slide.subtitles && (
-                <div className="text-gray-600 mt-1">{slide.subtitles}</div>
-              )}
+              {item.heading}
+            </h2>
+          ) : (
+            <div key={i} className="flex flex-col gap-2">
+              <Link
+                to={`/slideshow/${item.num}`}
+                className="block bg-white aspect-video shadow-sm ring-1 ring-gray-200 hover:ring-2 hover:ring-blue-400"
+              >
+                <Thumb slide={item.slide} num={item.num} />
+              </Link>
+              <SlideInfo slide={item.slide} num={item.num} />
             </div>
-          </div>
-        ))}
+          ),
+        )}
       </div>
+    </div>
+  );
+}
+
+function SlideInfo({ slide, num }: { slide: Slide; num: number }) {
+  return (
+    <div className="text-sm">
+      <div className="flex items-baseline gap-2">
+        <span className="text-gray-400 tabular-nums">{num}</span>
+        <span className="font-semibold">{slide.title}</span>
+        <span className="ml-auto text-xs text-gray-400">
+          {"video" in slide && `video ${slide.video.start}–${slide.video.end}s`}
+          {"video" in slide && slide.transition && " · "}
+          {slide.transition}
+        </span>
+      </div>
+      {slide.subtitles && (
+        <div className="text-gray-600 mt-1">{slide.subtitles}</div>
+      )}
     </div>
   );
 }
