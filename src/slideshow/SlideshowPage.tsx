@@ -7,7 +7,13 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTitle } from "../useTitle";
-import { type Heading, type Slide, STAGE_H, STAGE_W } from "./slide";
+import {
+  type Heading,
+  notesFirstLine,
+  type Slide,
+  STAGE_H,
+  STAGE_W,
+} from "./slide";
 import { numberedOutline, slides } from "./slides";
 import { SlideThumb, useSlideSnapshots } from "./SlideThumb";
 
@@ -145,6 +151,7 @@ function SlideOutline({
       <div className="grid gap-x-3 gap-y-7 px-3 pt-7 pb-3 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
         {outlineSlides.map(({ slide, num, headings }) => {
           const i = num - 1;
+          const notes = notesFirstLine(slide.notes);
           return (
             <div key={i} data-slide={i} style={{ position: "relative" }}>
               {/* The section's headings, in the gutter above its first slide */}
@@ -181,11 +188,22 @@ function SlideOutline({
                   <SlideThumb slide={slide} num={num} />
                 </div>
                 <div
-                  className={`text-xs tabular-nums ${
-                    i === current ? "text-white font-semibold" : "text-gray-500"
+                  className={`flex gap-1.5 text-xs ${
+                    i === current ? "text-white" : "text-gray-500"
                   }`}
                 >
-                  {num}
+                  <span
+                    className={`tabular-nums ${i === current ? "font-semibold" : ""}`}
+                  >
+                    {num}
+                  </span>
+                  {notes && (
+                    <span
+                      className={`truncate ${i === current ? "text-gray-300" : ""}`}
+                    >
+                      {notes}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
