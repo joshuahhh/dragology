@@ -211,7 +211,6 @@ function BeadsWithTreeView({
               width={BEADS_W}
               height={BEADS_H}
               onDragStatus={setDragStatus}
-              trace
               simulateDrag={simulateDrag ? { id: "A" } : undefined}
             />
           </div>
@@ -230,7 +229,7 @@ function BeadsWithTreeView({
           {draggingStatus && (
             <div style={{ width: treeWidth, overflow: "hidden" }}>
               <DragSpecTreeView
-                spec={draggingStatus.result.tracedSpec}
+                op={draggingStatus.result.op}
                 activePath={draggingStatus.result.activePath}
                 colorMap={null}
                 svgWidth={BEADS_W}
@@ -293,6 +292,7 @@ function BeadsWhenFarLabeled() {
   );
 }
 
+// @ts-expect-error -- kept around for a possible d.between slide
 function BeadsBetween() {
   const draggable = useMemo(() => makeDraggable("d.between()"), []);
   return (
