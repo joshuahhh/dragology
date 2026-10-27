@@ -6,7 +6,14 @@ import {
   type DragSpecTreeViewNodeProps,
 } from "../DragSpecTreeView";
 import { StudioHackContext } from "../studio/StudioHackContext";
-import { demoSlide, imageSlide, type Slide, videoSlide } from "./slide";
+import {
+  demoSlide,
+  heading,
+  type Heading,
+  imageSlide,
+  type Slide,
+  videoSlide,
+} from "./slide";
 
 // ── Demo wrappers ──
 
@@ -297,8 +304,9 @@ function AnimateAlgebraClean() {
 
 // ── Slide sequence ──
 
-export const slides: Slide[] = [
-  // === Opening (0-13s): demo montage ===
+/** The slides, with headings among them. */
+export const outline: (Slide | Heading)[] = [
+  heading("Intro"),
   demoSlide("Opening — Tessellations", <tactileTessellationsDemo.Component />, {
     subtitles: "How would you make a drag-and-drop interface like this?",
     width: 900,
@@ -318,8 +326,6 @@ export const slides: Slide[] = [
     height: 600,
     demoId: "twisted-trees",
   }),
-
-  // === Title slide (13-25s) ===
   imageSlide(
     "slide-04.jpg",
     "Declarative Dragging — Model-Driven",
@@ -333,7 +339,7 @@ export const slides: Slide[] = [
     { transition: "fade" },
   ),
 
-  // === Ring of beads intro (25-35s) ===
+  heading("Model-driven dragging"),
   demoSlide("Ring of Beads", <BeadsWhenFar />, {
     subtitles:
       "Here's a simple drag-and-drop interface for reordering beads in a ring.",
@@ -342,15 +348,12 @@ export const slides: Slide[] = [
     transition: "fade-white",
     demoId: "ring-of-beads",
   }),
-
   imageSlide(
     "slide-04.jpg",
     "",
     "Traditionally you would make this manually, by adding listeners to pointer events. Model-driven dragging works at a higher level.",
     { transition: "fade-white" },
   ),
-
-  // === Model state → View explanation (35-65s) ===
   imageSlide(
     "slide-07.jpg",
     "Model State → View",
@@ -380,15 +383,13 @@ export const slides: Slide[] = [
   ),
   videoSlide("model-driven-full.mp4", "Live Drag", 23, 27.7),
 
-  // === Dragology title (65-70s) ===
+  heading("Live-coding, composable dragging"),
   imageSlide(
     "slide-12.jpg",
     "Dragology",
     "Here's how an interface developer builds this with our prototype library, Dragology.",
     { transition: "fade-white" },
   ),
-
-  // === Code walkthrough (70-90s) ===
   imageSlide(
     "slide-13.jpg",
     "Code — Static View",
@@ -400,8 +401,6 @@ export const slides: Slide[] = [
     "Code — dragologyOnDrag",
     "To make them draggable, the developer adds a Dragology onDrag handler.",
   ),
-
-  // === d.closest demo (90-100s) ===
   demoSlide("d.closest — Ring of Beads", <BeadsClosestLabeled />, {
     subtitles:
       'The "closest" combinator snaps the dragged element to the closest target position to the cursor.',
@@ -410,8 +409,6 @@ export const slides: Slide[] = [
     transition: "fade",
     demoId: "ring-of-beads",
   }),
-
-  // === withFloating demo (100-110s) ===
   demoSlide("withFloating — Ring of Beads", <BeadsWithFloatingLabeled />, {
     subtitles:
       'The "withFloating" modifier detaches the dragged element, letting it follow the cursor immediately.',
@@ -419,8 +416,6 @@ export const slides: Slide[] = [
     height: 540,
     transition: "fade",
   }),
-
-  // === whenFar demo (110-120s) ===
   demoSlide("whenFar — Ring of Beads", <BeadsWhenFarLabeled />, {
     subtitles:
       'The "whenFar" modifier allows us to switch to a new behavior when the cursor is far from any target.',
@@ -428,8 +423,6 @@ export const slides: Slide[] = [
     height: 540,
     transition: "fade",
   }),
-
-  // === Composable recap (120-130s) ===
   imageSlide(
     "slide-18.jpg",
     "Composable Dragging",
@@ -437,8 +430,7 @@ export const slides: Slide[] = [
     { transition: "fade-white" },
   ),
 
-  // === More examples section (130+) ===
-
+  heading("Demos"),
   // Scheduler (130-155s)
   demoSlide("Scheduler", <schedulerDemo.Component />, {
     subtitles:
@@ -449,7 +441,6 @@ export const slides: Slide[] = [
     demoId: "scheduler",
     transition: "fade-white",
   }),
-
   // Lists in Lists (155-170s)
   demoSlide("Lists in Lists", <ListsInListsClean />, {
     subtitles:
@@ -460,7 +451,6 @@ export const slides: Slide[] = [
     demoId: "lists-in-lists",
     transition: "fade-white",
   }),
-
   // Tactile Tessellations (170-180s)
   demoSlide("Tactile Tessellations", <tactileTessellationsDemo.Component />, {
     subtitles:
@@ -471,7 +461,6 @@ export const slides: Slide[] = [
     demoId: "tactile-tessellations",
     transition: "fade-white",
   }),
-
   // Nodes and Noodles (180-190s)
   demoSlide("Nodes & Noodles", <nodesAndNoodlesDemo.Component />, {
     subtitles:
@@ -482,7 +471,6 @@ export const slides: Slide[] = [
     demoId: "nodes-and-noodles",
     transition: "fade-white",
   }),
-
   // Animate Algebra (190-210s)
   demoSlide("Animate Algebra", <AnimateAlgebraClean />, {
     subtitles:
@@ -493,7 +481,6 @@ export const slides: Slide[] = [
     demoId: "animate-algebra-tree",
     transition: "fade-white",
   }),
-
   // Twisted Trees (210-230s) — single slide combining both
   demoSlide("Twisted Trees", <TwistedTrees7 />, {
     subtitles:
@@ -504,7 +491,6 @@ export const slides: Slide[] = [
     demoId: "twisted-trees",
     transition: "fade-white",
   }),
-
   // Drag-Spec Designer (230-240s)
   demoSlide("Drag-Spec Designer", <dragSpecDesignerDemo.Component />, {
     subtitles:
@@ -515,4 +501,8 @@ export const slides: Slide[] = [
     demoId: "drag-spec-designer",
     transition: "fade-white",
   }),
+
+  heading("..."),
 ];
+
+export const slides = outline.filter((s): s is Slide => !("heading" in s));

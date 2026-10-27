@@ -26,6 +26,20 @@ export type Slide = {
 
 type SlideMeta = Pick<Slide, "title" | "subtitles" | "transition">;
 
+/**
+ * A heading among the slides, for us authors: it shows in the outline, not
+ * the slideshow. Level 2 is a subheading.
+ */
+export type Heading = { heading: string; level: 1 | 2 };
+
+export function heading(text: string): Heading {
+  return { heading: text, level: 1 };
+}
+
+export function subheading(text: string): Heading {
+  return { heading: text, level: 2 };
+}
+
 export function demoSlide(
   title: string,
   demo: ReactNode,
