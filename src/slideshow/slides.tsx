@@ -1,4 +1,4 @@
-import { ComponentType, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { DemoDraggable } from "../demo/ui";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import {
@@ -6,87 +6,7 @@ import {
   type DragSpecTreeViewNodeProps,
 } from "../DragSpecTreeView";
 import { StudioHackContext } from "../studio/StudioHackContext";
-
-type Transition = "fade-white" | "fade";
-
-type ImageSlide = {
-  type: "image";
-  image: string;
-  title: string;
-  subtitles?: string;
-  transition?: Transition;
-};
-
-type DemoSlide = {
-  type: "demo";
-  Component: ComponentType;
-  title: string;
-  subtitles?: string;
-  width?: string | number;
-  height?: string | number;
-  overlayTitle?: string;
-  demoId?: string;
-  transition?: Transition;
-};
-
-type VideoSlide = {
-  type: "video";
-  video: string;
-  startTime: number;
-  endTime: number;
-  title: string;
-  subtitles?: string;
-  transition?: Transition;
-};
-
-export type Slide = ImageSlide | DemoSlide | VideoSlide;
-
-function demoSlide(
-  title: string,
-  Component: ComponentType,
-  opts?: {
-    subtitles?: string;
-    width?: string | number;
-    height?: string | number;
-    overlayTitle?: string;
-    demoId?: string;
-    transition?: Transition;
-  },
-): DemoSlide {
-  return { type: "demo", title, Component, ...opts };
-}
-
-function imageSlide(
-  image: string,
-  title: string,
-  subtitles?: string,
-  opts?: { transition?: Transition },
-): ImageSlide {
-  return { type: "image", image, title, subtitles, ...opts };
-}
-
-function videoSlide(
-  title: string,
-  startTime: number,
-  endTime: number,
-  subtitles?: string,
-  opts?: { transition?: Transition },
-): VideoSlide {
-  return {
-    type: "video",
-    video: "model-driven-full.mp4",
-    startTime,
-    endTime,
-    title,
-    subtitles,
-    ...opts,
-  };
-}
-
-// Wrapper to provide demo settings context
-function withSettings(Component: ComponentType): ComponentType {
-  return Component;
-}
+import { demoSlide, imageSlide, type Slide, videoSlide } from "./slide";
 
 // ── Demo wrappers ──
 
@@ -375,29 +295,23 @@ function AnimateAlgebraClean() {
   );
 }
 
-// Generic wrapper to render a demo's Component
-function wrapDemo(demoObj: { Component: ComponentType }): ComponentType {
-  const Wrapped = withSettings(demoObj.Component);
-  return Wrapped;
-}
-
 // ── Slide sequence ──
 
 export const slides: Slide[] = [
   // === Opening (0-13s): demo montage ===
-  demoSlide("Opening — Tessellations", wrapDemo(tactileTessellationsDemo), {
+  demoSlide("Opening — Tessellations", <tactileTessellationsDemo.Component />, {
     subtitles: "How would you make a drag-and-drop interface like this?",
     width: 900,
     height: 600,
     demoId: "tactile-tessellations",
   }),
-  demoSlide("Opening — Nodes & Noodles", wrapDemo(nodesAndNoodlesDemo), {
+  demoSlide("Opening — Nodes & Noodles", <nodesAndNoodlesDemo.Component />, {
     subtitles: "Or like this?",
     width: 500,
     height: 200,
     demoId: "nodes-and-noodles",
   }),
-  demoSlide("Opening — Twisted Trees", TwistedTrees7, {
+  demoSlide("Opening — Twisted Trees", <TwistedTrees7 />, {
     subtitles:
       "It takes a lot of work to make high quality, bespoke drag-and-drop interactions.",
     width: 400,
@@ -420,7 +334,7 @@ export const slides: Slide[] = [
   ),
 
   // === Ring of beads intro (25-35s) ===
-  demoSlide("Ring of Beads", BeadsWhenFar, {
+  demoSlide("Ring of Beads", <BeadsWhenFar />, {
     subtitles:
       "Here's a simple drag-and-drop interface for reordering beads in a ring.",
     width: 300,
@@ -444,24 +358,27 @@ export const slides: Slide[] = [
     { transition: "fade-white" },
   ),
   videoSlide(
+    "model-driven-full.mp4",
     "Speculative Rendering",
     7.5,
     9,
     "Next, they specify, for each draggable element, a set of new model states the drag should be able to access.",
   ),
   videoSlide(
+    "model-driven-full.mp4",
     "Target Positions",
     14.7,
     17.2,
     "When a drag starts, we speculatively render each of these states to view trees, and we extract possible target locations of the dragged element.",
   ),
   videoSlide(
+    "model-driven-full.mp4",
     "Drag Synthesis",
     17.5,
     23,
     "This gives us enough information to synthesize a high-quality animated drag drop interaction.",
   ),
-  videoSlide("Live Drag", 23, 27.7, ""),
+  videoSlide("model-driven-full.mp4", "Live Drag", 23, 27.7),
 
   // === Dragology title (65-70s) ===
   imageSlide(
@@ -485,7 +402,7 @@ export const slides: Slide[] = [
   ),
 
   // === d.closest demo (90-100s) ===
-  demoSlide("d.closest — Ring of Beads", BeadsClosestLabeled, {
+  demoSlide("d.closest — Ring of Beads", <BeadsClosestLabeled />, {
     subtitles:
       'The "closest" combinator snaps the dragged element to the closest target position to the cursor.',
     width: 960,
@@ -495,7 +412,7 @@ export const slides: Slide[] = [
   }),
 
   // === withFloating demo (100-110s) ===
-  demoSlide("withFloating — Ring of Beads", BeadsWithFloatingLabeled, {
+  demoSlide("withFloating — Ring of Beads", <BeadsWithFloatingLabeled />, {
     subtitles:
       'The "withFloating" modifier detaches the dragged element, letting it follow the cursor immediately.',
     width: 960,
@@ -504,7 +421,7 @@ export const slides: Slide[] = [
   }),
 
   // === whenFar demo (110-120s) ===
-  demoSlide("whenFar — Ring of Beads", BeadsWhenFarLabeled, {
+  demoSlide("whenFar — Ring of Beads", <BeadsWhenFarLabeled />, {
     subtitles:
       'The "whenFar" modifier allows us to switch to a new behavior when the cursor is far from any target.',
     width: 960,
@@ -523,7 +440,7 @@ export const slides: Slide[] = [
   // === More examples section (130+) ===
 
   // Scheduler (130-155s)
-  demoSlide("Scheduler", wrapDemo(schedulerDemo), {
+  demoSlide("Scheduler", <schedulerDemo.Component />, {
     subtitles:
       "This diagram of a scheduling problem uses a discrete drag to move meetings between rooms, and a continuous drag to change start and end times.",
     width: 560,
@@ -534,7 +451,7 @@ export const slides: Slide[] = [
   }),
 
   // Lists in Lists (155-170s)
-  demoSlide("Lists in Lists", ListsInListsClean, {
+  demoSlide("Lists in Lists", <ListsInListsClean />, {
     subtitles:
       "Vary can be combined freely with other behaviors using Dragology’s DSL.",
     width: 400,
@@ -545,7 +462,7 @@ export const slides: Slide[] = [
   }),
 
   // Tactile Tessellations (170-180s)
-  demoSlide("Tactile Tessellations", wrapDemo(tactileTessellationsDemo), {
+  demoSlide("Tactile Tessellations", <tactileTessellationsDemo.Component />, {
     subtitles:
       "Dragology extends past repositioning drags to support drags that create and destroy objects, like these tessellated shapes.",
     width: 900,
@@ -556,7 +473,7 @@ export const slides: Slide[] = [
   }),
 
   // Nodes and Noodles (180-190s)
-  demoSlide("Nodes & Noodles", wrapDemo(nodesAndNoodlesDemo), {
+  demoSlide("Nodes & Noodles", <nodesAndNoodlesDemo.Component />, {
     subtitles:
       "In this mock nodes and wires programming interface, edges are created by dragging between ports and they can be destroyed by detachment.",
     width: 500,
@@ -567,7 +484,7 @@ export const slides: Slide[] = [
   }),
 
   // Animate Algebra (190-210s)
-  demoSlide("Animate Algebra", AnimateAlgebraClean, {
+  demoSlide("Animate Algebra", <AnimateAlgebraClean />, {
     subtitles:
       "This interface shows an algebraic expression and makes the commutative and associative laws into drags.",
     width: 300,
@@ -578,7 +495,7 @@ export const slides: Slide[] = [
   }),
 
   // Twisted Trees (210-230s) — single slide combining both
-  demoSlide("Twisted Trees", TwistedTrees7, {
+  demoSlide("Twisted Trees", <TwistedTrees7 />, {
     subtitles:
       "The way these tracks interpolate between previews as you drag can be extended into two dimensions.",
     width: 400,
@@ -589,7 +506,7 @@ export const slides: Slide[] = [
   }),
 
   // Drag-Spec Designer (230-240s)
-  demoSlide("Drag-Spec Designer", wrapDemo(dragSpecDesignerDemo), {
+  demoSlide("Drag-Spec Designer", <dragSpecDesignerDemo.Component />, {
     subtitles:
       "And as a recursive finale, this block-based programming interface lets a user assemble operators to define a Dragology drag spec.",
     width: 600,

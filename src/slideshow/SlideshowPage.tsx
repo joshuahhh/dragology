@@ -6,18 +6,17 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
 import { useTitle } from "../useTitle";
+import { STAGE_H, STAGE_W } from "./slide";
 import { slides } from "./slides";
 
 const FADE_MS = 300;
 const FADE_WHITE_MS = 200;
 
-// The slideshow is presented on a 1920×1080 screen. Everything is laid out in
-// a stage of exactly that size, which is then zoomed to fit the window, so
-// that any window shows what the real screen would.
-const STAGE_W = 1920;
-const STAGE_H = 1080;
+/** Every video file the slides play clips from, each kept loaded throughout. */
+const videoSrcs = [
+  ...new Set(slides.flatMap((s) => ("video" in s ? [s.video.src] : []))),
+];
 
 function useStageZoom() {
   const compute = () =>
@@ -32,73 +31,53 @@ function useStageZoom() {
   return zoom;
 }
 
-/** Zoom that fits a demo slide's content into the stage. */
-function demoZoom(s: (typeof slides)[number]) {
-  if (s.type !== "demo") return 1;
-  const demoW = (s.width as number) || 400;
-  const demoH = (s.height as number) || 400;
-  const padX = 64;
-  const padY = s.overlayTitle ? 120 : 64;
-  return Math.min((STAGE_W - padX) / demoW, (STAGE_H - padY) / demoH, 3);
-}
-
 function useVideoPlayer() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const endTimeRef = useRef<number>(0);
-  const playingSlideRef = useRef<number>(-1);
-  const rafIdRef = useRef<number>(0);
+  const videoEls = useRef(new Map<string, HTMLVideoElement>());
+  const playingRef = useRef<{
+    slideIdx: number;
+    video: HTMLVideoElement;
+    frameCallback: number;
+  } | null>(null);
 
-  const checkFrame = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || video.paused) return;
-    if (video.currentTime >= endTimeRef.current) {
-      video.pause();
-      return;
-    }
-    rafIdRef.current = video.requestVideoFrameCallback(checkFrame);
+  const stop = useCallback(() => {
+    const p = playingRef.current;
+    if (p) p.video.cancelVideoFrameCallback(p.frameCallback);
+    playingRef.current = null;
+    for (const video of videoEls.current.values()) video.pause();
   }, []);
 
   const playSlide = useCallback(
     (slideIdx: number) => {
-      const video = videoRef.current;
       const slide = slides[slideIdx];
-      if (!video || slide.type !== "video") return;
-      if (playingSlideRef.current === slideIdx) return;
-      playingSlideRef.current = slideIdx;
-      video.currentTime = slide.startTime;
-      endTimeRef.current = slide.endTime;
-      const playPromise = video.play();
-      if (playPromise) playPromise.catch(() => {});
-      rafIdRef.current = video.requestVideoFrameCallback(checkFrame);
+      if (!("video" in slide)) return;
+      if (playingRef.current?.slideIdx === slideIdx) return;
+      stop();
+      const video = videoEls.current.get(slide.video.src);
+      if (!video) return;
+      const { start, end } = slide.video;
+      const playing = { slideIdx, video, frameCallback: 0 };
+      const checkFrame = () => {
+        if (video.paused) return;
+        if (video.currentTime >= end) {
+          video.pause();
+          return;
+        }
+        playing.frameCallback = video.requestVideoFrameCallback(checkFrame);
+      };
+      playingRef.current = playing;
+      video.currentTime = start;
+      video.play()?.catch(() => {});
+      playing.frameCallback = video.requestVideoFrameCallback(checkFrame);
     },
-    [checkFrame],
+    [stop],
   );
 
-  const stop = useCallback(() => {
-    const video = videoRef.current;
-    if (video) {
-      video.cancelVideoFrameCallback(rafIdRef.current);
-      video.pause();
-    }
-    playingSlideRef.current = -1;
-  }, []);
-
   const [playing, setPlaying] = useState(false);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
-    return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-    };
+  const updatePlaying = useCallback(() => {
+    setPlaying([...videoEls.current.values()].some((v) => !v.paused));
   }, []);
 
-  return { videoRef, playSlide, stop, playing };
+  return { videoEls, playSlide, stop, playing, updatePlaying };
 }
 
 export function SlideshowPage() {
@@ -135,14 +114,18 @@ export function SlideshowPage() {
   >(false);
   const prevSlideRef = useRef(currentSlide);
 
-  // Video player — must be before transition effect so videoRef is available
+  // Video player — must be before transition effect so videoEls is available
   const {
-    videoRef,
+    videoEls,
     playSlide,
     stop: stopVideo,
     playing: videoPlaying,
+    updatePlaying,
   } = useVideoPlayer();
-  const [videoSeekedSlide, setVideoSeekedSlide] = useState<number>(-1);
+  // Video files that have finished a seek, so are showing a frame of some clip
+  const [seekedSrcs, setSeekedSrcs] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     if (currentSlide === prevSlideRef.current) return;
@@ -155,19 +138,21 @@ export function SlideshowPage() {
     setTransitioning(false);
 
     // Pre-seek video if the target slide is a video
-    if (targetSlide.type === "video" && videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = targetSlide.startTime;
+    const targetVideo =
+      "video" in targetSlide
+        ? videoEls.current.get(targetSlide.video.src)
+        : undefined;
+    if (targetVideo && "video" in targetSlide) {
+      targetVideo.pause();
+      targetVideo.currentTime = targetSlide.video.start;
     }
 
     if (!transition) {
-      if (targetSlide.type === "video" && videoRef.current) {
+      if (targetVideo) {
         // Don't swap layer content yet — keep showing the old slide
         // until the video has seeked to the correct frame
-        const video = videoRef.current;
-        const slideIdx = currentSlide;
+        const video = targetVideo;
         const onSeeked = () => {
-          setVideoSeekedSlide(slideIdx);
           const next: [number, number] = [...layerSlidesRef.current] as [
             number,
             number,
@@ -259,7 +244,7 @@ export function SlideshowPage() {
 
     prevSlideRef.current = currentSlide;
     return () => timers.forEach(clearTimeout);
-  }, [currentSlide, videoRef]);
+  }, [currentSlide, videoEls]);
 
   const displaySlide = layerSlides[activeLayer];
   const shownSlide = slides[displaySlide];
@@ -287,22 +272,10 @@ export function SlideshowPage() {
   }, [goNext, goPrev]);
 
   const stageZoom = useStageZoom();
-  const demoZooms = ([0, 1] as const).map((layerIdx) =>
-    demoZoom(slides[layerSlides[layerIdx]]),
-  );
-
-  // Mark video ready once seek completes (for transitions)
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const onSeeked = () => setVideoSeekedSlide(currentSlide);
-    video.addEventListener("seeked", onSeeked);
-    return () => video.removeEventListener("seeked", onSeeked);
-  }, [videoRef, currentSlide]);
 
   // Start/stop video when active slide changes
   useEffect(() => {
-    if (shownSlide.type === "video") {
+    if ("video" in shownSlide) {
       playSlide(displaySlide);
     } else {
       stopVideo();
@@ -311,26 +284,16 @@ export function SlideshowPage() {
 
   const transitionMs = transitioning === "fade-white" ? FADE_WHITE_MS : FADE_MS;
 
-  // Compute video visibility from both layers
-  const videoSrc = slides.find((s) => s.type === "video")
-    ? `${import.meta.env.BASE_URL}slides/model-driven-full.mp4`
-    : null;
-
-  // Video is visible if any layer has a video slide AND the video is seeked
-  // to some video slide (not necessarily the target — so video→video cuts
-  // keep showing the old frame until the new seek completes)
-  const videoIsReady =
-    videoSeekedSlide >= 0 && slides[videoSeekedSlide]?.type === "video";
-  let videoOpacity = 0;
-  let videoVisible = false;
+  // A video file is visible while a visible layer shows one of its clips,
+  // once it has a clip's frame to show. (So a cut between clips of one file
+  // keeps showing the old frame until the new seek completes.)
+  const videoOpacity = new Map<string, number>();
   for (const i of [0, 1] as const) {
-    if (slides[layerSlides[i]].type === "video") {
-      const op = transitioning ? layerOpacity[i] : i === activeLayer ? 1 : 0;
-      if (op > 0 && videoIsReady) {
-        videoOpacity = op;
-        videoVisible = true;
-      }
-    }
+    const s = slides[layerSlides[i]];
+    if (!("video" in s) || !seekedSrcs.has(s.video.src)) continue;
+    const op = transitioning ? layerOpacity[i] : i === activeLayer ? 1 : 0;
+    const prev = videoOpacity.get(s.video.src) ?? 0;
+    videoOpacity.set(s.video.src, Math.max(prev, op));
   }
 
   return (
@@ -353,32 +316,45 @@ export function SlideshowPage() {
           contain: "layout paint",
         }}
       >
-        {/* Preloaded video element (hidden when not on a video slide) */}
-        {videoSrc && (
-          <video
-            ref={videoRef}
-            src={videoSrc}
-            preload="auto"
-            muted
-            playsInline
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              background: "white",
-              visibility: videoVisible ? "visible" : "hidden",
-              opacity: videoOpacity,
-              transition: transitioning
-                ? `opacity ${transitionMs}ms linear`
-                : "none",
-              pointerEvents: videoVisible ? "auto" : "none",
-              zIndex: 5,
-            }}
-          />
-        )}
+        {/* Preloaded video elements (hidden when not on a video slide) */}
+        {videoSrcs.map((src) => {
+          const opacity = videoOpacity.get(src) ?? 0;
+          return (
+            <video
+              key={src}
+              ref={(el) => {
+                if (el) videoEls.current.set(src, el);
+              }}
+              src={src}
+              preload="auto"
+              muted
+              playsInline
+              onSeeked={() =>
+                setSeekedSrcs((prev) =>
+                  prev.has(src) ? prev : new Set(prev).add(src),
+                )
+              }
+              onPlay={updatePlaying}
+              onPause={updatePlaying}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                background: "white",
+                visibility: opacity > 0 ? "visible" : "hidden",
+                opacity,
+                transition: transitioning
+                  ? `opacity ${transitionMs}ms linear`
+                  : "none",
+                pointerEvents: opacity > 0 ? "auto" : "none",
+                zIndex: 5,
+              }}
+            />
+          );
+        })}
 
         {/* Main slide area — two layers stacked via CSS grid so both get identical layout */}
         <div
@@ -412,82 +388,7 @@ export function SlideshowPage() {
                   visibility: visible ? "visible" : "hidden",
                 }}
               >
-                {/* Overlay title */}
-                {s.type === "demo" && s.overlayTitle && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 24,
-                      left: 32,
-                      fontSize: 42,
-                      fontWeight: "bold",
-                      fontStyle: "italic",
-                      color: "#1a1a1a",
-                      zIndex: 10,
-                      pointerEvents: "none",
-                    }}
-                  >
-                    {s.overlayTitle}
-                  </div>
-                )}
-
-                {/* Demo link icon */}
-                {s.type === "demo" && s.demoId && isActive && (
-                  <a
-                    href={`#/demos/${s.demoId}`}
-                    style={{
-                      position: "absolute",
-                      bottom: 16,
-                      right: 16,
-                      zIndex: 10,
-                      fontSize: 16,
-                      color: "#9ca3af",
-                      textDecoration: "none",
-                      padding: "4px 6px",
-                      borderRadius: 4,
-                    }}
-                    title="Open demo"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M6.5 3.5H3.5C2.95 3.5 2.5 3.95 2.5 4.5V12.5C2.5 13.05 2.95 13.5 3.5 13.5H11.5C12.05 13.5 12.5 13.05 12.5 12.5V9.5" />
-                      <path d="M9.5 2.5H13.5V6.5" />
-                      <path d="M6.5 9.5L13.5 2.5" />
-                    </svg>
-                  </a>
-                )}
-
-                {/* Slide content */}
-                {s.type === "image" && (
-                  <img
-                    src={`${import.meta.env.BASE_URL}slides/${s.image}`}
-                    alt=""
-                    className="max-w-full max-h-full object-contain"
-                    draggable={false}
-                  />
-                )}
-                {s.type === "demo" && (
-                  <DemoSettingsProvider persist={false}>
-                    <div
-                      className="flex items-center justify-center"
-                      style={{
-                        zoom: demoZooms[layerIdx],
-                        marginTop: s.overlayTitle ? 40 : 0,
-                      }}
-                    >
-                      <s.Component />
-                    </div>
-                    {isActive && <DemoSettingsBar compact />}
-                  </DemoSettingsProvider>
-                )}
+                {"content" in s && s.content}
               </div>
             );
           })}
