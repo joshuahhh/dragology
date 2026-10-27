@@ -6,6 +6,7 @@ import { execSync } from "node:child_process";
 import { defineConfig } from "vite";
 import { qrcode } from "vite-plugin-qrcode";
 import { reactProd } from "./vite-plugin-react-prod";
+import { slideSnapshots } from "./vite-plugin-slide-snapshots";
 
 const commitHash = execSync("git rev-parse --short HEAD").toString().trim();
 
@@ -28,7 +29,7 @@ export default defineConfig({
         .pathname,
     },
   },
-  plugins: [react(), reactProd(), tailwindcss(), qrcode()],
+  plugins: [react(), reactProd(), tailwindcss(), qrcode(), slideSnapshots()],
   test: {
     // The fuzz tests (src/fuzz) take minutes; they only run via
     // `pnpm fuzz` (which sets FUZZ=1), not on every `pnpm test`.
