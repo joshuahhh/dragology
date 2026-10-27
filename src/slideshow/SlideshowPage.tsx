@@ -13,6 +13,35 @@ import { slides } from "./slides";
 const FADE_MS = 300;
 const FADE_WHITE_MS = 200;
 
+// The slideshow is presented on a 1920×1080 screen. Everything is laid out in
+// a stage of exactly that size, which is then zoomed to fit the window, so
+// that any window shows what the real screen would.
+const STAGE_W = 1920;
+const STAGE_H = 1080;
+
+function useStageZoom() {
+  const compute = () =>
+    Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+  const [zoom, setZoom] = useState(compute);
+  useLayoutEffect(() => {
+    const update = () => setZoom(compute());
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return zoom;
+}
+
+/** Zoom that fits a demo slide's content into the stage. */
+function demoZoom(s: (typeof slides)[number]) {
+  if (s.type !== "demo") return 1;
+  const demoW = (s.width as number) || 400;
+  const demoH = (s.height as number) || 400;
+  const padX = 64;
+  const padY = s.overlayTitle ? 120 : 64;
+  return Math.min((STAGE_W - padX) / demoW, (STAGE_H - padY) / demoH, 3);
+}
+
 function useVideoPlayer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const endTimeRef = useRef<number>(0);
@@ -257,35 +286,10 @@ export function SlideshowPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [goNext, goPrev]);
 
-  const slideAreaRef = useRef<HTMLDivElement>(null);
-  const [demoZooms, setDemoZooms] = useState<[number, number]>([1, 1]);
-
-  const layerSlide0 = layerSlides[0];
-  const layerSlide1 = layerSlides[1];
-
-  useLayoutEffect(() => {
-    if (!slideAreaRef.current) return;
-    const el = slideAreaRef.current;
-    const update = () => {
-      const next: [number, number] = [1, 1];
-      for (const layerIdx of [0, 1] as const) {
-        const s = slides[layerIdx === 0 ? layerSlide0 : layerSlide1];
-        if (s.type !== "demo") continue;
-        const demoW = (s.width as number) || 400;
-        const demoH = (s.height as number) || 400;
-        const padX = 64;
-        const padY = s.overlayTitle ? 120 : 64;
-        const scaleX = (el.clientWidth - padX) / demoW;
-        const scaleY = (el.clientHeight - padY) / demoH;
-        next[layerIdx] = Math.min(scaleX, scaleY, 3);
-      }
-      setDemoZooms(next);
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [layerSlide0, layerSlide1]);
+  const stageZoom = useStageZoom();
+  const demoZooms = ([0, 1] as const).map((layerIdx) =>
+    demoZoom(slides[layerSlides[layerIdx]]),
+  );
 
   // Mark video ready once seek completes (for transitions)
   useEffect(() => {
@@ -332,170 +336,184 @@ export function SlideshowPage() {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 bg-white flex flex-col select-none"
-      style={{ overflow: "hidden" }}
+      className="fixed inset-0 flex items-center justify-center select-none"
+      style={{ overflow: "hidden", background: "#111" }}
     >
-      {/* Preloaded video element (hidden when not on a video slide) */}
-      {videoSrc && (
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          preload="auto"
-          muted
-          playsInline
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            background: "white",
-            visibility: videoVisible ? "visible" : "hidden",
-            opacity: videoOpacity,
-            transition: transitioning
-              ? `opacity ${transitionMs}ms linear`
-              : "none",
-            pointerEvents: videoVisible ? "auto" : "none",
-            zIndex: 5,
-          }}
-        />
-      )}
-
-      {/* Main slide area — two layers stacked via CSS grid so both get identical layout */}
+      {/* The stage. Layout and paint containment make it the containing block
+          for position: fixed descendants (e.g. DemoSettingsBar), so they stay
+          inside the stage rather than pinning to the window. */}
       <div
-        ref={slideAreaRef}
-        className="flex-1 min-h-0"
-        style={{ display: "grid", isolation: "isolate" }}
+        className="bg-white flex flex-col"
+        style={{
+          position: "relative",
+          width: STAGE_W,
+          height: STAGE_H,
+          flexShrink: 0,
+          zoom: stageZoom,
+          contain: "layout paint",
+        }}
       >
-        {([0, 1] as const).map((layerIdx) => {
-          const s = slides[layerSlides[layerIdx]];
-          const isActive = layerIdx === activeLayer;
-          const opacity = transitioning
-            ? layerOpacity[layerIdx]
-            : isActive
-              ? 1
-              : 0;
-          const visible = opacity > 0 || isActive;
-          return (
-            <div
-              key={layerIdx}
-              style={{
-                gridArea: "1 / 1",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                position: "relative",
-                opacity,
-                transition: transitioning
-                  ? `opacity ${transitionMs}ms linear`
-                  : "none",
-                mixBlendMode: "plus-lighter",
-                pointerEvents: isActive ? "auto" : "none",
-                visibility: visible ? "visible" : "hidden",
-              }}
-            >
-              {/* Overlay title */}
-              {s.type === "demo" && s.overlayTitle && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 24,
-                    left: 32,
-                    fontSize: 42,
-                    fontWeight: "bold",
-                    fontStyle: "italic",
-                    color: "#1a1a1a",
-                    zIndex: 10,
-                    pointerEvents: "none",
-                  }}
-                >
-                  {s.overlayTitle}
-                </div>
-              )}
+        {/* Preloaded video element (hidden when not on a video slide) */}
+        {videoSrc && (
+          <video
+            ref={videoRef}
+            src={videoSrc}
+            preload="auto"
+            muted
+            playsInline
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              background: "white",
+              visibility: videoVisible ? "visible" : "hidden",
+              opacity: videoOpacity,
+              transition: transitioning
+                ? `opacity ${transitionMs}ms linear`
+                : "none",
+              pointerEvents: videoVisible ? "auto" : "none",
+              zIndex: 5,
+            }}
+          />
+        )}
 
-              {/* Demo link icon */}
-              {s.type === "demo" && s.demoId && isActive && (
-                <a
-                  href={`#/demos/${s.demoId}`}
-                  style={{
-                    position: "absolute",
-                    bottom: 16,
-                    right: 16,
-                    zIndex: 10,
-                    fontSize: 16,
-                    color: "#9ca3af",
-                    textDecoration: "none",
-                    padding: "4px 6px",
-                    borderRadius: 4,
-                  }}
-                  title="Open demo"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M6.5 3.5H3.5C2.95 3.5 2.5 3.95 2.5 4.5V12.5C2.5 13.05 2.95 13.5 3.5 13.5H11.5C12.05 13.5 12.5 13.05 12.5 12.5V9.5" />
-                    <path d="M9.5 2.5H13.5V6.5" />
-                    <path d="M6.5 9.5L13.5 2.5" />
-                  </svg>
-                </a>
-              )}
-
-              {/* Slide content */}
-              {s.type === "image" && (
-                <img
-                  src={`${import.meta.env.BASE_URL}slides/${s.image}`}
-                  alt=""
-                  className="max-w-full max-h-full object-contain"
-                  draggable={false}
-                />
-              )}
-              {s.type === "demo" && (
-                <DemoSettingsProvider persist={false}>
+        {/* Main slide area — two layers stacked via CSS grid so both get identical layout */}
+        <div
+          className="flex-1 min-h-0"
+          style={{ display: "grid", isolation: "isolate" }}
+        >
+          {([0, 1] as const).map((layerIdx) => {
+            const s = slides[layerSlides[layerIdx]];
+            const isActive = layerIdx === activeLayer;
+            const opacity = transitioning
+              ? layerOpacity[layerIdx]
+              : isActive
+                ? 1
+                : 0;
+            const visible = opacity > 0 || isActive;
+            return (
+              <div
+                key={layerIdx}
+                style={{
+                  gridArea: "1 / 1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                  opacity,
+                  transition: transitioning
+                    ? `opacity ${transitionMs}ms linear`
+                    : "none",
+                  mixBlendMode: "plus-lighter",
+                  pointerEvents: isActive ? "auto" : "none",
+                  visibility: visible ? "visible" : "hidden",
+                }}
+              >
+                {/* Overlay title */}
+                {s.type === "demo" && s.overlayTitle && (
                   <div
-                    className="flex items-center justify-center"
                     style={{
-                      zoom: demoZooms[layerIdx],
-                      marginTop: s.overlayTitle ? 40 : 0,
+                      position: "absolute",
+                      top: 24,
+                      left: 32,
+                      fontSize: 42,
+                      fontWeight: "bold",
+                      fontStyle: "italic",
+                      color: "#1a1a1a",
+                      zIndex: 10,
+                      pointerEvents: "none",
                     }}
                   >
-                    <s.Component />
+                    {s.overlayTitle}
                   </div>
-                  {isActive && <DemoSettingsBar compact />}
-                </DemoSettingsProvider>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                )}
 
-      {/* Slide counter (minimal, bottom-left) */}
-      <div
-        className="fixed bottom-2 left-3 text-xs text-gray-300 select-none pointer-events-none"
-        style={{ zIndex: 30 }}
-      >
-        {currentSlide + 1}/{slides.length}
-        <svg
-          width="8"
-          height="9"
-          viewBox="0 0 8 9"
-          fill="currentColor"
-          style={{
-            display: "inline",
-            verticalAlign: "middle",
-            marginLeft: 4,
-            opacity: videoPlaying ? 1 : 0,
-          }}
+                {/* Demo link icon */}
+                {s.type === "demo" && s.demoId && isActive && (
+                  <a
+                    href={`#/demos/${s.demoId}`}
+                    style={{
+                      position: "absolute",
+                      bottom: 16,
+                      right: 16,
+                      zIndex: 10,
+                      fontSize: 16,
+                      color: "#9ca3af",
+                      textDecoration: "none",
+                      padding: "4px 6px",
+                      borderRadius: 4,
+                    }}
+                    title="Open demo"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M6.5 3.5H3.5C2.95 3.5 2.5 3.95 2.5 4.5V12.5C2.5 13.05 2.95 13.5 3.5 13.5H11.5C12.05 13.5 12.5 13.05 12.5 12.5V9.5" />
+                      <path d="M9.5 2.5H13.5V6.5" />
+                      <path d="M6.5 9.5L13.5 2.5" />
+                    </svg>
+                  </a>
+                )}
+
+                {/* Slide content */}
+                {s.type === "image" && (
+                  <img
+                    src={`${import.meta.env.BASE_URL}slides/${s.image}`}
+                    alt=""
+                    className="max-w-full max-h-full object-contain"
+                    draggable={false}
+                  />
+                )}
+                {s.type === "demo" && (
+                  <DemoSettingsProvider persist={false}>
+                    <div
+                      className="flex items-center justify-center"
+                      style={{
+                        zoom: demoZooms[layerIdx],
+                        marginTop: s.overlayTitle ? 40 : 0,
+                      }}
+                    >
+                      <s.Component />
+                    </div>
+                    {isActive && <DemoSettingsBar compact />}
+                  </DemoSettingsProvider>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Slide counter (minimal, bottom-left) */}
+        <div
+          className="fixed bottom-2 left-3 text-xs text-gray-300 select-none pointer-events-none"
+          style={{ zIndex: 30 }}
         >
-          <path d="M0 0.5L8 4.5L0 8.5Z" />
-        </svg>
+          {currentSlide + 1}/{slides.length}
+          <svg
+            width="8"
+            height="9"
+            viewBox="0 0 8 9"
+            fill="currentColor"
+            style={{
+              display: "inline",
+              verticalAlign: "middle",
+              marginLeft: 4,
+              opacity: videoPlaying ? 1 : 0,
+            }}
+          >
+            <path d="M0 0.5L8 4.5L0 8.5Z" />
+          </svg>
+        </div>
       </div>
     </div>
   );
