@@ -265,11 +265,13 @@ export function SlideshowPage() {
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         goPrev();
+      } else if (e.key === "o") {
+        navigate("/slideshow-outline");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [goNext, goPrev]);
+  }, [goNext, goPrev, navigate]);
 
   const stageZoom = useStageZoom();
 
