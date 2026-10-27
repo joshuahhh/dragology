@@ -506,3 +506,12 @@ export const outline: (Slide | Heading)[] = [
 ];
 
 export const slides = outline.filter((s): s is Slide => !("heading" in s));
+
+/** The outline, with each slide's number in the slideshow (from 1). */
+export const numberedOutline: (Heading | { slide: Slide; num: number })[] =
+  (() => {
+    let num = 0;
+    return outline.map((item) =>
+      "heading" in item ? item : { slide: item, num: ++num },
+    );
+  })();
