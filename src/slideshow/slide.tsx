@@ -20,11 +20,25 @@ export type VideoClip = { src: string; start: number; end: number };
 export type Slide = {
   title?: string;
   subtitles?: string;
+  /** Speaker notes, in Markdown. */
+  notes?: string;
   /** How to arrive at this slide when going forward. Going back always cuts. */
   transition?: Transition;
 } & ({ content: ReactNode } | { video: VideoClip });
 
-type SlideMeta = Pick<Slide, "title" | "subtitles" | "transition">;
+type SlideMeta = Pick<Slide, "title" | "subtitles" | "notes" | "transition">;
+
+/** The first line of a slide's notes, as plain text, for at-a-glance views. */
+export function notesFirstLine(notes: string | undefined): string | undefined {
+  const line = notes
+    ?.split("\n")
+    .map((l) => l.trim())
+    .find((l) => l !== "");
+  return line
+    ?.replace(/^(#+|[-*+>]|\d+\.)\s+/, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[*_`]/g, "");
+}
 
 /**
  * A heading among the slides, for us authors: it shows in the outline, not
@@ -93,7 +107,7 @@ export function imageSlide(
   image: string,
   title: string,
   subtitles?: string,
-  opts?: { transition?: Transition },
+  opts?: Pick<SlideMeta, "notes" | "transition">,
 ): Slide {
   return {
     title,
@@ -116,7 +130,7 @@ export function videoSlide(
   start: number,
   end: number,
   subtitles?: string,
-  opts?: { transition?: Transition },
+  opts?: Pick<SlideMeta, "notes" | "transition">,
 ): Slide {
   return {
     title,
