@@ -7,8 +7,9 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTitle } from "../useTitle";
-import { STAGE_H, STAGE_W } from "./slide";
-import { slides } from "./slides";
+import { type Heading, type Slide, STAGE_H, STAGE_W } from "./slide";
+import { numberedOutline, slides } from "./slides";
+import { SlideThumb, useSlideSnapshots } from "./SlideThumb";
 
 const FADE_MS = 300;
 const FADE_WHITE_MS = 200;
@@ -78,6 +79,121 @@ function useVideoPlayer() {
   }, []);
 
   return { videoEls, playSlide, stop, playing, updatePlaying };
+}
+
+/**
+ * Every slide's snapshot, with the outline's headings in the gutters, for the
+ * space the stage leaves below it: click one to go there. It's for whoever is at the window, not the audience, so it's sized
+ * in window pixels, not stage pixels.
+ */
+/**
+ * Each slide with the headings just before it, which start its section. (A
+ * heading with no slide after it isn't shown.)
+ */
+const outlineSlides = (() => {
+  const result: { slide: Slide; num: number; headings: Heading[] }[] = [];
+  let headings: Heading[] = [];
+  for (const item of numberedOutline) {
+    if ("heading" in item) {
+      headings.push(item);
+    } else {
+      result.push({ ...item, headings });
+      headings = [];
+    }
+  }
+  return result;
+})();
+
+function SlideOutline({
+  current,
+  onSelect,
+}: {
+  current: number;
+  onSelect: (i: number) => void;
+}) {
+  useSlideSnapshots();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Keep the current slide in view. (Not scrollIntoView, which would also
+  // scroll the page's overflow: hidden container.)
+  useEffect(() => {
+    const container = scrollRef.current;
+    const el = container?.querySelector<HTMLElement>(
+      `[data-slide="${current}"]`,
+    );
+    if (!container || !el) return;
+    const pad = 12;
+    // Room for the headings in the gutter above
+    const top = el.offsetTop - 28;
+    const bottom = el.offsetTop + el.offsetHeight + pad;
+    if (top < container.scrollTop) {
+      container.scrollTo({ top, behavior: "smooth" });
+    } else if (bottom > container.scrollTop + container.clientHeight) {
+      container.scrollTo({
+        top: bottom - container.clientHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [current]);
+
+  return (
+    <div
+      ref={scrollRef}
+      className="self-stretch flex-1 min-h-0 overflow-y-auto"
+      style={{ position: "relative" }}
+    >
+      <div className="grid gap-x-3 gap-y-7 px-3 pt-7 pb-3 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
+        {outlineSlides.map(({ slide, num, headings }) => {
+          const i = num - 1;
+          return (
+            <div key={i} data-slide={i} style={{ position: "relative" }}>
+              {/* The section's headings, in the gutter above its first slide */}
+              {headings.length > 0 && (
+                <div className="absolute bottom-full mb-1 whitespace-nowrap text-sm">
+                  {headings.map((h, j) => (
+                    <span
+                      key={j}
+                      className={
+                        h.level === 1
+                          ? "font-bold text-white"
+                          : "font-semibold text-gray-400"
+                      }
+                    >
+                      {j > 0 && <span className="text-gray-600"> · </span>}
+                      {h.heading}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div
+                className={`flex flex-col gap-1 cursor-pointer ${
+                  i === current ? "" : "opacity-50 hover:opacity-100"
+                }`}
+                onClick={() => onSelect(i)}
+              >
+                <div
+                  className={`bg-white aspect-video ${
+                    i === current
+                      ? "ring-4 ring-amber-400 ring-offset-2 ring-offset-[#111]"
+                      : "ring-1 ring-gray-700"
+                  }`}
+                >
+                  <SlideThumb slide={slide} num={num} />
+                </div>
+                <div
+                  className={`text-xs tabular-nums ${
+                    i === current ? "text-white font-semibold" : "text-gray-500"
+                  }`}
+                >
+                  {num}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function SlideshowPage() {
@@ -301,7 +417,7 @@ export function SlideshowPage() {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 flex items-center justify-center select-none"
+      className="fixed inset-0 flex flex-col items-center select-none"
       style={{ overflow: "hidden", background: "#111" }}
     >
       {/* The stage. Layout and paint containment make it the containing block
@@ -418,6 +534,8 @@ export function SlideshowPage() {
           </svg>
         </div>
       </div>
+
+      <SlideOutline current={currentSlide} onSelect={setCurrentSlide} />
     </div>
   );
 }

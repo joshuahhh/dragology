@@ -1,69 +1,16 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useTitle } from "../useTitle";
 import { type Slide } from "./slide";
-import { outline } from "./slides";
-
-// Content slides are too heavy to render live in a grid, so they're shown from
-// snapshots taken by snapshot-slides.sh, which the dev server runs on changes
-// to the slides once this page tells it it's open. The script writes a
-// manifest of content hashes alongside them; the hashes bust the browser's
-// image cache, and since the manifest is a module, a new snapshot updates this
-// page by HMR. (Globbed so that a missing manifest is fine.)
-const manifest: Record<string, string> =
-  Object.values(
-    import.meta.glob<Record<string, string>>("./thumbs.json", {
-      eager: true,
-      import: "default",
-    }),
-  )[0] ?? {};
-
-function Thumb({ slide, num }: { slide: Slide; num: number }) {
-  if ("video" in slide) {
-    return (
-      <video
-        src={`${slide.video.src}#t=${slide.video.start}`}
-        preload="metadata"
-        muted
-        playsInline
-        className="w-full h-full object-contain"
-      />
-    );
-  }
-  const hash = manifest[num];
-  if (!hash) {
-    return (
-      <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
-        no snapshot yet
-      </div>
-    );
-  }
-  return (
-    <img
-      src={`${import.meta.env.BASE_URL}slides/thumbs/${num}.jpg?v=${hash}`}
-      className="w-full h-full object-contain"
-      draggable={false}
-    />
-  );
-}
-
-// Each slide with its number in the slideshow, which skips headings.
-const numbered = (() => {
-  let num = 0;
-  return outline.map((item) =>
-    "heading" in item ? item : { slide: item, num: ++num },
-  );
-})();
+import { numberedOutline } from "./slides";
+import { SlideThumb, useSlideSnapshots } from "./SlideThumb";
 
 export function SlideshowOutlinePage() {
   useTitle("Dragology — Slideshow outline");
-  useEffect(() => {
-    import.meta.hot?.send("slide-snapshots:open");
-  }, []);
+  useSlideSnapshots();
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="grid gap-6 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
-        {numbered.map((item, i) =>
+        {numberedOutline.map((item, i) =>
           "heading" in item ? (
             <h2
               key={i}
@@ -81,7 +28,7 @@ export function SlideshowOutlinePage() {
                 to={`/slideshow/${item.num}`}
                 className="block bg-white aspect-video shadow-sm ring-1 ring-gray-200 hover:ring-2 hover:ring-blue-400"
               >
-                <Thumb slide={item.slide} num={item.num} />
+                <SlideThumb slide={item.slide} num={item.num} />
               </Link>
               <SlideInfo slide={item.slide} num={item.num} />
             </div>
