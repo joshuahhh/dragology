@@ -707,15 +707,6 @@ export const outline: (Slide | Heading)[] = [
     content: <ImageSlide src="slide-12.jpg" />,
   },
   {
-    title: "Code — Static View",
-    transition: "fade",
-    content: <ImageSlide src="slide-13.jpg" />,
-  },
-  {
-    title: "Code — dragologyOnDrag",
-    content: <ImageSlide src="slide-14.jpg" />,
-  },
-  {
     title: "Live Code",
     transition: "fade",
     // Its editor takes focus and keys on mount
