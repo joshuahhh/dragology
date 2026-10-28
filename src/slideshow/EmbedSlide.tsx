@@ -1,15 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { STAGE_H, STAGE_W, useSlideActive } from "./slide";
 
 /**
  * Keys that, pressed inside an embed, go to the slideshow rather than the
- * embedded app: a presentation clicker's keys. Escape also hands the keys
- * back, by taking focus out of the embed.
+ * embedded app: a presentation clicker's keys. Escape, which the app never
+ * sees either, hands the keys back by taking focus out of the embed.
  */
 const SLIDESHOW_KEYS = ["PageDown", "PageUp"];
 
 /** The arrow keys, which the slideshow uses and some embedded apps don't. */
 const ARROW_KEYS = ["ArrowRight", "ArrowLeft"];
+
+/** Embedded windows whose keys already go through their slide */
+const bridged = new WeakSet<Window>();
 
 /**
  * Another web app on the stage, in an iframe: a static build of it in
@@ -19,7 +28,9 @@ const ARROW_KEYS = ["ArrowRight", "ArrowLeft"];
  * While the embed has focus, keys go to it, except those in SLIDESHOW_KEYS,
  * the arrow keys if `arrows` is "slideshow", and Escape, which takes focus out
  * of the embed so that all keys go to the slideshow again. A ring around the
- * embed shows when it has focus.
+ * embed shows when it has focus. On the dev server, vite-plugin-embed-keys.ts
+ * has the embedded page tell us its window exists before the app's scripts
+ * run, so we see keys before the app does, whatever the app does with them.
  *
  * On its slide, ⌘+, ⌘− and ⌘0 zoom the embed rather than the whole page; the
  * zoom is remembered, per embedded app, in localStorage.
@@ -107,45 +118,66 @@ export function EmbedSlide({
     if (active && focusOnShow) iframeRef.current?.focus();
   }, [active, focusOnShow]);
 
-  // Every load of the embedded page: style it and catch the slideshow's keys
+  // The embedded window's keys, each pressed before the app sees it
+  const onKey = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
-    const iframe = iframeRef.current!;
     const forwarded = [
       ...SLIDESHOW_KEYS,
       ...(arrows === "slideshow" ? ARROW_KEYS : []),
     ];
+    onKey.current = (e) => {
+      if (onZoomKey(e)) {
+        e.stopImmediatePropagation();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        iframeRef.current?.blur();
+        window.focus();
+      } else if (forwarded.includes(e.key)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
+      }
+    };
+  }, [arrows, onZoomKey]);
+
+  // Catch the embedded window's keys: as soon as it exists if the page says
+  // so (see vite-plugin-embed-keys.ts), else once it has loaded. Listeners in
+  // the same phase run in the order they were added, so the earlier the
+  // better.
+  const bridge = useCallback(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win || bridged.has(win)) return;
+    bridged.add(win);
+    win.addEventListener("keydown", (e) => onKey.current(e), {
+      capture: true,
+    });
+  }, []);
+  // A layout effect, to be listening before the page starts loading
+  useLayoutEffect(() => {
+    const iframe = iframeRef.current!;
+    iframe.addEventListener("embed-window", bridge);
+    return () => iframe.removeEventListener("embed-window", bridge);
+  }, [bridge]);
+
+  // Every load of the embedded page: style it and catch its keys
+  useEffect(() => {
+    const iframe = iframeRef.current!;
     const onLoad = () => {
-      const win = iframe.contentWindow!;
-      const doc = iframe.contentDocument!;
       if (css) {
+        const doc = iframe.contentDocument!;
         const style = doc.createElement("style");
         style.textContent = css;
         doc.head.appendChild(style);
       }
-      win.addEventListener(
-        "keydown",
-        (e) => {
-          if (onZoomKey(e)) {
-            e.stopImmediatePropagation();
-          } else if (e.key === "Escape") {
-            iframe.blur();
-            window.focus();
-          } else if (forwarded.includes(e.key)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
-          }
-        },
-        // Before the app sees it
-        { capture: true },
-      );
+      bridge();
     };
     iframe.addEventListener("load", onLoad);
     // In case it loaded before we got here
     const doc = iframe.contentDocument;
     if (doc?.readyState === "complete" && doc.URL !== "about:blank") onLoad();
     return () => iframe.removeEventListener("load", onLoad);
-  }, [css, arrows, onZoomKey]);
+  }, [css, bridge]);
 
   return (
     <div

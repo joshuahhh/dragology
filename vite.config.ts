@@ -5,6 +5,7 @@ import { execSync } from "node:child_process";
 
 import { defineConfig } from "vite";
 import { qrcode } from "vite-plugin-qrcode";
+import { embedKeys } from "./vite-plugin-embed-keys";
 import { liveTypes } from "./vite-plugin-live-types";
 import { montageLayout } from "./vite-plugin-montage-layout";
 import { railsTracks } from "./vite-plugin-rails-tracks";
@@ -42,6 +43,7 @@ export default defineConfig({
     slideNotes(),
     montageLayout(),
     railsTracks(),
+    embedKeys(),
     liveTypes(),
   ],
   worker: {
