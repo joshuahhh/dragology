@@ -1,6 +1,6 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { Prec } from "@codemirror/state";
+import { EditorSelection, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import CodeMirror, { ExternalChange } from "@uiw/react-codemirror";
@@ -42,13 +42,48 @@ const theme = EditorView.theme(
   { dark: true },
 );
 
+// Typing one of these with text selected wraps the selection in it rather than
+// replacing it, and selects the result, so typing * twice makes it **bold**.
+const WRAP_MARKERS = ["*", "_", "`", "~"];
+
+const wrapSelection = EditorView.inputHandler.of((view, _from, _to, text) => {
+  const { state } = view;
+  if (
+    !WRAP_MARKERS.includes(text) ||
+    state.selection.ranges.every((r) => r.empty)
+  )
+    return false;
+  view.dispatch(
+    state.update(
+      state.changeByRange((range) => {
+        if (range.empty) {
+          return {
+            changes: { from: range.from, insert: text },
+            range: EditorSelection.cursor(range.from + text.length),
+          };
+        }
+        return {
+          changes: [
+            { from: range.from, insert: text },
+            { from: range.to, insert: text },
+          ],
+          range: EditorSelection.range(range.from, range.to + 2 * text.length),
+        };
+      }),
+      { scrollIntoView: true, userEvent: "input.type" },
+    ),
+  );
+  return true;
+});
+
 /**
  * A plain-text Markdown editor that shows the text formatted, with the markup
- * left in place (CodeMirror). ⌘↵ calls `onSave`; Escape calls `onCancel` and
- * leaves the editor.
+ * left in place (CodeMirror). ⌘↵ or ⌘S calls `onSave`; Escape calls `onCancel`
+ * and leaves the editor. Typing * _ ` or ~ over a selection wraps it.
  */
 export function NotesEditor({
   value,
+  editable,
   readOnly,
   placeholder,
   onChange,
@@ -57,6 +92,9 @@ export function NotesEditor({
   onCancel,
 }: {
   value: string;
+  /** If false, the notes are just text: no cursor, no focus */
+  editable: boolean;
+  /** Takes no edits for now, but keeps focus and the cursor (while saving) */
   readOnly: boolean;
   placeholder?: string;
   onChange: (value: string) => void;
@@ -89,10 +127,18 @@ export function NotesEditor({
       markdown(),
       syntaxHighlighting(highlightStyle),
       EditorView.lineWrapping,
+      wrapSelection,
       Prec.highest(
         keymap.of([
           {
             key: "Mod-Enter",
+            run: () => {
+              handlers.current.onSave();
+              return true;
+            },
+          },
+          {
+            key: "Mod-s",
             run: () => {
               handlers.current.onSave();
               return true;
@@ -117,7 +163,7 @@ export function NotesEditor({
       value={initialValue}
       onCreateEditor={setView}
       readOnly={readOnly}
-      editable={!readOnly}
+      editable={editable}
       placeholder={placeholder}
       onChange={onChange}
       onBlur={onBlur}
