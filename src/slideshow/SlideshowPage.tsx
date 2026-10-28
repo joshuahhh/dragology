@@ -386,10 +386,13 @@ const outlineSlides = (() => {
  */
 function SlideOutline({
   current,
+  step,
   wide,
   onSelect,
 }: {
   current: number;
+  /** The current slide's step */
+  step: number;
   wide: boolean;
   onSelect: (i: number) => void;
 }) {
@@ -457,13 +460,19 @@ function SlideOutline({
                 onClick={() => onSelect(i)}
               >
                 <div
-                  className={`bg-white aspect-video ${
+                  className={`relative bg-white aspect-video ${
                     i === current
                       ? "ring-4 ring-amber-400 ring-offset-2 ring-offset-[#111]"
                       : "ring-1 ring-gray-700"
                   }`}
                 >
                   <SlideThumb slide={slide} num={num} />
+                  {slideSteps(slide) > 1 && (
+                    <StepBar
+                      steps={slideSteps(slide)}
+                      step={i === current ? step : null}
+                    />
+                  )}
                 </div>
                 <div
                   className={`flex gap-1.5 text-xs ${
@@ -488,6 +497,29 @@ function SlideOutline({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A slide's steps, as segments along the bottom of its thumbnail, filled
+ * through the step it's on (if it's the current slide).
+ */
+function StepBar({ steps, step }: { steps: number; step: number | null }) {
+  return (
+    <div
+      className={`absolute inset-x-0 bottom-0 flex gap-0.5 ${
+        step === null ? "h-[3px]" : "h-[5px]"
+      }`}
+    >
+      {_.range(steps).map((k) => (
+        <div
+          key={k}
+          className={`flex-1 ${
+            step !== null && k <= step ? "bg-amber-400" : "bg-black/30"
+          }`}
+        />
+      ))}
     </div>
   );
 }
@@ -933,7 +965,12 @@ export function SlideshowPage() {
           onUnsavedChange={setNotesUnsaved}
         />
       </div>
-      <SlideOutline current={currentSlide} wide={wide} onSelect={goToSlide} />
+      <SlideOutline
+        current={currentSlide}
+        step={currentStep}
+        wide={wide}
+        onSelect={goToSlide}
+      />
     </div>
   );
 }
