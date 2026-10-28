@@ -10,6 +10,7 @@ import {
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTitle } from "../useTitle";
 import { useAudienceFeed } from "./audienceFeed";
+import { ControlPanel, ControlPanelButton } from "./ControlPanel";
 import { ErrorToasts } from "./ErrorToasts";
 import { toggleFullscreen } from "./fullscreen";
 import {
@@ -31,7 +32,6 @@ import {
 } from "./slide";
 import { numberedOutline, outline, slides } from "./slides";
 import { SlideThumb, useSlideSnapshots } from "./SlideThumb";
-import { StageInfo } from "./StageInfo";
 
 const FADE_MS = 300;
 const FADE_WHITE_MS = 200;
@@ -786,17 +786,26 @@ export function SlideshowPage() {
   }, []);
 
   useEffect(() => {
-    // Ctrl+Left/Right always navigate: caught on the way down, before a
-    // focused editor or an embedded demo can take them, and while typing.
-    // Shift may be held too (Ctrl+Shift+Arrow), for Macs where Mission
-    // Control's "move a space" shortcuts swallow the plain Ctrl+Arrow.
-    // Ctrl+Shift+P, which toggles the control panel, works the same way.
+    // Ctrl+Shift+<key> shortcuts always work: caught on the way down, before
+    // a focused editor or an embedded demo can take them, and while typing.
+    // (Plain Ctrl+Arrow works too, except on Macs where Mission Control's
+    // "move a space" shortcuts swallow it; hence the Shift.) Keys are matched
+    // by `code`, since Shift changes `key`.
     const forced = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "ArrowRight") goNext();
       else if (e.key === "ArrowLeft") goPrev();
-      else if (e.shiftKey && e.code === "KeyP") setPanelOpen((open) => !open);
-      else return;
+      else if (!e.shiftKey) return;
+      else if (e.code === "KeyP") setPanelOpen((open) => !open);
+      else if (e.code === "KeyA") shareWithAudience();
+      else if (e.code === "KeyF") toggleFullscreen(showAudienceError);
+      else if (e.code === "KeyS") {
+        const path = `/slideshow/${formatSlidePos(posRef.current)}`;
+        navigate(stageOnly ? path : `${path}?stage`, { replace: true });
+      } else if (e.code === "KeyO") {
+        if (notesUnsavedRef.current && !confirmLeave()) return;
+        navigate("/slideshow-outline");
+      } else return;
       e.preventDefault();
       e.stopPropagation();
     };
@@ -810,16 +819,6 @@ export function SlideshowPage() {
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         goPrev();
-      } else if (e.key === "a") {
-        shareWithAudience();
-      } else if (e.key === "f") {
-        toggleFullscreen(showAudienceError);
-      } else if (e.key === "s") {
-        const path = `/slideshow/${formatSlidePos(posRef.current)}`;
-        navigate(stageOnly ? path : `${path}?stage`, { replace: true });
-      } else if (e.key === "o") {
-        if (notesUnsavedRef.current && !confirmLeave()) return;
-        navigate("/slideshow-outline");
       }
     };
     window.addEventListener("keydown", forced, { capture: true });
@@ -1056,7 +1055,17 @@ export function SlideshowPage() {
         style={{ zIndex: 100 }}
       >
         <ErrorToasts errors={audienceErrors} onDismiss={dismissAudienceError} />
-        {panelOpen && <StageInfo stageRef={stageRef} feed={audienceFeed} />}
+        {panelOpen && (
+          <ControlPanel
+            stageRef={stageRef}
+            feed={audienceFeed}
+            onClose={() => setPanelOpen(false)}
+          />
+        )}
+        <ControlPanelButton
+          open={panelOpen}
+          onToggle={() => setPanelOpen((open) => !open)}
+        />
       </div>
     </div>
   );

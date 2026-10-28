@@ -2,7 +2,7 @@ import { type RefObject, useEffect, useReducer } from "react";
 import { type AudienceFeed } from "./audienceFeed";
 
 /**
- * A little panel for the presenter: how many pixels the stage gets at each
+ * For the presenter's control panel: how many pixels the stage gets at each
  * step on its way to the audience. The audience's stage can be no sharper
  * than the smallest of them.
  */
@@ -53,19 +53,18 @@ export function StageInfo({
     ]);
   }
 
+  if (rows.length === 0) return <div className="text-zinc-500">Not shown</div>;
   return (
-    <div className="rounded bg-black/70 px-2 py-1 text-xs text-gray-300 tabular-nums select-text">
-      <table>
-        <tbody>
-          {rows.map(([label, value]) => (
-            <tr key={label}>
-              <td className="pr-3 text-gray-500">{label}</td>
-              <td className="text-right">{value}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <table className="w-full tabular-nums select-text">
+      <tbody>
+        {rows.map(([label, value]) => (
+          <tr key={label}>
+            <td className="pr-3">{label}</td>
+            <td className="text-right text-zinc-200">{value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
