@@ -26,7 +26,6 @@ export type VideoClip = { file: string; start: number; end: number };
  */
 export type Slide = {
   title?: string;
-  subtitles?: string;
   /** Speaker notes, in Markdown. */
   notes?: string;
   /** How to arrive at this slide when going forward. Going back always cuts. */
