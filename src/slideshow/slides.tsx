@@ -17,6 +17,20 @@ import {
 import { StudioHackContext } from "../studio/StudioHackContext";
 import { LiveCode } from "../talk/LiveCodePage";
 import { slideSnippet } from "../talk/snippets";
+import {
+  CallToActionSlide,
+  CodeCallout,
+  ElliotSlide,
+  HazelSlide,
+  Hl,
+  NoolClassicSlide,
+  StepToggles,
+  SupernoolSlide,
+  WalkSlide,
+  WhiteboardSlide,
+} from "./back-half";
+import { ClosingMontageSlide } from "./montage/MontageCanvas";
+import { Rails } from "./rails";
 import { robotoMono } from "./roboto-mono";
 import {
   DemoSlide,
@@ -57,7 +71,11 @@ import {
   draggable as listsInListsDraggable,
   initialState as listsInListsInitialState,
 } from "../demos/lists-in-lists";
-import nodesAndNoodlesDemo from "../demos/nodes-and-noodles";
+import {
+  PERM_TALK_HEIGHT,
+  PERM_TALK_WIDTH,
+  PermutationLabTalk,
+} from "../demos/permutation-lab-talk";
 import {
   initialState as beadsInitialState,
   makeDraggable,
@@ -904,109 +922,419 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Scheduler",
     transition: "fade-white",
+    steps: 4,
+    notes: `
+      This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
+
+      ---
+
+      But it also has a continuous drag to change start and end times. A continuous drag has an infinite number of possible destination states. You can't list them all.
+
+      ---
+
+      So our DSL offers an operator called "vary" which controls one or more numeric parameters in the model.
+
+      ---
+
+      Behind the scenes, Dragology uses numerical optimization to search for the best parameter settings. Numerical optimization lets us extend model-driven dragging to continuous state spaces.
+    `,
     content: (
-      <DemoSlide
-        width={560}
-        height={212}
-        overlayTitle="Alex’s Scheduler"
-        demoId="scheduler"
-      >
-        <schedulerDemo.Component />
-      </DemoSlide>
+      <Rails id="scheduler">
+        <>
+          <DemoSlide
+            width={560}
+            height={212}
+            overlayTitle="Alex’s Scheduler"
+            demoId="scheduler"
+          >
+            <schedulerDemo.Component />
+            <StepToggles byStep={[{}, {}, {}, { showVaryVisualizer: true }]} />
+          </DemoSlide>
+          <CodeCallout from={2}>
+            {"d."}
+            <Hl at={[2, 3]}>vary</Hl>
+            {'(state, param("meetings", i, "end"))'}
+          </CodeCallout>
+        </>
+      </Rails>
     ),
   },
   // Lists in Lists (155-170s)
   {
     title: "Lists in Lists",
     transition: "fade-white",
+    steps: 4,
+    notes: `
+      Vary can be combined freely with other behaviors using Dragology's DSL.
+
+      ---
+
+      This interface uses vary inside whenFar to combine a continuous drag on the canvas
+
+      ---
+
+      with a discrete drag into snapping points.
+
+      ---
+
+      This use of whenFar makes the snapping locations into discrete islands in a continuous ocean.
+    `,
     content: (
-      <DemoSlide
-        width={400}
-        height={400}
-        overlayTitle="Lists in Lists"
-        demoId="lists-in-lists"
-      >
-        <ListsInListsClean />
-      </DemoSlide>
+      <Rails id="lists-in-lists">
+        <>
+          <DemoSlide
+            width={400}
+            height={400}
+            overlayTitle="Lists in Lists"
+            demoId="lists-in-lists"
+          >
+            <ListsInListsClean />
+            <StepToggles byStep={[{}, {}, {}, { showDropZones: true }]} />
+          </DemoSlide>
+          <CodeCallout>
+            {"d."}
+            <Hl at={[2, 3]}>closest</Hl>
+            {"(snapStates)\n .withFloating()\n "}
+            <Hl at={[1]}>.whenFar(</Hl>
+            <Hl at={[0, 1]}>d.vary(state, [x, y])</Hl>
+            <Hl at={[1]}>)</Hl>
+          </CodeCallout>
+        </>
+      </Rails>
     ),
   },
   // Tactile Tessellations (170-180s)
   {
     title: "Tactile Tessellations",
     transition: "fade-white",
+    steps: 3,
+    notes: `
+      This tessellation editor uses this same pattern, where the discrete states are edge-to-edge snaps, and the continuous states are free-floating shapes.
+
+      ---
+
+      This example also shows how Dragology supports creating
+
+      ---
+
+      and destroying objects using some additional operators.
+    `,
     content: (
-      <DemoSlide
-        width={900}
-        height={600}
-        overlayTitle="Tactile Tessellations"
-        demoId="tactile-tessellations"
-      >
-        <tactileTessellationsDemo.Component />
-      </DemoSlide>
-    ),
-  },
-  // Nodes and Noodles (180-190s)
-  {
-    title: "Nodes & Noodles",
-    transition: "fade-white",
-    content: (
-      <DemoSlide
-        width={500}
-        height={200}
-        overlayTitle="Nodes and Noodles"
-        demoId="nodes-and-noodles"
-      >
-        <nodesAndNoodlesDemo.Component />
-      </DemoSlide>
-    ),
-  },
-  // Animate Algebra (190-210s)
-  {
-    title: "Animate Algebra",
-    transition: "fade-white",
-    content: (
-      <DemoSlide
-        width={300}
-        height={350}
-        overlayTitle="Animate Algebra"
-        demoId="animate-algebra-tree"
-      >
-        <AnimateAlgebraClean />
-      </DemoSlide>
+      <Rails id="tactile-tessellations">
+        <>
+          <DemoSlide
+            width={900}
+            height={600}
+            overlayTitle="Tactile Tessellations"
+            demoId="tactile-tessellations"
+          >
+            <tactileTessellationsDemo.Component />
+          </DemoSlide>
+          <CodeCallout from={1} corner="top-right">
+            <Hl at={[1]}>d.switchToStateAndFollow</Hl>
+            {"(withNew, newId)\n"}
+            <Hl at={[2]}>d.dropTarget</Hl>
+            {'("trash", without)'}
+          </CodeCallout>
+        </>
+      </Rails>
     ),
   },
   // Twisted Trees (210-230s) — single slide combining both
   {
     title: "Twisted Trees",
     transition: "fade-white",
+    steps: 3,
+    notes: `
+      The way these tracks interpolate between previews as you drag can be extended into two dimensions. This diagram of an order-preserving map between trees lets the black dots be dragged freely between the gray bubbles. As the user drags a dot, bubbles get larger, anticipating the dot's arrival.
+
+      ---
+
+      // purple overlay comes on
+      "Between" produces this interpolation
+
+      ---
+
+      by tracking the dot's position in a triangulation of target positions.
+    `,
     content: (
-      <DemoSlide
-        width={400}
-        height={600}
-        overlayTitle="Twisted Trees"
-        demoId="twisted-trees"
-      >
-        <TwistedTrees7 />
-      </DemoSlide>
+      <Rails id="twisted-trees">
+        <DemoSlide
+          width={400}
+          height={600}
+          overlayTitle="Twisted Trees"
+          demoId="twisted-trees"
+        >
+          <TwistedTrees7 />
+          <StepToggles
+            byStep={[{ showDebugOverlay: false }, { showDebugOverlay: true }]}
+          />
+        </DemoSlide>
+      </Rails>
+    ),
+  },
+  // Animate Algebra (190-210s)
+  {
+    title: "Animate Algebra",
+    transition: "fade-white",
+    steps: 3,
+    notes: `
+      These drags are created with three operators.
+      First, the "between" operator makes tracks to the destination states.
+
+      ---
+
+      The "closest", which we've seen before, reappears to combine these tracks together.
+
+      ---
+
+      And finally, Dragology's "chaining" feature lets you drag through multiple model states in a single gesture, instead of having to drop and drag again in intermediate states.
+    `,
+    content: (
+      <Rails id="animate-algebra">
+        <>
+          <DemoSlide
+            width={300}
+            height={350}
+            overlayTitle="Animate Algebra"
+            demoId="animate-algebra-tree"
+          >
+            <AnimateAlgebraClean />
+          </DemoSlide>
+          <CodeCallout>
+            {"d."}
+            <Hl at={[1]}>closest</Hl>
+            {"(newTrees.map((t) =>\n  d."}
+            <Hl at={[0]}>between</Hl>
+            {"([state, t])))\n .withSnapRadius(1, { "}
+            <Hl at={[2]}>chain: true</Hl>
+            {" })"}
+          </CodeCallout>
+        </>
+      </Rails>
+    ),
+  },
+  // Permutation Playground
+  {
+    title: "Permutation Playground",
+    transition: "fade-white",
+    steps: 3,
+    notes: `
+      We found Dragology to be particularly suited to interfaces that combine parallel representations, where you see the same system from different perspectives.
+      This is a playground for experimenting with permutations. Interacting with any of these representations
+
+      ---
+
+      fluidly updates the others, even halfway through a drag,
+
+      ---
+
+      showing their relationships in real time.
+    `,
+    content: (
+      <Rails id="permutation-lab">
+        <DemoSlide
+          width={PERM_TALK_WIDTH}
+          height={PERM_TALK_HEIGHT}
+          overlayTitle="Permutation Playground"
+          demoId="permutation-lab-talk"
+        >
+          <PermutationLabTalk />
+        </DemoSlide>
+      </Rails>
     ),
   },
   // Drag-Spec Designer (230-240s)
   {
     title: "Drag-Spec Designer",
     transition: "fade-white",
+    steps: 3,
+    notes: `
+      And as a recursive finale, this block-based programming interface lets a user assemble operators
+
+      ---
+
+      to define a Dragology drag spec for a simple three-state interface.
+
+      ---
+
+      So, to be clear, this is an interface made with Dragology, for composing Dragology behaviors. Would you believe us if we told you we were computer scientists?
+    `,
     content: (
-      <DemoSlide
-        width={600}
-        height={400}
-        overlayTitle="Drag-Spec Designer"
-        demoId="drag-spec-designer"
-      >
-        <dragSpecDesignerDemo.Component />
-      </DemoSlide>
+      <Rails id="drag-spec-designer">
+        <DemoSlide
+          width={600}
+          height={400}
+          overlayTitle="Drag-Spec Designer"
+          demoId="drag-spec-designer"
+        >
+          <dragSpecDesignerDemo.Component />
+        </DemoSlide>
+      </Rails>
     ),
   },
 
-  { heading: "..." },
+  { heading: "Since the paper" },
+  {
+    title: "Hazel",
+    transition: "fade-white",
+    steps: 4,
+    notes: `
+      Since writing our paper, we've incorporated declarative dragging into some existing projects.
+
+      Most of my research is on Hazel, a programming environment where every edit keeps your code meaningful. Using declarative dragging, we've made Hazel's refactorings physical: code moves along meaning-preserving paths.
+
+      // drag bluex in blend's parameters
+      For example, I can reorder a function's parameters, and its call sites follow.
+
+      ---
+
+      // grab price * rate / 100 in checkout
+      Or I can pull an expression out into its own variable,
+
+      ---
+
+      and if I keep pulling up,
+
+      ---
+
+      even extract it into a new helper function.
+
+      To tell you about the other place declarative dragging has found a home, we need to go back to the year 2022.
+    `,
+    content: <HazelSlide />,
+  },
+
+  { heading: "Origins" },
+  {
+    title: "Nool classic",
+    transition: "fade-white",
+    steps: 3,
+    notes: `
+      I had a prototype of a tangible math game. It had a lot to say for it,
+
+      ---
+
+      but the fundamental mechanic, based on selecting transformations from a menu,
+
+      ---
+
+      lacked the tactility I craved.
+    `,
+    content: <NoolClassicSlide />,
+  },
+  {
+    title: "The whiteboard",
+    transition: "fade",
+    steps: 3,
+    notes: `
+      I eventually came up with a compelling scheme to make it draggable,
+
+      ---
+
+      but implementing it seemed daunting,
+
+      ---
+
+      so it sat on my whiteboard for the next two years, haunting me every time I went to make a sandwich.
+    `,
+    content: <WhiteboardSlide />,
+  },
+  {
+    title: "A walk in Seattle",
+    transition: "fade-white",
+    steps: 3,
+    notes: `
+      // Josh
+      On a really nice walk in Seattle back in 2023,
+
+      ---
+
+      Andrew shared his draggy ideas with me.
+
+      ---
+
+      I kept thinking about them over the years, but didn't do anything about it.
+    `,
+    content: <WalkSlide />,
+  },
+  {
+    title: "Trees, all together",
+    transition: "fade",
+    steps: 4,
+    notes: `
+      // Josh
+      And then last year, it all came together.
+      My buddy Elliot was playing with order-preserving maps between trees, like you saw earlier.
+
+      ---
+
+      I came up with a fun way to draw these structures,
+
+      ---
+
+      but I realized I didn't just want to draw them;
+
+      ---
+
+      I wanted to reach in and pull them around, and feel out their dynamics. That felt pretty tough, until I remembered Andrew's ideas. I got working on a library that, with Andrew's help, grew into the work we are presenting today.
+    `,
+    content: (
+      <ElliotSlide
+        live={
+          <DemoSlide width={400} height={600} demoId="twisted-trees">
+            <TwistedTrees7 />
+          </DemoSlide>
+        }
+      />
+    ),
+  },
+  {
+    title: "Nool, full circle",
+    transition: "fade-white",
+    // Supernool takes focus and keys once shown
+    preload: false,
+    notes: `
+      // Space runs supernool's own beats; Escape, then → (or Ctrl+→) moves on
+      Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype using declarative dragging.
+
+      Invigorated by the new physicality I quickly moved off the 2D canvas into a 3D world, in which innocent trees are possessed by mathematical ghosts.
+
+      In this encounter, I drag to simplify expressions, which, now exorcised, return to the platonic realm.
+    `,
+    content: <SupernoolSlide />,
+  },
+
+  { heading: "Close" },
+  {
+    title: "What might they build?",
+    transition: "fade-white",
+    steps: 3,
+    notes: `
+      In our own work, declarative dragging has helped us make the digital graspable without being bogged down by implementation details.
+
+      ---
+
+      Our study suggests people from diverse disciplines want the same thing: from educators, to game designers, to mathematicians, to creative tool builders.
+
+      We hope declarative dragging, and infrastructures like it, will let them work in the semantic worlds they inhabit, helping them turn the rules of their worlds into rich tactile interactions in ours.
+
+      ---
+
+      Without wrestling with tween states, transitions, and trigonometry... what might they build?
+    `,
+    content: <ClosingMontageSlide />,
+  },
+  {
+    title: "Call to action",
+    transition: "fade-white",
+    notes: `
+      We'd love to hear about your experiences working with Dragology, or even just ideas about what you dream of making.
+
+      Thanks a bunch.
+    `,
+    content: <CallToActionSlide />,
+  },
 ];
 
 export const slides = outline.filter((s): s is Slide => !("heading" in s));
