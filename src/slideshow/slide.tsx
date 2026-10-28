@@ -63,6 +63,16 @@ export function useSlideStep() {
   return useContext(SlideStepContext);
 }
 
+export const SlideActiveContext = createContext(true);
+
+/**
+ * Whether the slide is the one being shown, rather than one fading out or
+ * preloaded (mounted hidden) ahead of being shown.
+ */
+export function useSlideActive() {
+  return useContext(SlideActiveContext);
+}
+
 /** The URL of a file in public/slides. */
 export function slideFileUrl(file: string) {
   return `${import.meta.env.BASE_URL}slides/${file}`;

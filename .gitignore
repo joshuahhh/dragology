@@ -32,3 +32,7 @@ dist-ssr
 # Slide snapshots (src/slideshow/snapshot-slides.sh)
 /public/slides/thumbs
 /src/slideshow/thumbs.json
+
+# Static builds of other apps the talk embeds (src/slideshow/EmbedSlide.tsx);
+# too big to commit. See d2-talk/framework-changes.md for how to make them.
+/public/embeds
