@@ -85,7 +85,15 @@ const reelRows: { files: string[]; direction: "left" | "right" }[] = [
 /** A placeholder inset: an illustration to come, over a title */
 function PlaceholderInset({ title }: { title: string }) {
   return (
-    <div className="flex flex-col items-center" style={{ width: 480, gap: 32 }}>
+    <div
+      className="flex flex-col items-center"
+      style={{
+        width: 480,
+        gap: 32,
+        padding: "48px 64px",
+        boxSizing: "content-box",
+      }}
+    >
       <div
         className="flex items-center justify-center text-3xl text-gray-400 border-2 border-dashed border-gray-300 rounded-xl"
         style={{ width: 400, height: 380 }}
@@ -97,13 +105,32 @@ function PlaceholderInset({ title }: { title: string }) {
   );
 }
 
+/** An inset drawn as a whole, margins and all, in an image in public/slides */
+function ImageInset({ src }: { src: string }) {
+  return (
+    <img
+      src={slideFileUrl(src)}
+      alt=""
+      draggable={false}
+      style={{ display: "block", height: 720 }}
+    />
+  );
+}
+
 /** The insets, one per step */
 const introInsets: ReactNode[] = [
-  <div style={{ fontFamily: sourceSans, fontSize: 96, whiteSpace: "nowrap" }}>
+  <div
+    style={{
+      fontFamily: sourceSans,
+      fontSize: 96,
+      whiteSpace: "nowrap",
+      padding: "48px 64px",
+    }}
+  >
     Declarative Dragging
   </div>,
-  <PlaceholderInset title="Model-Driven" />,
-  <PlaceholderInset title="Composable" />,
+  <ImageInset src="model-driven.png" />,
+  <ImageInset src="composable.png" />,
   <PlaceholderInset title="Dragology" />,
 ];
 
@@ -255,10 +282,7 @@ function DeclarativeDraggingIntro() {
         >
           <div
             className="bg-white"
-            style={{
-              padding: "48px 64px",
-              boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
-            }}
+            style={{ boxShadow: "0 30px 80px rgba(0,0,0,0.35)" }}
           >
             {inset}
           </div>
