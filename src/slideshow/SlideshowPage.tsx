@@ -231,7 +231,7 @@ function SlideNotes({
             current.status === "saving" ? "text-gray-500" : "text-amber-400"
           }`}
         >
-          {current.status === "saving" ? "Saving…" : "● Unsaved"}
+          {current.status === "saving" ? "Saving…" : "Unsaved"}
         </div>
       )}
       <div className={unsaved ? "border-l-2 border-amber-400 pl-2" : ""}>
