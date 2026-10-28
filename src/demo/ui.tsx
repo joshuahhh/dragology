@@ -108,6 +108,12 @@ export function DemoSettingsProvider({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("input, textarea, [contenteditable]")
+      ) {
+        return;
+      }
       if (e.key === "]") {
         setThumbArea((a) => Math.min(Math.round(a * 1.4), 40000));
       } else if (e.key === "[") {
