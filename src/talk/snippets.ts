@@ -119,7 +119,7 @@ const allSnippets: Snippet[] = [
   beadsSnippet(
     "ring of beads: whenFar",
     `d.closest(reinsertions(state, idx))
-      .whenFar(d.fixed(removed(state, idx)).onDrop(state), { gap: 65 })
+      .whenFar(removed(state, idx))
       .withFloating()`,
   ),
 ];
