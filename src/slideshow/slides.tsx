@@ -639,6 +639,10 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Ring of Beads",
     transition: "fade-white",
+    notes: `
+      We’ll start with a simple drag-and-drop interface for reordering beads in a ring.
+      Traditionally you would make this manually, by adding listeners to pointer events, and managing ephemeral state during the drag.
+    `,
     content: (
       <DemoSlide width={300} height={300} demoId="ring-of-beads">
         <BeadsWhenFar />
@@ -647,27 +651,49 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
+    notes: `
+      **Model-driven dragging** works at a higher level.
+    `,
     content: <ImageSlide src="slide-04.jpg" />,
   },
   {
     title: "Model State → View",
     transition: "fade-white",
+    notes: `
+      First, the interface developer implements a static version of the interface as a function from a model state to a view tree, like in React.
+    `,
     content: <ImageSlide src="slide-07.jpg" />,
   },
   {
     title: "Speculative Rendering",
+    notes: `
+      Next, they specify, for each draggable element, a set of new model states the user should be able to access by dragging that element.
+    `,
     video: { file: "model-driven-full.mp4", start: 7.5, end: 9 },
   },
   {
     title: "Target Positions",
+    notes: `
+      When a drag starts, an engine speculatively renders each of these states to a view...
+    `,
     video: { file: "model-driven-full.mp4", start: 14.7, end: 17.2 },
   },
   {
     title: "Drag Synthesis",
+    notes: `
+      ... and examines where the dragged element ends up in each of these hypothetical future worlds.
+    `,
     video: { file: "model-driven-full.mp4", start: 17.5, end: 23 },
   },
   {
     title: "Live Drag",
+    notes: `
+      These views and positions provide the engine with enough information to synthesize a high-quality animated drag-and-drop interaction.
+
+      That’s the core idea of model-driven dragging: an interface developer provides future model states to an engine, which speculatively renders them to create an interaction.
+
+      // Consider: introduce repositional drags
+    `,
     video: { file: "model-driven-full.mp4", start: 23, end: 27.7 },
   },
 
@@ -675,6 +701,9 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Dragology",
     transition: "fade-white",
+    notes: `
+      To show you how this works in practice, and introduce you to the complementary concept of composable dragging, we’ll do some live coding with our library Dragology.
+    `,
     content: <ImageSlide src="slide-12.jpg" />,
   },
   {
