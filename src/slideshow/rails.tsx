@@ -116,6 +116,12 @@ export function Rails({ id, children }: { id: string; children: ReactNode }) {
     if (!active || !import.meta.hot) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "r" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("input, textarea, [contenteditable]")
+      ) {
+        return;
+      }
       setRecording((r) => !r);
     };
     window.addEventListener("keydown", onKey);

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { STAGE_H, STAGE_W, useSlideStep } from "../slide";
+import { STAGE_H, STAGE_W, useSlideShown, useSlideStep } from "../slide";
 import {
   type MontageLayout,
   montageLayout,
@@ -29,6 +29,8 @@ export type MontageCanvasProps = {
   width?: number;
   height?: number;
   layout?: MontageLayout;
+  /** Hold the clips at their first frames */
+  paused?: boolean;
 };
 
 /** The scale and center that fit `view` in a width×height box */
@@ -63,6 +65,7 @@ export function MontageCanvas({
   width = STAGE_W,
   height = STAGE_H,
   layout = montageLayout,
+  paused = false,
 }: MontageCanvasProps) {
   const target = cameraFor(resolveView(layout, view), width, height);
   const targetKey = `${target.scale} ${target.cx} ${target.cy}`;
@@ -141,7 +144,7 @@ export function MontageCanvas({
                 transition: "opacity 600ms ease",
               }}
             >
-              <TileContent tile={tile} />
+              <TileContent tile={tile} paused={paused} />
             </div>
           );
         })}
@@ -219,7 +222,10 @@ export function ClosingMontageSlide({
   ...rest
 }: { plan?: MontageStep[] } & Omit<MontageCanvasProps, "view" | "highlight">) {
   const step = useSlideStep();
-  return <MontagePlayer plan={plan} step={step} {...rest} />;
+  // Like Josh's intro montage: the clips play only while the slide is shown,
+  // not while it's mounted hidden to preload
+  const shown = useSlideShown();
+  return <MontagePlayer plan={plan} step={step} paused={!shown} {...rest} />;
 }
 
 /** The montage at a step of a plan, outside of a slide */

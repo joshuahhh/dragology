@@ -1239,10 +1239,9 @@ export const outline: (Slide | Heading)[] = [
     content: <NoolClassicSlide />,
   },
   {
-    title: "The whiteboard (A: column)",
+    title: "The whiteboard",
     transition: "fade",
     steps: 3,
-    // Concept A: the board moves left, close-ups stack beside it. Keep one of A, B, C.
     notes: `
       I eventually came up with a compelling scheme to make it draggable,
 
@@ -1254,27 +1253,7 @@ export const outline: (Slide | Heading)[] = [
 
       so it sat on my whiteboard for the next two years, haunting me every time I went to make a sandwich.
     `,
-    content: <WhiteboardSlide variant="column" />,
-  },
-  {
-    title: "The whiteboard (B: lenses)",
-    transition: "fade",
-    steps: 3,
-    // Concept B: close-ups pop out as round lenses tied to the board. Keep one of A, B, C.
-    notes: `
-      // Same script as concept A
-    `,
-    content: <WhiteboardSlide variant="lenses" />,
-  },
-  {
-    title: "The whiteboard (C: pair)",
-    transition: "fade",
-    steps: 3,
-    // Concept C: the board shrinks left, close-ups side by side. Keep one of A, B, C.
-    notes: `
-      // Same script as concept A
-    `,
-    content: <WhiteboardSlide variant="pair" />,
+    content: <WhiteboardSlide />,
   },
   {
     title: "A walk in Seattle",

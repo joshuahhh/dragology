@@ -1,4 +1,4 @@
-import { type CSSProperties, useRef } from "react";
+import { type CSSProperties, useEffect, useRef } from "react";
 import { slideFileUrl } from "../slide";
 import type { MontageTile } from "./layout";
 
@@ -24,13 +24,24 @@ export function LoopingVideo({
   paused = false,
 }: {
   file: string;
-  /** Show the first frame, still (for the editor) */
+  /** Show the first frame, still */
   paused?: boolean;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const video = videoRef.current!;
+    if (!paused) {
+      video.play()?.catch(() => {});
+    } else {
+      video.pause();
+      if (video.currentTime !== 0) video.currentTime = 0;
+    }
+  }, [paused]);
   return (
     <>
       <video
+        ref={videoRef}
         src={slideFileUrl(file)}
         autoPlay={!paused}
         preload="auto"

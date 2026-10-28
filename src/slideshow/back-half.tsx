@@ -7,7 +7,12 @@ import { DemoContext, type DemoToggleSettings } from "../demo/ui";
 import "../studio/shantell-sans";
 import { EmbedSlide } from "./EmbedSlide";
 import hazelProgram from "./hazel-demo-program.txt?raw";
-import { slideFileUrl, useSlideCurrent, useSlideStep } from "./slide";
+import {
+  slideFileUrl,
+  useSlideCurrent,
+  useSlideShown,
+  useSlideStep,
+} from "./slide";
 
 const HIGHLIGHT = "#d5e5a3";
 const EASE = "cubic-bezier(0.45, 0, 0.25, 1)";
@@ -162,16 +167,19 @@ export function ClipVideo({
   loop?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
-  const active = useSlideCurrent();
+  const shown = useSlideShown();
+  const current = useSlideCurrent();
+  // Plays from the start each time the slide is shown, and keeps playing as
+  // it fades out (like Josh's montage), rather than jumping back to the start
   useEffect(() => {
     const video = ref.current!;
-    if (active) {
+    if (shown && current) {
       video.play()?.catch(() => {});
-    } else {
+    } else if (!shown) {
       video.pause();
-      video.currentTime = 0;
+      if (video.currentTime !== 0) video.currentTime = 0;
     }
-  }, [active]);
+  }, [shown, current]);
   return (
     <video
       ref={ref}
@@ -244,30 +252,19 @@ const BOARD_SKETCHES = [
 ];
 
 /**
- * The board at `scale` of full stage height, its left edge at `x` and its top
- * at `y`, with a ring around each sketch from the step its close-up shows.
+ * The board at full stage height, its left edge at `x`, with a ring around
+ * each sketch from the step its close-up shows.
  */
-function Board({
-  x,
-  y = 0,
-  scale = 1,
-}: {
-  x: number;
-  y?: number;
-  scale?: number;
-}) {
+function Board({ x }: { x: number }) {
   const step = useSlideStep();
-  const s = BOARD_SCALE * scale;
   return (
     <div
       style={{
         position: "absolute",
-        left: 0,
+        left: x,
         top: 0,
-        width: BOARD_W * s,
-        height: BOARD_H * s,
-        transform: `translate(${x}px, ${y}px)`,
-        transition: `transform 900ms ${EASE}, width 900ms ${EASE}, height 900ms ${EASE}`,
+        width: BOARD_W * BOARD_SCALE,
+        height: BOARD_H * BOARD_SCALE,
       }}
     >
       <Picture name="wb-board.jpg" fit="cover" />
@@ -331,121 +328,57 @@ function CloseUp({
 }
 
 /**
- * The whiteboard, whole, and two of its sketches close up, in one of three
- * layouts (concepts to choose between):
- *
- * - "column": the board moves left, and the close-ups stack in the room
- *   beside it.
- * - "lenses": the close-ups pop out of the board as round lenses, tied to
- *   where they are on it.
- * - "pair": the board shrinks to the left, and the close-ups stand side by
- *   side.
+ * The whiteboard, whole, and two of its sketches close up: each pops out of
+ * the board as a round lens, tied by a line to where it is on the board.
  */
-export function WhiteboardSlide({
-  variant,
-}: {
-  variant: "column" | "lenses" | "pair";
-}) {
+export function WhiteboardSlide() {
   const step = useSlideStep();
-  const boardW = BOARD_W * BOARD_SCALE;
-  const centered = (1920 - boardW) / 2;
-  if (variant === "column") {
-    const colX = boardW + 20;
-    const tileH = 510;
-    const tileW = (tileH * 3) / 4;
-    const left = colX + (1920 - colX - tileW) / 2;
-    return (
-      <div className="absolute inset-0" style={{ background: "#efeee9" }}>
-        <Board x={step >= 1 ? 0 : centered} />
-        {BOARD_SKETCHES.map((k, i) => (
-          <CloseUp
-            key={k.name}
-            name={k.name}
-            at={k.at}
-            style={{
-              left,
-              top: 20 + i * (tileH + 20),
-              width: tileW,
-              height: tileH,
-            }}
-          />
-        ))}
-      </div>
-    );
-  }
-  if (variant === "lenses") {
-    const lenses = [
-      { cx: 330, cy: 790 },
-      { cx: 1520, cy: 330 },
-    ];
-    const R = 230;
-    return (
-      <div className="absolute inset-0" style={{ background: "#efeee9" }}>
-        <Board x={centered} />
-        <svg
-          viewBox="0 0 1920 1080"
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-          }}
-        >
-          {BOARD_SKETCHES.map((k, i) => (
-            <line
-              key={k.name}
-              x1={centered + k.cx * BOARD_SCALE}
-              y1={k.cy * BOARD_SCALE}
-              x2={lenses[i].cx}
-              y2={lenses[i].cy}
-              stroke="#f59e0b"
-              strokeWidth={5}
-              style={{
-                opacity: step >= k.at ? 0.9 : 0,
-                transition: "opacity 500ms ease",
-              }}
-            />
-          ))}
-        </svg>
-        {BOARD_SKETCHES.map((k, i) => (
-          <CloseUp
-            key={k.name}
-            name={k.name}
-            at={k.at}
-            style={{
-              left: lenses[i].cx - R,
-              top: lenses[i].cy - R,
-              width: 2 * R,
-              height: 2 * R,
-              borderRadius: "50%",
-              borderColor: "#f59e0b",
-            }}
-          />
-        ))}
-      </div>
-    );
-  }
-  // "pair"
-  const small = 0.6;
-  const tileW = 470;
-  const tileH = (tileW * 4) / 3;
+  const centered = (1920 - BOARD_W * BOARD_SCALE) / 2;
+  const lenses = [
+    { cx: 330, cy: 790 },
+    { cx: 1520, cy: 330 },
+  ];
+  const R = 230;
   return (
     <div className="absolute inset-0" style={{ background: "#efeee9" }}>
-      <Board
-        x={step >= 1 ? 40 : centered}
-        y={step >= 1 ? (1080 * (1 - small)) / 2 : 0}
-        scale={step >= 1 ? small : 1}
-      />
+      <Board x={centered} />
+      <svg
+        viewBox="0 0 1920 1080"
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        {BOARD_SKETCHES.map((k, i) => (
+          <line
+            key={k.name}
+            x1={centered + k.cx * BOARD_SCALE}
+            y1={k.cy * BOARD_SCALE}
+            x2={lenses[i].cx}
+            y2={lenses[i].cy}
+            stroke="#f59e0b"
+            strokeWidth={5}
+            style={{
+              opacity: step >= k.at ? 0.9 : 0,
+              transition: "opacity 500ms ease",
+            }}
+          />
+        ))}
+      </svg>
       {BOARD_SKETCHES.map((k, i) => (
         <CloseUp
           key={k.name}
           name={k.name}
           at={k.at}
           style={{
-            left: 40 + boardW * small + 50 + i * (tileW + 40),
-            top: (1080 - tileH) / 2,
-            width: tileW,
-            height: tileH,
+            left: lenses[i].cx - R,
+            top: lenses[i].cy - R,
+            width: 2 * R,
+            height: 2 * R,
+            borderRadius: "50%",
+            borderColor: "#f59e0b",
           }}
         />
       ))}
