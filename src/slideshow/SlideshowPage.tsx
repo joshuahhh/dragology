@@ -113,9 +113,9 @@ const outlineIndexOfSlide = outline.flatMap((item, k) =>
  * shrink (and scroll) before the stage does, so the stage stays as big as the
  * window allows.
  *
- * During dev they're an editor, saving to slides.tsx on blur or ⌘↵
+ * During dev they're an editor, saving to slides.tsx on blur, ⌘↵ or ⌘S
  * (vite-plugin-slide-notes.ts); Escape undoes the edit. A save that fails
- * keeps its draft, with the error, until ⌘↵ saves it over whatever is there.
+ * keeps its draft, with the error, until ⌘↵ or ⌘S saves it over whatever is there.
  */
 function SlideNotes({
   slideIdx,
@@ -178,7 +178,7 @@ function SlideNotes({
     if (!d || d.slideIdx !== slideIdx) return;
     if (d.status !== "editing" && d.status !== "failed") return;
     // Retrying a failed save, which may overwrite someone else's edit, takes
-    // ⌘↵, not just a blur
+    // ⌘↵ or ⌘S, not just a blur
     if (d.status === "failed" && !retry) return;
     if (d.status === "editing" && d.text.trim() === d.initial.trim()) {
       setDraft(null);
@@ -222,7 +222,7 @@ function SlideNotes({
       )}
       {current?.error && (
         <div className="text-red-400 text-sm mb-1">
-          Not saved: {current.error}. ⌘↵ to save yours over it.
+          Not saved: {current.error}. ⌘S to save yours over it.
         </div>
       )}
       {current && (unsaved || current.status === "saving") && (
@@ -237,6 +237,7 @@ function SlideNotes({
       <div className={unsaved ? "border-l-2 border-amber-400 pl-2" : ""}>
         <NotesEditor
           value={current ? current.text : saved}
+          editable={editable}
           readOnly={readOnly}
           placeholder="Add speaker notes…"
           onChange={onChange}
