@@ -51,9 +51,6 @@ function SlideInfo({ slide, num }: { slide: Slide; num: number }) {
           {slide.transition}
         </span>
       </div>
-      {slide.subtitles && (
-        <div className="text-gray-600 mt-1">{slide.subtitles}</div>
-      )}
     </div>
   );
 }

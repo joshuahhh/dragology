@@ -343,7 +343,6 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     title: "Opening — Tessellations",
-    subtitles: "How would you make a drag-and-drop interface like this?",
     content: (
       <DemoSlide width={900} height={600} demoId="tactile-tessellations">
         <tactileTessellationsDemo.Component />
@@ -352,7 +351,6 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     title: "Opening — Nodes & Noodles",
-    subtitles: "Or like this?",
     content: (
       <DemoSlide width={500} height={200} demoId="nodes-and-noodles">
         <nodesAndNoodlesDemo.Component />
@@ -361,8 +359,6 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     title: "Opening — Twisted Trees",
-    subtitles:
-      "It takes a lot of work to make high quality, bespoke drag-and-drop interactions.",
     content: (
       <DemoSlide width={400} height={600} demoId="twisted-trees">
         <TwistedTrees7 />
@@ -371,15 +367,11 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     title: "Declarative Dragging — Model-Driven",
-    subtitles:
-      "Declarative dragging is our new approach, combining two new pieces: model-driven dragging…",
     transition: "fade-white",
     content: <ImageSlide src="slide-04.jpg" />,
   },
   {
     title: "Declarative Dragging — Both Pillars",
-    subtitles:
-      "…which lets drags be defined from semantic transformations rather than low-level logic, and composable dragging, which lets complex drag-and-drop behaviors be built up from simpler ones.",
     transition: "fade",
     content: <ImageSlide src="slide-05.jpg" />,
   },
@@ -387,8 +379,6 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Model-driven dragging" },
   {
     title: "Ring of Beads",
-    subtitles:
-      "Here's a simple drag-and-drop interface for reordering beads in a ring.",
     transition: "fade-white",
     content: (
       <DemoSlide width={300} height={300} demoId="ring-of-beads">
@@ -397,34 +387,24 @@ export const outline: (Slide | Heading)[] = [
     ),
   },
   {
-    subtitles:
-      "Traditionally you would make this manually, by adding listeners to pointer events. Model-driven dragging works at a higher level.",
     transition: "fade-white",
     content: <ImageSlide src="slide-04.jpg" />,
   },
   {
     title: "Model State → View",
-    subtitles:
-      "First, the interface developer represents this diagram as a function from model state to view tree, like in React.",
     transition: "fade-white",
     content: <ImageSlide src="slide-07.jpg" />,
   },
   {
     title: "Speculative Rendering",
-    subtitles:
-      "Next, they specify, for each draggable element, a set of new model states the drag should be able to access.",
     video: { file: "model-driven-full.mp4", start: 7.5, end: 9 },
   },
   {
     title: "Target Positions",
-    subtitles:
-      "When a drag starts, we speculatively render each of these states to view trees, and we extract possible target locations of the dragged element.",
     video: { file: "model-driven-full.mp4", start: 14.7, end: 17.2 },
   },
   {
     title: "Drag Synthesis",
-    subtitles:
-      "This gives us enough information to synthesize a high-quality animated drag drop interaction.",
     video: { file: "model-driven-full.mp4", start: 17.5, end: 23 },
   },
   {
@@ -435,28 +415,20 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Live-coding, composable dragging" },
   {
     title: "Dragology",
-    subtitles:
-      "Here's how an interface developer builds this with our prototype library, Dragology.",
     transition: "fade-white",
     content: <ImageSlide src="slide-12.jpg" />,
   },
   {
     title: "Code — Static View",
-    subtitles:
-      "They start with a function that maps a model state to a static view. Here's the code that draws the beads.",
     transition: "fade",
     content: <ImageSlide src="slide-13.jpg" />,
   },
   {
     title: "Code — dragologyOnDrag",
-    subtitles:
-      "To make them draggable, the developer adds a Dragology onDrag handler.",
     content: <ImageSlide src="slide-14.jpg" />,
   },
   {
     title: "d.closest — Ring of Beads",
-    subtitles:
-      'The "closest" combinator snaps the dragged element to the closest target position to the cursor.',
     transition: "fade",
     content: (
       <DemoSlide width={960} height={540} demoId="ring-of-beads">
@@ -466,8 +438,6 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     title: "withFloating — Ring of Beads",
-    subtitles:
-      'The "withFloating" modifier detaches the dragged element, letting it follow the cursor immediately.',
     transition: "fade",
     content: (
       <DemoSlide width={960} height={540}>
@@ -477,8 +447,6 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     title: "whenFar — Ring of Beads",
-    subtitles:
-      'The "whenFar" modifier allows us to switch to a new behavior when the cursor is far from any target.',
     transition: "fade",
     content: (
       <DemoSlide width={960} height={540}>
@@ -488,8 +456,6 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     title: "Composable Dragging",
-    subtitles:
-      "We call this approach composable dragging, and it lets us build up sophisticated interactions from model-driven primitives.",
     transition: "fade-white",
     content: <ImageSlide src="slide-18.jpg" />,
   },
@@ -498,8 +464,6 @@ export const outline: (Slide | Heading)[] = [
   // Scheduler (130-155s)
   {
     title: "Scheduler",
-    subtitles:
-      "This diagram of a scheduling problem uses a discrete drag to move meetings between rooms, and a continuous drag to change start and end times.",
     transition: "fade-white",
     content: (
       <DemoSlide
@@ -515,8 +479,6 @@ export const outline: (Slide | Heading)[] = [
   // Lists in Lists (155-170s)
   {
     title: "Lists in Lists",
-    subtitles:
-      "Vary can be combined freely with other behaviors using Dragology’s DSL.",
     transition: "fade-white",
     content: (
       <DemoSlide
@@ -532,8 +494,6 @@ export const outline: (Slide | Heading)[] = [
   // Tactile Tessellations (170-180s)
   {
     title: "Tactile Tessellations",
-    subtitles:
-      "Dragology extends past repositioning drags to support drags that create and destroy objects, like these tessellated shapes.",
     transition: "fade-white",
     content: (
       <DemoSlide
@@ -549,8 +509,6 @@ export const outline: (Slide | Heading)[] = [
   // Nodes and Noodles (180-190s)
   {
     title: "Nodes & Noodles",
-    subtitles:
-      "In this mock nodes and wires programming interface, edges are created by dragging between ports and they can be destroyed by detachment.",
     transition: "fade-white",
     content: (
       <DemoSlide
@@ -566,8 +524,6 @@ export const outline: (Slide | Heading)[] = [
   // Animate Algebra (190-210s)
   {
     title: "Animate Algebra",
-    subtitles:
-      "This interface shows an algebraic expression and makes the commutative and associative laws into drags.",
     transition: "fade-white",
     content: (
       <DemoSlide
@@ -583,8 +539,6 @@ export const outline: (Slide | Heading)[] = [
   // Twisted Trees (210-230s) — single slide combining both
   {
     title: "Twisted Trees",
-    subtitles:
-      "The way these tracks interpolate between previews as you drag can be extended into two dimensions.",
     transition: "fade-white",
     content: (
       <DemoSlide
@@ -600,8 +554,6 @@ export const outline: (Slide | Heading)[] = [
   // Drag-Spec Designer (230-240s)
   {
     title: "Drag-Spec Designer",
-    subtitles:
-      "And as a recursive finale, this block-based programming interface lets a user assemble operators to define a Dragology drag spec.",
     transition: "fade-white",
     content: (
       <DemoSlide
