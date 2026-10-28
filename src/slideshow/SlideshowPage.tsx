@@ -19,6 +19,7 @@ import {
   type Heading,
   notesFirstLine,
   type Slide,
+  SlideActiveContext,
   slideFileUrl,
   SlideStepContext,
   slideSteps,
@@ -709,10 +710,11 @@ export function SlideshowPage() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (isTyping(e)) return;
-      if (e.key === "ArrowRight" || e.key === " ") {
+      // PageDown and PageUp are what presentation clickers send
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
         e.preventDefault();
         goNext();
-      } else if (e.key === "ArrowLeft") {
+      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
         e.preventDefault();
         goPrev();
       } else if (e.key === "o") {
@@ -876,9 +878,11 @@ export function SlideshowPage() {
                   }}
                 >
                   {"content" in s && (
-                    <SlideStepContext.Provider value={stepOf(slideIdx)}>
-                      {s.content}
-                    </SlideStepContext.Provider>
+                    <SlideActiveContext.Provider value={isActive}>
+                      <SlideStepContext.Provider value={stepOf(slideIdx)}>
+                        {s.content}
+                      </SlideStepContext.Provider>
+                    </SlideActiveContext.Provider>
                   )}
                 </div>
               );
