@@ -1,3 +1,4 @@
+import dedent from "dedent";
 import {
   useCallback,
   useEffect,
@@ -5,25 +6,40 @@ import {
   useRef,
   useState,
 } from "react";
+import Markdown from "react-markdown";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTitle } from "../useTitle";
+import {
+  SAVE_NOTES_PATH,
+  type SaveNotesRequest,
+  type SaveNotesResponse,
+} from "./notesApi";
 import {
   type Heading,
   notesFirstLine,
   type Slide,
+  slideFileUrl,
   STAGE_H,
   STAGE_W,
 } from "./slide";
-import { numberedOutline, slides } from "./slides";
+import { numberedOutline, outline, slides } from "./slides";
 import { SlideThumb, useSlideSnapshots } from "./SlideThumb";
 
 const FADE_MS = 300;
 const FADE_WHITE_MS = 200;
 
 /** Every video file the slides play clips from, each kept loaded throughout. */
-const videoSrcs = [
-  ...new Set(slides.flatMap((s) => ("video" in s ? [s.video.src] : []))),
+const videoFiles = [
+  ...new Set(slides.flatMap((s) => ("video" in s ? [s.video.file] : []))),
 ];
+
+/** Is this key going into a text field, rather than to the page? */
+function isTyping(e: KeyboardEvent) {
+  return (
+    e.target instanceof HTMLElement &&
+    !!e.target.closest("input, textarea, [contenteditable]")
+  );
+}
 
 function useStageZoom() {
   const compute = () =>
@@ -59,7 +75,7 @@ function useVideoPlayer() {
       if (!("video" in slide)) return;
       if (playingRef.current?.slideIdx === slideIdx) return;
       stop();
-      const video = videoEls.current.get(slide.video.src);
+      const video = videoEls.current.get(slide.video.file);
       if (!video) return;
       const { start, end } = slide.video;
       const playing = { slideIdx, video, frameCallback: 0 };
@@ -87,11 +103,202 @@ function useVideoPlayer() {
   return { videoEls, playSlide, stop, playing, updatePlaying };
 }
 
+/** Each slide's index in `outline`, which counts headings too. */
+const outlineIndexOfSlide = outline.flatMap((item, k) =>
+  "heading" in item ? [] : [k],
+);
+
 /**
- * Every slide's snapshot, with the outline's headings in the gutters, for the
- * space the stage leaves below it: click one to go there. It's for whoever is at the window, not the audience, so it's sized
- * in window pixels, not stage pixels.
+ * The current slide's speaker notes, between the stage and the outline. They
+ * shrink (and scroll) before the stage does, so the stage stays as big as the
+ * window allows.
+ *
+ * During dev, click them to edit them: they save to slides.tsx on blur or
+ * ⌘↵ (vite-plugin-slide-notes.ts), and Escape cancels. A save that fails
+ * keeps its draft open, with the error, until ⌘↵ saves it over whatever is
+ * there.
  */
+function SlideNotes({
+  slideIdx,
+  onUnsavedChange,
+}: {
+  slideIdx: number;
+  /** Whether there are edits that would be lost by leaving the page */
+  onUnsavedChange: (unsaved: boolean) => void;
+}) {
+  const notes = slides[slideIdx].notes;
+  const editable = !!import.meta.hot;
+  // At most one slide's notes are being edited (or saved) at a time
+  const [draft, setDraft] = useState<{
+    slideIdx: number;
+    /** The notes in slides.tsx the edit started from */
+    old: string | undefined;
+    /** The text the editor opened with */
+    initial: string;
+    text: string;
+    status: "editing" | "saving" | "saved" | "failed";
+    error?: string;
+  } | null>(null);
+
+  // A saved draft is done once slides.tsx has it, or once we've moved on.
+  // (Until then, it stands in for the notes.)
+  const current = draft?.slideIdx === slideIdx ? draft : null;
+  if (
+    draft?.status === "saved" &&
+    (draft.old !== slides[draft.slideIdx].notes || !current)
+  ) {
+    setDraft(null);
+  }
+
+  // Sent saves aren't at risk: the dev server writes them regardless
+  const unsaved =
+    !!draft &&
+    ((draft.status === "editing" && draft.text !== draft.initial) ||
+      draft.status === "failed");
+  useEffect(() => onUnsavedChange(unsaved), [unsaved, onUnsavedChange]);
+
+  const saved = notes ? dedent(notes) : "";
+  const editing = current?.status === "editing" || current?.status === "failed";
+  const shown = current && current.status !== "editing" ? current.text : saved;
+
+  const open = () => {
+    setDraft({
+      slideIdx,
+      old: notes,
+      initial: shown,
+      text: shown,
+      status: "editing",
+    });
+  };
+  const save = ({ retry }: { retry: boolean }) => {
+    if (!current || !editing) return;
+    // Retrying a failed save, which may overwrite someone else's edit, takes
+    // ⌘↵, not just a blur
+    if (current.status === "failed" && !retry) return;
+    if (current.text.trim() === current.initial.trim() && !current.error) {
+      setDraft(null);
+      return;
+    }
+    // Saving again after a failure means "these notes, over what's there now"
+    const old = current.status === "failed" ? notes : current.old;
+    setDraft({ ...current, old, status: "saving", error: undefined });
+    const req: SaveNotesRequest = {
+      index: outlineIndexOfSlide[slideIdx],
+      old,
+      notes: current.text,
+    };
+    void fetch(SAVE_NOTES_PATH, { method: "POST", body: JSON.stringify(req) })
+      .then((res) => res.json() as Promise<SaveNotesResponse>)
+      .catch((e) => ({ error: String(e) }))
+      .then(({ error }) =>
+        setDraft((d) =>
+          d?.status === "saving" && d.slideIdx === slideIdx
+            ? error
+              ? { ...d, status: "failed", error }
+              : { ...d, status: "saved" }
+            : d,
+        ),
+      );
+  };
+
+  const otherFailed =
+    draft?.status === "failed" && !current ? draft.slideIdx + 1 : null;
+
+  if (!shown && !editable) return null;
+  return (
+    <div
+      className="self-stretch min-h-0 max-h-[40vh] overflow-y-auto px-4 py-3 border-b border-gray-800 text-base leading-snug text-gray-200 [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5 [&_strong]:text-white [&_a]:underline [&_code]:text-amber-200 [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-semibold"
+      style={{ flex: "0 1 auto", position: "relative" }}
+    >
+      {otherFailed && (
+        <div className="text-red-400 text-sm mb-1">
+          Slide {otherFailed}’s notes weren’t saved; go back to it to try again.
+        </div>
+      )}
+      {current?.error && (
+        <div className="text-red-400 text-sm mb-1">
+          Not saved: {current.error}. ⌘↵ to save yours over it.
+        </div>
+      )}
+      {current && (unsaved || current.status === "saving") && (
+        <div
+          className={`absolute top-2 right-3 text-xs font-semibold ${
+            current.status === "saving" ? "text-gray-500" : "text-amber-400"
+          }`}
+        >
+          {current.status === "saving" ? "Saving…" : "● Unsaved"}
+        </div>
+      )}
+      {editing ? (
+        <textarea
+          autoFocus
+          value={current.text}
+          rows={Math.max(3, current.text.split("\n").length + 1)}
+          onChange={(e) => setDraft({ ...current, text: e.target.value })}
+          onBlur={() => save({ retry: false })}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setDraft(null);
+            } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              save({ retry: true });
+            }
+          }}
+          className={`block w-full bg-transparent font-mono text-sm text-gray-100 outline-none resize-none ${
+            unsaved ? "border-l-2 border-amber-400 pl-2" : ""
+          }`}
+        />
+      ) : (
+        <div
+          className={editable ? "cursor-text" : ""}
+          onClick={(e) => {
+            // Let links in the notes work
+            if (!editable || (e.target as HTMLElement).closest("a")) return;
+            open();
+          }}
+        >
+          {shown ? (
+            <Markdown>{shown}</Markdown>
+          ) : (
+            <div className="text-gray-600">Add speaker notes…</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * While `unsaved`, asks before leaving the page: closing or reloading it, or
+ * following a link out of it. (HashRouter can't block navigation itself, so
+ * other ways out of the page should check `confirmLeave` themselves.)
+ */
+function useConfirmLeave(unsaved: boolean) {
+  useEffect(() => {
+    if (!unsaved) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    const onClick = (e: MouseEvent) => {
+      const link =
+        e.target instanceof Element ? e.target.closest("a[href]") : null;
+      if (link && !confirmLeave()) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClick, true);
+    };
+  }, [unsaved]);
+}
+
+function confirmLeave() {
+  return window.confirm(
+    "Your speaker notes have unsaved changes. Leave anyway?",
+  );
+}
+
 /**
  * Each slide with the headings just before it, which start its section. (A
  * heading with no slide after it isn't shown.)
@@ -110,6 +317,12 @@ const outlineSlides = (() => {
   return result;
 })();
 
+/**
+ * Every slide's snapshot, with the outline's headings in the gutters, for the
+ * space the stage leaves below it: click one to go there. It's for whoever is
+ * at the window, not the audience, so it's sized in window pixels, not stage
+ * pixels.
+ */
 function SlideOutline({
   current,
   onSelect,
@@ -161,7 +374,7 @@ function SlideOutline({
                     <span
                       key={j}
                       className={
-                        h.level === 1
+                        h.level !== 2
                           ? "font-bold text-white"
                           : "font-semibold text-gray-400"
                       }
@@ -257,7 +470,7 @@ export function SlideshowPage() {
     updatePlaying,
   } = useVideoPlayer();
   // Video files that have finished a seek, so are showing a frame of some clip
-  const [seekedSrcs, setSeekedSrcs] = useState<ReadonlySet<string>>(
+  const [seekedFiles, setSeekedFiles] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
 
@@ -274,7 +487,7 @@ export function SlideshowPage() {
     // Pre-seek video if the target slide is a video
     const targetVideo =
       "video" in targetSlide
-        ? videoEls.current.get(targetSlide.video.src)
+        ? videoEls.current.get(targetSlide.video.file)
         : undefined;
     if (targetVideo && "video" in targetSlide) {
       targetVideo.pause();
@@ -383,6 +596,11 @@ export function SlideshowPage() {
   const displaySlide = layerSlides[activeLayer];
   const shownSlide = slides[displaySlide];
 
+  const [notesUnsaved, setNotesUnsaved] = useState(false);
+  const notesUnsavedRef = useRef(notesUnsaved);
+  notesUnsavedRef.current = notesUnsaved;
+  useConfirmLeave(notesUnsaved);
+
   const goNext = useCallback(() => {
     setCurrentSlide((i) => Math.min(i + 1, slides.length - 1));
   }, []);
@@ -393,6 +611,7 @@ export function SlideshowPage() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (isTyping(e)) return;
       if (e.key === "ArrowRight" || e.key === " ") {
         e.preventDefault();
         goNext();
@@ -400,6 +619,7 @@ export function SlideshowPage() {
         e.preventDefault();
         goPrev();
       } else if (e.key === "o") {
+        if (notesUnsavedRef.current && !confirmLeave()) return;
         navigate("/slideshow-outline");
       }
     };
@@ -426,10 +646,10 @@ export function SlideshowPage() {
   const videoOpacity = new Map<string, number>();
   for (const i of [0, 1] as const) {
     const s = slides[layerSlides[i]];
-    if (!("video" in s) || !seekedSrcs.has(s.video.src)) continue;
+    if (!("video" in s) || !seekedFiles.has(s.video.file)) continue;
     const op = transitioning ? layerOpacity[i] : i === activeLayer ? 1 : 0;
-    const prev = videoOpacity.get(s.video.src) ?? 0;
-    videoOpacity.set(s.video.src, Math.max(prev, op));
+    const prev = videoOpacity.get(s.video.file) ?? 0;
+    videoOpacity.set(s.video.file, Math.max(prev, op));
   }
 
   return (
@@ -453,21 +673,21 @@ export function SlideshowPage() {
         }}
       >
         {/* Preloaded video elements (hidden when not on a video slide) */}
-        {videoSrcs.map((src) => {
-          const opacity = videoOpacity.get(src) ?? 0;
+        {videoFiles.map((file) => {
+          const opacity = videoOpacity.get(file) ?? 0;
           return (
             <video
-              key={src}
+              key={file}
               ref={(el) => {
-                if (el) videoEls.current.set(src, el);
+                if (el) videoEls.current.set(file, el);
               }}
-              src={src}
+              src={slideFileUrl(file)}
               preload="auto"
               muted
               playsInline
               onSeeked={() =>
-                setSeekedSrcs((prev) =>
-                  prev.has(src) ? prev : new Set(prev).add(src),
+                setSeekedFiles((prev) =>
+                  prev.has(file) ? prev : new Set(prev).add(file),
                 )
               }
               onPlay={updatePlaying}
@@ -553,6 +773,7 @@ export function SlideshowPage() {
         </div>
       </div>
 
+      <SlideNotes slideIdx={currentSlide} onUnsavedChange={setNotesUnsaved} />
       <SlideOutline current={currentSlide} onSelect={setCurrentSlide} />
     </div>
   );

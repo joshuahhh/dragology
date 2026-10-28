@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { type Slide } from "./slide";
+import { type Slide, slideFileUrl } from "./slide";
 
 // Content slides are too heavy to render live in a grid, so they're shown from
 // snapshots taken by snapshot-slides.sh, which the dev server runs on changes
@@ -20,7 +20,7 @@ export function SlideThumb({ slide, num }: { slide: Slide; num: number }) {
   if ("video" in slide) {
     return (
       <video
-        src={`${slide.video.src}#t=${slide.video.start}`}
+        src={`${slideFileUrl(slide.video.file)}#t=${slide.video.start}`}
         preload="metadata"
         muted
         playsInline

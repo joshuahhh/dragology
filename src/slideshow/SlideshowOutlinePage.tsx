@@ -15,7 +15,7 @@ export function SlideshowOutlinePage() {
             <h2
               key={i}
               className={
-                item.level === 1
+                item.level !== 2
                   ? "col-span-full text-2xl font-bold mt-4 first:mt-0 border-b border-gray-300 pb-1"
                   : "col-span-full text-lg font-semibold text-gray-600 -mb-2"
               }
