@@ -1296,7 +1296,7 @@ export const outline: (Slide | Heading)[] = [
     // Supernool takes focus and keys once shown
     preload: false,
     notes: `
-      // Space runs supernool's own beats; the clicker (or Escape, then →) moves on
+      // Space runs supernool's own beats; Escape, then → (or Ctrl+→) moves on
       Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype using declarative dragging.
 
       Invigorated by the new physicality I quickly moved off the 2D canvas into a 3D world, in which innocent trees are possessed by mathematical ghosts.

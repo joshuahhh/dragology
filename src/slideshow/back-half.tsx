@@ -481,8 +481,8 @@ export function ElliotSlide({ live }: { live: ReactNode }) {
 
 /**
  * Supernool's talk build. It runs its own beats on Space, and moves the
- * avatar with the arrow keys, so it gets those; the clicker's keys (or
- * Escape, then →) move on.
+ * avatar with the arrow keys, so it gets those; Escape, then →, or
+ * Ctrl+→, moves on.
  */
 export function SupernoolSlide() {
   return (

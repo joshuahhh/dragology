@@ -756,11 +756,10 @@ export function SlideshowPage() {
     const bare = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTyping(e)) return;
-      // PageDown and PageUp are what presentation clickers send
-      if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+      if (e.key === "ArrowRight" || e.key === " ") {
         e.preventDefault();
         goNext();
-      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+      } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         goPrev();
       } else if (e.key === "o") {
