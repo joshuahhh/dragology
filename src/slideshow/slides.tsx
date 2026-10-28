@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import _ from "lodash";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { DemoDraggable } from "../demo/ui";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import {
@@ -12,8 +13,11 @@ import {
   type Heading,
   ImageSlide,
   type Slide,
+  slideFileUrl,
+  STAGE_W,
   useSlideStep,
 } from "./slide";
+import { sourceSans } from "./source-sans";
 
 /**
  * The live editor (#/talk/livecode) on the stage. The snippet index
@@ -57,19 +61,210 @@ import {
 } from "../demos/twisted-trees/index";
 import { tree7 } from "../demos/twisted-trees/trees";
 
-// Stand-in for the Model-Driven slide's insets, one per step
-function ModelDrivenSteps() {
-  const step = useSlideStep();
+// The Declarative Dragging slide: two rows of demo videos scroll endlessly in
+// opposite directions behind an inset that changes with each step.
+
+/** Every video in public/slides/awe, found at build time (only the names). */
+const reelFiles = Object.keys(import.meta.glob("/public/slides/awe/*.mp4"))
+  .map((p) => p.replace("/public/slides/", ""))
+  .sort();
+
+const REEL_ROW_H = 480;
+const REEL_GAP = 32;
+/** How fast the rows scroll, in stage pixels per second */
+const REEL_SPEED = 60;
+/** How long a video's last frame takes to crossfade into its start */
+const REEL_CROSSFADE_S = 0.5;
+
+// Each row gets every other video
+const reelRows: { files: string[]; direction: "left" | "right" }[] = [
+  { files: reelFiles.filter((_, i) => i % 2 === 0), direction: "left" },
+  { files: reelFiles.filter((_, i) => i % 2 === 1), direction: "right" },
+];
+
+/** A placeholder inset: an illustration to come, over a title */
+function PlaceholderInset({ title }: { title: string }) {
   return (
-    <>
-      <ImageSlide src="model-driven.jpg" />
+    <div className="flex flex-col items-center" style={{ width: 480, gap: 32 }}>
       <div
-        className="absolute top-8 right-12 text-9xl font-bold"
-        style={{ fontVariantNumeric: "tabular-nums" }}
+        className="flex items-center justify-center text-3xl text-gray-400 border-2 border-dashed border-gray-300 rounded-xl"
+        style={{ width: 400, height: 380 }}
       >
-        {step + 1}
+        illustration
       </div>
-    </>
+      <div className="text-6xl italic">{title}</div>
+    </div>
+  );
+}
+
+/** The insets, one per step */
+const introInsets: ReactNode[] = [
+  <div style={{ fontFamily: sourceSans, fontSize: 96, whiteSpace: "nowrap" }}>
+    Declarative Dragging
+  </div>,
+  <PlaceholderInset title="Model-Driven" />,
+  <PlaceholderInset title="Composable" />,
+  <PlaceholderInset title="Dragology" />,
+];
+
+/**
+ * A video that loops forever. Each time round, its last frame crossfades into
+ * its start: the frame is copied to a canvas over the video, which fades out
+ * once the video is playing again.
+ */
+function LoopingVideo({
+  file,
+  width,
+  onAspect,
+}: {
+  file: string;
+  width: number;
+  onAspect: (file: string, aspect: number) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fill = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  } as const;
+  return (
+    <div
+      className="rounded-2xl overflow-hidden border border-gray-200 bg-white"
+      style={{ position: "relative", width, height: "100%", flexShrink: 0 }}
+    >
+      <video
+        src={slideFileUrl(file)}
+        autoPlay
+        muted
+        playsInline
+        onLoadedMetadata={(e) =>
+          onAspect(
+            file,
+            e.currentTarget.videoWidth / e.currentTarget.videoHeight,
+          )
+        }
+        onEnded={async (e) => {
+          const video = e.currentTarget;
+          const canvas = canvasRef.current!;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          canvas.getContext("2d")!.drawImage(video, 0, 0);
+          canvas.style.transition = "none";
+          canvas.style.opacity = "1";
+          // Commit the opacity, so that the fade below starts from it
+          canvas.getBoundingClientRect();
+          video.currentTime = 0;
+          await video.play();
+          canvas.style.transition = `opacity ${REEL_CROSSFADE_S * 1000}ms linear`;
+          canvas.style.opacity = "0";
+        }}
+        style={fill}
+      />
+      <canvas ref={canvasRef} style={{ ...fill, opacity: 0 }} />
+    </div>
+  );
+}
+
+function VideoReelRow({
+  files,
+  direction,
+  aspects,
+  onAspect,
+}: {
+  files: string[];
+  direction: "left" | "right";
+  aspects: Map<string, number>;
+  onAspect: (file: string, aspect: number) => void;
+}) {
+  // Tiles are sized from their videos' aspect ratios, once known
+  const widths = files.map((f) => REEL_ROW_H * (aspects.get(f) ?? 16 / 9));
+  const setW = _.sum(widths) + REEL_GAP * files.length;
+  // The track repeats the set of videos enough times to cover the stage and
+  // then some, and slides by one set's width per loop, so the loop has no seam.
+  const copies = files.length > 0 ? Math.ceil(STAGE_W / setW) + 1 : 0;
+  return (
+    <div style={{ height: REEL_ROW_H, overflow: "hidden" }}>
+      <div
+        style={
+          {
+            display: "flex",
+            gap: REEL_GAP,
+            width: "max-content",
+            height: "100%",
+            "--reel-set-w": `${setW}px`,
+            animation: `reel-${direction} ${setW / REEL_SPEED}s linear infinite`,
+          } as React.CSSProperties
+        }
+      >
+        {_.range(copies).flatMap((c) =>
+          files.map((file, i) => (
+            <LoopingVideo
+              key={`${c}-${file}`}
+              file={file}
+              width={widths[i]}
+              onAspect={onAspect}
+            />
+          )),
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DeclarativeDraggingIntro() {
+  const step = useSlideStep();
+  const [aspects, setAspects] = useState(() => new Map<string, number>());
+  const onAspect = useCallback(
+    (file: string, aspect: number) =>
+      setAspects((prev) =>
+        prev.get(file) === aspect ? prev : new Map(prev).set(file, aspect),
+      ),
+    [],
+  );
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      <style>{`
+        @keyframes reel-left { from { transform: translateX(0) } to { transform: translateX(calc(-1 * var(--reel-set-w))) } }
+        @keyframes reel-right { from { transform: translateX(calc(-1 * var(--reel-set-w))) } to { transform: translateX(0) } }
+      `}</style>
+      <div
+        className="absolute inset-0 flex flex-col justify-center"
+        style={{ gap: REEL_GAP }}
+      >
+        {reelRows.map((row, i) => (
+          <VideoReelRow
+            key={i}
+            {...row}
+            aspects={aspects}
+            onAspect={onAspect}
+          />
+        ))}
+      </div>
+      {introInsets.map((inset, i) => (
+        <div
+          key={i}
+          className="absolute inset-0 flex items-center justify-center"
+          style={{
+            opacity: i === step ? 1 : 0,
+            transform: i === step ? "scale(1)" : "scale(0.94)",
+            transition: "opacity 400ms ease, transform 400ms ease",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            className="bg-white"
+            style={{
+              padding: "48px 64px",
+              boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
+            }}
+          >
+            {inset}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -360,7 +555,7 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     steps: 4,
-    content: <ModelDrivenSteps />,
+    content: <DeclarativeDraggingIntro />,
     notes: `
       // Design concept: endless array of animated demos scrolls right to left in background, as we show insets: “Declarative Dragging”, “Model-Driven”, and “Composable”, “Dragology”
 
