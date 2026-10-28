@@ -5,6 +5,7 @@ import { execSync } from "node:child_process";
 
 import { defineConfig } from "vite";
 import { qrcode } from "vite-plugin-qrcode";
+import { liveTypes } from "./vite-plugin-live-types";
 import { reactProd } from "./vite-plugin-react-prod";
 import { slideNotes } from "./vite-plugin-slide-notes";
 import { slideSnapshots } from "./vite-plugin-slide-snapshots";
@@ -37,7 +38,12 @@ export default defineConfig({
     qrcode(),
     slideSnapshots(),
     slideNotes(),
+    liveTypes(),
   ],
+  worker: {
+    format: "es",
+    plugins: () => [liveTypes()],
+  },
   test: {
     // The fuzz tests (src/fuzz) take minutes; they only run via
     // `pnpm fuzz` (which sets FUZZ=1), not on every `pnpm test`.

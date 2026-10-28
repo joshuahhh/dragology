@@ -1,14 +1,10 @@
 import { tsxLanguage } from "@codemirror/lang-javascript";
 import type { SyntaxNode } from "@lezer/common";
-import { produce } from "immer";
 import _ from "lodash";
 import React from "react";
 import { transform } from "sucrase";
-import { amb, produceAmb, require } from "../amb";
 import { Draggable } from "../draggable";
-import { and, lessThan, moreThan, param } from "../DragSpec";
-import { Vec2 } from "../math/vec2";
-import { path, rotateDeg, rotateRad, scale, translate } from "../svgx/helpers";
+import * as scope from "./scope";
 
 /**
  * Where a lowercase (SVG) JSX element lives in the source. `from`/`to`
@@ -81,24 +77,7 @@ function tagName(tag: SyntaxNode): SyntaxNode | null {
 }
 
 /** Names available to live code without importing. */
-const SCOPE: Record<string, unknown> = {
-  React,
-  _,
-  Vec2,
-  translate,
-  rotateDeg,
-  rotateRad,
-  scale,
-  path,
-  produce,
-  amb,
-  produceAmb,
-  require,
-  param,
-  and,
-  lessThan,
-  moreThan,
-};
+const SCOPE: Record<string, unknown> = { React, ...scope };
 
 export type Compiled = {
   draggable: Draggable<object>;
