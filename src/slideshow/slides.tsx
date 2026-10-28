@@ -303,15 +303,25 @@ export const outline: (Slide | Heading)[] = [
   {
     content: <ImageSlide src="earth.jpg" />,
     notes: `
-      A photograph is a portal into another place on dw.
+      A photograph is a portal into another place on Earth.
 
       But graphical interfaces can be portals into other worlds.
     `,
   },
-  // {
-  //   content: <div className="text-9xl">hi</div>,
-  //   notes:
-  // },
+  {
+    notes: `
+      Interfaces can show you worlds of information, worlds of imagination, structures, patterns, simulation.
+
+      And unlike photographs, interfaces let us reach into these worlds, tug things around, and see how they respond.
+
+      Often, we do this with drag and drop, which give us virtual hands to act in virtual worlds
+
+      But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. It takes complex, cross-cutting choreography to build interactions with the fluidity and tangibility of the physical world.
+
+      We think interface inventors need better infrastructure.
+    `,
+    content: <div className="text-9xl">montage of drag+drop</div>,
+  },
   {
     title: "Opening — Tessellations",
     subtitles: "How would you make a drag-and-drop interface like this?",

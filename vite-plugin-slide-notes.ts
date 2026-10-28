@@ -25,16 +25,16 @@ export function slideNotes(): Plugin {
         let body = "";
         req.on("data", (chunk) => (body += chunk));
         req.on("end", async () => {
-          let error: string | undefined;
+          let reply: SaveNotesResponse;
           try {
             const save: SaveNotesRequest = JSON.parse(body);
             const text = await fs.readFile(file, "utf8");
             const next = setNotes(text, save);
             if (next !== text) await fs.writeFile(file, next);
+            reply = { changed: next !== text };
           } catch (e) {
-            error = e instanceof Error ? e.message : String(e);
+            reply = { error: e instanceof Error ? e.message : String(e) };
           }
-          const reply: SaveNotesResponse = { error };
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify(reply));
         });
