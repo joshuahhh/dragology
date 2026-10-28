@@ -7,13 +7,6 @@ import {
 } from "react";
 import { STAGE_H, STAGE_W, useSlideCurrent } from "./slide";
 
-/**
- * Keys that, pressed inside an embed, go to the slideshow rather than the
- * embedded app: a presentation clicker's keys. Escape, which the app never
- * sees either, hands the keys back by taking focus out of the embed.
- */
-const SLIDESHOW_KEYS = ["PageDown", "PageUp"];
-
 /** The arrow keys, which the slideshow uses and some embedded apps don't. */
 const ARROW_KEYS = ["ArrowRight", "ArrowLeft"];
 
@@ -25,10 +18,9 @@ const bridged = new WeakSet<Window>();
  * public/embeds (see d2-talk/framework-changes.md), so that it's on our
  * origin, which lets us reach into it to style it and catch keys.
  *
- * While the embed has focus, keys go to it, except those in SLIDESHOW_KEYS,
- * the arrow keys if `arrows` is "slideshow" (and with Ctrl either way), and
- * Escape, which takes focus out
- * of the embed so that all keys go to the slideshow again. A ring around the
+ * While the embed has focus, keys go to it, except the arrow keys if `arrows`
+ * is "slideshow" (and with Ctrl either way), and Escape, which takes focus
+ * out of the embed so that all keys go to the slideshow again. A ring around the
  * embed shows when it has focus. On the dev server, vite-plugin-embed-keys.ts
  * has the embedded page tell us its window exists before the app's scripts
  * run, so we see keys before the app does, whatever the app does with them.
@@ -122,10 +114,7 @@ export function EmbedSlide({
   // The embedded window's keys, each pressed before the app sees it
   const onKey = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
-    const forwarded = [
-      ...SLIDESHOW_KEYS,
-      ...(arrows === "slideshow" ? ARROW_KEYS : []),
-    ];
+    const forwarded = arrows === "slideshow" ? ARROW_KEYS : [];
     onKey.current = (e) => {
       if (onZoomKey(e)) {
         e.stopImmediatePropagation();
