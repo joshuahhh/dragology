@@ -65,55 +65,55 @@ export type DragSpecBrand = { readonly [_dragSpecBrand]: true };
 
 // Fluent methods available on every DragSpec value.
 export class DragSpecMethods<T extends object> {
-  get onDrop() {
+  get onDrop(): typeof onDrop<T> {
     return onDrop<T>;
   }
 
-  get whenFar() {
+  get whenFar(): typeof whenFar<T> {
     return whenFar<T>;
   }
 
-  get withSnapRadius() {
+  get withSnapRadius(): typeof withSnapRadius<T> {
     return withSnapRadius<T>;
   }
 
-  get withDropTransition() {
+  get withDropTransition(): typeof withDropTransition<T> {
     return withDropTransition<T>;
   }
 
-  get withOverlay() {
+  get withOverlay(): typeof withOverlay<T> {
     return withOverlay<T>;
   }
 
-  get withBranchTransition() {
+  get withBranchTransition(): typeof withBranchTransition<T> {
     return withBranchTransition<T>;
   }
 
-  get changeFrame() {
+  get changeFrame(): typeof changeFrame<T> {
     return changeFrame<T>;
   }
 
-  get changeResult() {
+  get changeResult(): typeof changeResult<T> {
     return changeResult<T>;
   }
 
-  get changeGap() {
+  get changeGap(): typeof changeGap<T> {
     return changeGap<T>;
   }
 
-  get withFloating() {
+  get withFloating(): typeof withFloating<T> {
     return withFloating<T>;
   }
 
-  get withChaining() {
+  get withChaining(): typeof withChaining<T> {
     return withChaining<T>;
   }
 
-  get during() {
+  get during(): typeof during<T> {
     return during<T>;
   }
 
-  get withInitContext() {
+  get withInitContext(): typeof withInitContext<T> {
     return withInitContext<T>;
   }
 
@@ -203,15 +203,15 @@ export class DragSpecBuilder<T extends object> {
     this.state = state;
   }
 
-  get fixed() {
+  get fixed(): typeof fixed<T> {
     return fixed<T>;
   }
 
-  get between() {
+  get between(): typeof between<T> {
     return between<T>;
   }
 
-  get closest() {
+  get closest(): typeof closest<T> {
     return closest<T>;
   }
 
@@ -219,15 +219,15 @@ export class DragSpecBuilder<T extends object> {
     return VaryMethod.prototype.vary;
   }
 
-  get varyFunc() {
+  get varyFunc(): typeof varyFunc<T> {
     return varyFunc<T>;
   }
 
-  get custom() {
+  get custom(): typeof custom<T> {
     return custom<T>;
   }
 
-  get dropTarget() {
+  get dropTarget(): typeof dropTarget<T> {
     return dropTarget<T>;
   }
 
@@ -235,7 +235,7 @@ export class DragSpecBuilder<T extends object> {
     return SubstateMethod.prototype.substate;
   }
 
-  get switchToStateAndFollow() {
+  get switchToStateAndFollow(): typeof switchToStateAndFollow<T> {
     return switchToStateAndFollow<T>;
   }
 
