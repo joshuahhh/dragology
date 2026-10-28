@@ -7,8 +7,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTitle } from "../useTitle";
+import { useAudienceFeed } from "./audienceFeed";
+import { ErrorToasts } from "./ErrorToasts";
+import { toggleFullscreen } from "./fullscreen";
 import {
   SAVE_NOTES_PATH,
   type SaveNotesRequest,
@@ -28,6 +31,7 @@ import {
 } from "./slide";
 import { numberedOutline, outline, slides } from "./slides";
 import { SlideThumb, useSlideSnapshots } from "./SlideThumb";
+import { StageInfo } from "./StageInfo";
 
 const FADE_MS = 300;
 const FADE_WHITE_MS = 200;
@@ -86,13 +90,14 @@ const NOTES_MIN_H = 200;
  * The stage's zoom, and whether the window gets the wide layout. If it does,
  * the outline goes to the stage's left, and the notes below it, the stage
  * shrinking to leave them room. If not, the stage fills the window's width,
- * with the notes and the outline in whatever room it leaves below.
+ * with the notes and the outline in whatever room it leaves below. With
+ * `stageOnly`, there are no notes or outline, and the stage fills the window.
  */
-function useStageLayout() {
+function useStageLayout(stageOnly: boolean) {
   const compute = () => {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const wide = w / h >= WIDE_MIN_ASPECT;
+    const wide = !stageOnly && w / h >= WIDE_MIN_ASPECT;
     const zoom = wide
       ? Math.min((w - OUTLINE_MIN_W) / STAGE_W, (h - NOTES_MIN_H) / STAGE_H)
       : Math.min(w / STAGE_W, h / STAGE_H);
@@ -104,8 +109,33 @@ function useStageLayout() {
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageOnly]);
   return layout;
+}
+
+const PANEL_OPEN_KEY = "slideshow-panel-open";
+
+/**
+ * Whether the control panel is showing (Ctrl+Shift+P), remembered across
+ * reloads
+ */
+function usePanelOpen() {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(PANEL_OPEN_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_OPEN_KEY, String(open));
+    } catch {
+      // Not remembered, then
+    }
+  }, [open]);
+  return [open, setOpen] as const;
 }
 
 function useVideoPlayer() {
@@ -529,20 +559,36 @@ export function SlideshowPage() {
   useTitle("Dragology — Slideshow");
   const { slideNum } = useParams();
   const navigate = useNavigate();
+  // Just the stage, filling the window, as for the audience's screen
+  const [searchParams] = useSearchParams();
+  const stageOnly = searchParams.has("stage");
+  const [panelOpen, setPanelOpen] = usePanelOpen();
 
   const [pos, setPos] = useState(() => parseSlidePos(slideNum));
   const currentSlide = pos.slide;
   const currentStep = pos.step;
+  const posRef = useRef(pos);
+  posRef.current = pos;
   const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const {
+    feed: audienceFeed,
+    share: shareWithAudience,
+    errors: audienceErrors,
+    showError: showAudienceError,
+    dismissError: dismissAudienceError,
+  } = useAudienceFeed(stageRef);
 
   useEffect(() => {
     navigate(
-      `/slideshow/${formatSlidePos({ slide: currentSlide, step: currentStep })}`,
+      `/slideshow/${formatSlidePos({ slide: currentSlide, step: currentStep })}${
+        stageOnly ? "?stage" : ""
+      }`,
       {
         replace: true,
       },
     );
-  }, [currentSlide, currentStep, navigate]);
+  }, [currentSlide, currentStep, stageOnly, navigate]);
 
   /**
    * The step to show a slide at: a slide other than the current one is
@@ -744,10 +790,12 @@ export function SlideshowPage() {
     // focused editor or an embedded demo can take them, and while typing.
     // Shift may be held too (Ctrl+Shift+Arrow), for Macs where Mission
     // Control's "move a space" shortcuts swallow the plain Ctrl+Arrow.
+    // Ctrl+Shift+P, which toggles the control panel, works the same way.
     const forced = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "ArrowRight") goNext();
       else if (e.key === "ArrowLeft") goPrev();
+      else if (e.shiftKey && e.code === "KeyP") setPanelOpen((open) => !open);
       else return;
       e.preventDefault();
       e.stopPropagation();
@@ -762,6 +810,13 @@ export function SlideshowPage() {
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         goPrev();
+      } else if (e.key === "a") {
+        shareWithAudience();
+      } else if (e.key === "f") {
+        toggleFullscreen(showAudienceError);
+      } else if (e.key === "s") {
+        const path = `/slideshow/${formatSlidePos(posRef.current)}`;
+        navigate(stageOnly ? path : `${path}?stage`, { replace: true });
       } else if (e.key === "o") {
         if (notesUnsavedRef.current && !confirmLeave()) return;
         navigate("/slideshow-outline");
@@ -773,9 +828,17 @@ export function SlideshowPage() {
       window.removeEventListener("keydown", forced, { capture: true });
       window.removeEventListener("keydown", bare);
     };
-  }, [goNext, goPrev, navigate]);
+  }, [
+    goNext,
+    goPrev,
+    navigate,
+    stageOnly,
+    setPanelOpen,
+    shareWithAudience,
+    showAudienceError,
+  ]);
 
-  const { zoom: stageZoom, wide } = useStageLayout();
+  const { zoom: stageZoom, wide } = useStageLayout(stageOnly);
 
   // Start/stop video when active slide changes
   useEffect(() => {
@@ -829,7 +892,9 @@ export function SlideshowPage() {
   return (
     <div
       ref={containerRef}
-      className={`fixed inset-0 flex ${wide ? "flex-row" : "flex-col"} items-center select-none`}
+      className={`fixed inset-0 flex ${wide ? "flex-row" : "flex-col"} items-center ${
+        stageOnly ? "justify-center" : ""
+      } select-none`}
       style={{ overflow: "hidden", background: "#111" }}
     >
       {/* The stage and the notes: a column of their own in the wide layout,
@@ -848,6 +913,7 @@ export function SlideshowPage() {
           for position: fixed descendants (e.g. DemoSettingsBar), so they stay
           inside the stage rather than pinning to the window. */}
         <div
+          ref={stageRef}
           className="bg-white flex flex-col"
           style={{
             position: "relative",
@@ -968,19 +1034,30 @@ export function SlideshowPage() {
           </div>
         </div>
 
-        <SlideNotes
-          slideIdx={currentSlide}
+        {!stageOnly && (
+          <SlideNotes
+            slideIdx={currentSlide}
+            step={currentStep}
+            wide={wide}
+            onUnsavedChange={setNotesUnsaved}
+          />
+        )}
+      </div>
+      {!stageOnly && (
+        <SlideOutline
+          current={currentSlide}
           step={currentStep}
           wide={wide}
-          onUnsavedChange={setNotesUnsaved}
+          onSelect={goToSlide}
         />
+      )}
+      <div
+        className="fixed bottom-3 right-3 flex flex-col items-end gap-2"
+        style={{ zIndex: 100 }}
+      >
+        <ErrorToasts errors={audienceErrors} onDismiss={dismissAudienceError} />
+        {panelOpen && <StageInfo stageRef={stageRef} feed={audienceFeed} />}
       </div>
-      <SlideOutline
-        current={currentSlide}
-        step={currentStep}
-        wide={wide}
-        onSelect={goToSlide}
-      />
     </div>
   );
 }

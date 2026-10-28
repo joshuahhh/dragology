@@ -2,8 +2,11 @@
 // that each press of → plays the next bit of interaction at a pace we chose
 // in advance. In "live" mode (the default) the demo is left to the presenter.
 //
-// Recording: in dev, with the slide shown, press R to start recording the
-// current step, fidget with the demo, and press R again to stop. The track is
+// R switches between the modes, for every slide at once. (Not F, which is the
+// slideshow's fullscreen.)
+//
+// Recording: in dev, with the slide shown, press Shift+R to start recording
+// the current step, fidget with the demo, and press Shift+R again to stop. The track is
 // saved to src/slideshow/rails/<id>.json (or, without the dev server, to
 // localStorage and the clipboard).
 //
@@ -39,7 +42,7 @@ const savedTracks: Record<string, Tracks> = Object.fromEntries(
   ).map(([path, tracks]) => [path.replace(/^.*\/|\.json$/g, ""), tracks]),
 );
 
-// ── Mode: live or rails, toggled with F, for every Rails at once ──
+// ── Mode: live or rails, toggled with R, for every Rails at once ──
 
 export type RailsMode = "live" | "rails";
 
@@ -63,7 +66,7 @@ export function useRailsMode() {
 
 if (typeof window !== "undefined") {
   window.addEventListener("keydown", (e) => {
-    if (e.key !== "f" || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key !== "r" || e.metaKey || e.ctrlKey || e.altKey) return;
     if (
       e.target instanceof HTMLElement &&
       e.target.closest("input, textarea, [contenteditable]")
@@ -111,11 +114,13 @@ export function Rails({ id, children }: { id: string; children: ReactNode }) {
     return () => cancelAnimationFrame(raf);
   }, [active, railsMode, step, tracks]);
 
-  // Recording, in dev: R starts and stops
+  // Recording, in dev: Shift+R starts and stops
   useEffect(() => {
     if (!active || !import.meta.hot) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "r" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "R" || !e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
       if (
         e.target instanceof HTMLElement &&
         e.target.closest("input, textarea, [contenteditable]")
