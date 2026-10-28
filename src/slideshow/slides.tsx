@@ -325,7 +325,7 @@ export const outline: (Slide | Heading)[] = [
   {
     content: <ImageSlide src="model-driven.jpg" />,
     notes: `
-      [Design concept: endless array of animated demos scrolls right to left in background, as we show insets: “Declarative Dragging”, “Model-Driven”, and “Composable”, “Dragology”]
+      // Design concept: endless array of animated demos scrolls right to left in background, as we show insets: “Declarative Dragging”, “Model-Driven”, and “Composable”, “Dragology”
 
       So we’d like to share **Declarative Dragging**, a new approach which makes it possible to build higher quality drag-and-drop interfaces with less work.
 
@@ -340,40 +340,6 @@ export const outline: (Slide | Heading)[] = [
 
       Let’s dive in and look at how these ideas work.
     `,
-  },
-  {
-    title: "Opening — Tessellations",
-    content: (
-      <DemoSlide width={900} height={600} demoId="tactile-tessellations">
-        <tactileTessellationsDemo.Component />
-      </DemoSlide>
-    ),
-  },
-  {
-    title: "Opening — Nodes & Noodles",
-    content: (
-      <DemoSlide width={500} height={200} demoId="nodes-and-noodles">
-        <nodesAndNoodlesDemo.Component />
-      </DemoSlide>
-    ),
-  },
-  {
-    title: "Opening — Twisted Trees",
-    content: (
-      <DemoSlide width={400} height={600} demoId="twisted-trees">
-        <TwistedTrees7 />
-      </DemoSlide>
-    ),
-  },
-  {
-    title: "Declarative Dragging — Model-Driven",
-    transition: "fade-white",
-    content: <ImageSlide src="slide-04.jpg" />,
-  },
-  {
-    title: "Declarative Dragging — Both Pillars",
-    transition: "fade",
-    content: <ImageSlide src="slide-05.jpg" />,
   },
 
   { heading: "Model-driven dragging" },
