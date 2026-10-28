@@ -6,7 +6,21 @@ import {
   type DragSpecTreeViewNodeProps,
 } from "../DragSpecTreeView";
 import { StudioHackContext } from "../studio/StudioHackContext";
+import { clampSnippetIdx, LiveCode } from "../talk/LiveCodePage";
 import { DemoSlide, type Heading, ImageSlide, type Slide } from "./slide";
+
+/**
+ * The live editor (#/talk/livecode) on the stage. The snippet index
+ * lives here rather than in the URL, which the slideshow owns.
+ */
+function LiveCodeSlide({ snippet = 0 }: { snippet?: number }) {
+  const [snippetIdx, setSnippetIdx] = useState(clampSnippetIdx(snippet));
+  return (
+    <div style={{ width: "100%", height: "100%" }}>
+      <LiveCode snippetIdx={snippetIdx} onSnippetIdx={setSnippetIdx} />
+    </div>
+  );
+}
 
 // ── Demo wrappers ──
 
@@ -392,6 +406,11 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Code — dragologyOnDrag",
     content: <ImageSlide src="slide-14.jpg" />,
+  },
+  {
+    title: "Live Code",
+    transition: "fade",
+    content: <LiveCodeSlide />,
   },
   {
     title: "d.closest — Ring of Beads",
