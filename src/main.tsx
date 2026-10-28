@@ -8,6 +8,7 @@ import "./index.css";
 import { IndexPage } from "./IndexPage";
 import { NaturalNeighborTestPage } from "./NaturalNeighborTestPage";
 import { RetroPage } from "./retro/RetroPage";
+import { SlideshowAudiencePage } from "./slideshow/SlideshowAudiencePage";
 import { SlideshowOutlinePage } from "./slideshow/SlideshowOutlinePage";
 import { SlideshowPage } from "./slideshow/SlideshowPage";
 import { SlideshowSnapshotPage } from "./slideshow/SlideshowSnapshotPage";
@@ -50,6 +51,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         {autoRoute("/natural-neighbor", NaturalNeighborTestPage)}
         {autoRoute("/slideshow", SlideshowPage)}
         {autoRoute("/slideshow/:slideNum", SlideshowPage)}
+        {autoRoute("/slideshow-audience", SlideshowAudiencePage)}
         {autoRoute("/slideshow-outline", SlideshowOutlinePage)}
         {autoRoute("/slideshow-snapshot", SlideshowSnapshotPage)}
         {autoRoute("/studio", StudioPage)}
