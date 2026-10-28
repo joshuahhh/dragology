@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from "react";
-import Markdown from "react-markdown";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTitle } from "../useTitle";
 import {
@@ -14,6 +13,7 @@ import {
   type SaveNotesRequest,
   type SaveNotesResponse,
 } from "./notesApi";
+import { NotesEditor } from "./NotesEditor";
 import {
   type Heading,
   notesFirstLine,
@@ -113,10 +113,9 @@ const outlineIndexOfSlide = outline.flatMap((item, k) =>
  * shrink (and scroll) before the stage does, so the stage stays as big as the
  * window allows.
  *
- * During dev, click them to edit them: they save to slides.tsx on blur or
- * ⌘↵ (vite-plugin-slide-notes.ts), and Escape cancels. A save that fails
- * keeps its draft open, with the error, until ⌘↵ saves it over whatever is
- * there.
+ * During dev they're an editor, saving to slides.tsx on blur or ⌘↵
+ * (vite-plugin-slide-notes.ts); Escape undoes the edit. A save that fails
+ * keeps its draft, with the error, until ⌘↵ saves it over whatever is there.
  */
 function SlideNotes({
   slideIdx,
@@ -129,16 +128,13 @@ function SlideNotes({
   const notes = slides[slideIdx].notes;
   const editable = !!import.meta.hot;
   // At most one slide's notes are being edited (or saved) at a time
-  const [draft, setDraft] = useState<{
-    slideIdx: number;
-    /** The notes in slides.tsx the edit started from */
-    old: string | undefined;
-    /** The text the editor opened with */
-    initial: string;
-    text: string;
-    status: "editing" | "saving" | "saved" | "failed";
-    error?: string;
-  } | null>(null);
+  const [draft, setDraftState] = useState<Draft | null>(null);
+  // For handlers that run before a re-render, like a blur right after Escape
+  const draftRef = useRef(draft);
+  const setDraft = (d: Draft | null) => {
+    draftRef.current = d;
+    setDraftState(d);
+  };
 
   // A saved draft is done once slides.tsx has it, or once we've moved on.
   // (Until then, it stands in for the notes.)
@@ -158,56 +154,65 @@ function SlideNotes({
   useEffect(() => onUnsavedChange(unsaved), [unsaved, onUnsavedChange]);
 
   const saved = notes ? dedent(notes) : "";
-  const editing = current?.status === "editing" || current?.status === "failed";
-  const shown = current && current.status !== "editing" ? current.text : saved;
+  const otherFailed =
+    draft?.status === "failed" && !current ? draft.slideIdx + 1 : null;
+  const readOnly =
+    !editable ||
+    current?.status === "saving" ||
+    current?.status === "saved" ||
+    // Don't start a draft that would replace one that failed to save
+    otherFailed !== null;
 
-  const open = () => {
-    setDraft({
-      slideIdx,
-      old: notes,
-      initial: shown,
-      text: shown,
-      status: "editing",
-    });
+  const onChange = (text: string) => {
+    const d = draftRef.current;
+    setDraft(
+      d?.slideIdx === slideIdx &&
+        (d.status === "editing" || d.status === "failed")
+        ? { ...d, text }
+        : { slideIdx, old: notes, initial: saved, text, status: "editing" },
+    );
   };
+
   const save = ({ retry }: { retry: boolean }) => {
-    if (!current || !editing) return;
+    const d = draftRef.current;
+    if (!d || d.slideIdx !== slideIdx) return;
+    if (d.status !== "editing" && d.status !== "failed") return;
     // Retrying a failed save, which may overwrite someone else's edit, takes
     // ⌘↵, not just a blur
-    if (current.status === "failed" && !retry) return;
-    if (current.text.trim() === current.initial.trim() && !current.error) {
+    if (d.status === "failed" && !retry) return;
+    if (d.status === "editing" && d.text.trim() === d.initial.trim()) {
       setDraft(null);
       return;
     }
     // Saving again after a failure means "these notes, over what's there now"
-    const old = current.status === "failed" ? notes : current.old;
-    setDraft({ ...current, old, status: "saving", error: undefined });
+    const old = d.status === "failed" ? notes : d.old;
+    setDraft({ ...d, old, status: "saving", error: undefined });
     const req: SaveNotesRequest = {
       index: outlineIndexOfSlide[slideIdx],
       old,
-      notes: current.text,
+      notes: d.text,
     };
     void fetch(SAVE_NOTES_PATH, { method: "POST", body: JSON.stringify(req) })
       .then((res) => res.json() as Promise<SaveNotesResponse>)
-      .catch((e) => ({ error: String(e) }))
-      .then(({ error }) =>
-        setDraft((d) =>
-          d?.status === "saving" && d.slideIdx === slideIdx
-            ? error
-              ? { ...d, status: "failed", error }
-              : { ...d, status: "saved" }
-            : d,
-        ),
-      );
+      .catch((e): SaveNotesResponse => ({ error: String(e) }))
+      .then(({ error, changed }) => {
+        const d = draftRef.current;
+        if (d?.status !== "saving" || d.slideIdx !== slideIdx) return;
+        setDraft(
+          error
+            ? { ...d, status: "failed", error }
+            : // An unchanged file sends no update to wait for
+              changed
+              ? { ...d, status: "saved" }
+              : null,
+        );
+      });
   };
 
-  const otherFailed =
-    draft?.status === "failed" && !current ? draft.slideIdx + 1 : null;
-
-  if (!shown && !editable) return null;
+  if (!editable && !saved) return null;
   return (
     <div
-      className="self-stretch min-h-0 max-h-[40vh] overflow-y-auto px-4 py-3 border-b border-gray-800 text-base leading-snug text-gray-200 [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5 [&_strong]:text-white [&_a]:underline [&_code]:text-amber-200 [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-semibold"
+      className="self-stretch min-h-0 max-h-[40vh] overflow-y-auto px-4 py-3 border-b border-gray-800"
       style={{ flex: "0 1 auto", position: "relative" }}
     >
       {otherFailed && (
@@ -229,43 +234,36 @@ function SlideNotes({
           {current.status === "saving" ? "Saving…" : "● Unsaved"}
         </div>
       )}
-      {editing ? (
-        <textarea
-          autoFocus
-          value={current.text}
-          rows={Math.max(3, current.text.split("\n").length + 1)}
-          onChange={(e) => setDraft({ ...current, text: e.target.value })}
+      <div className={unsaved ? "border-l-2 border-amber-400 pl-2" : ""}>
+        <NotesEditor
+          value={current ? current.text : saved}
+          readOnly={readOnly}
+          placeholder="Add speaker notes…"
+          onChange={onChange}
           onBlur={() => save({ retry: false })}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
+          onSave={() => save({ retry: true })}
+          onCancel={() => {
+            const d = draftRef.current;
+            if (d?.slideIdx === slideIdx && d.status === "editing") {
               setDraft(null);
-            } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              save({ retry: true });
             }
           }}
-          className={`block w-full bg-transparent font-mono text-sm text-gray-100 outline-none resize-none ${
-            unsaved ? "border-l-2 border-amber-400 pl-2" : ""
-          }`}
         />
-      ) : (
-        <div
-          className={editable ? "cursor-text" : ""}
-          onClick={(e) => {
-            // Let links in the notes work
-            if (!editable || (e.target as HTMLElement).closest("a")) return;
-            open();
-          }}
-        >
-          {shown ? (
-            <Markdown>{shown}</Markdown>
-          ) : (
-            <div className="text-gray-600">Add speaker notes…</div>
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
+
+type Draft = {
+  slideIdx: number;
+  /** The notes in slides.tsx the edit started from */
+  old: string | undefined;
+  /** The notes as the edit started */
+  initial: string;
+  text: string;
+  status: "editing" | "saving" | "saved" | "failed";
+  error?: string;
+};
 
 /**
  * While `unsaved`, asks before leaving the page: closing or reloading it, or

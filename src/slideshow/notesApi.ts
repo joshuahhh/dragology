@@ -12,4 +12,8 @@ export type SaveNotesRequest = {
   notes: string;
 };
 
-export type SaveNotesResponse = { error?: string };
+export type SaveNotesResponse = {
+  error?: string;
+  /** Whether slides.tsx changed (and so an HMR update is on its way) */
+  changed?: boolean;
+};
