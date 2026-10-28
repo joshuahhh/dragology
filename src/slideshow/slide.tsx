@@ -44,11 +44,16 @@ export function slideFileUrl(file: string) {
   return `${import.meta.env.BASE_URL}slides/${file}`;
 }
 
+/** A line of notes without its // comment, if it has one (see NotesEditor) */
+function stripNotesComment(line: string): string {
+  return line.replace(/(?<=^|\s)\/\/.*/, "");
+}
+
 /** The first line of a slide's notes, as plain text, for at-a-glance views. */
 export function notesFirstLine(notes: string | undefined): string | undefined {
   const line = notes
     ?.split("\n")
-    .map((l) => l.trim())
+    .map((l) => stripNotesComment(l).trim())
     .find((l) => l !== "");
   return line
     ?.replace(/^(#+|[-*+>]|\d+\.)\s+/, "")
