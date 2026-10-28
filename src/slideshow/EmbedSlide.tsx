@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { STAGE_H, STAGE_W, useSlideActive } from "./slide";
 
 /**
@@ -18,13 +18,17 @@ const ARROW_KEYS = ["ArrowRight", "ArrowLeft"];
  *
  * While the embed has focus, keys go to it, except those in SLIDESHOW_KEYS,
  * the arrow keys if `arrows` is "slideshow", and Escape, which takes focus out
- * of the embed so that all keys go to the slideshow again.
+ * of the embed so that all keys go to the slideshow again. A ring around the
+ * embed shows when it has focus.
+ *
+ * On its slide, ⌘+, ⌘− and ⌘0 zoom the embed rather than the whole page; the
+ * zoom is remembered, per embedded app, in localStorage.
  */
 export function EmbedSlide({
   src,
   width = STAGE_W,
   height = STAGE_H,
-  zoom = 1,
+  zoom: defaultZoom = 1,
   css,
   arrows = "slideshow",
   focusOnShow = false,
@@ -48,6 +52,56 @@ export function EmbedSlide({
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const active = useSlideActive();
+  const zoomKey = `embed-zoom:${src.split("/")[0]}`;
+  const [zoom, setZoom] = useState(() => {
+    try {
+      return Number(localStorage.getItem(zoomKey)) || defaultZoom;
+    } catch {
+      return defaultZoom;
+    }
+  });
+  const [focused, setFocused] = useState(false);
+
+  /** Handles ⌘+, ⌘− and ⌘0; returns whether it did. */
+  const onZoomKey = useCallback(
+    (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return false;
+      const by = { "=": 1.1, "+": 1.1, "-": 1 / 1.1, "0": 0 }[e.key];
+      if (by === undefined) return false;
+      e.preventDefault();
+      setZoom((z) => {
+        const next = by === 0 ? defaultZoom : Math.round(z * by * 100) / 100;
+        try {
+          if (by === 0) localStorage.removeItem(zoomKey);
+          else localStorage.setItem(zoomKey, String(next));
+        } catch {}
+        return next;
+      });
+      return true;
+    },
+    [defaultZoom, zoomKey],
+  );
+
+  // Zoom keys pressed while the slideshow has the keys
+  useEffect(() => {
+    if (!active) return;
+    window.addEventListener("keydown", onZoomKey);
+    return () => window.removeEventListener("keydown", onZoomKey);
+  }, [active, onZoomKey]);
+
+  // Whether the embed has focus: the page loses it to the iframe
+  useEffect(() => {
+    const update = () =>
+      setFocused(document.activeElement === iframeRef.current);
+    // activeElement only changes after the blur event
+    const onBlur = () => setTimeout(update);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", update);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", update);
+    };
+  }, []);
 
   useEffect(() => {
     if (active && focusOnShow) iframeRef.current?.focus();
@@ -71,7 +125,9 @@ export function EmbedSlide({
       win.addEventListener(
         "keydown",
         (e) => {
-          if (e.key === "Escape") {
+          if (onZoomKey(e)) {
+            e.stopImmediatePropagation();
+          } else if (e.key === "Escape") {
             iframe.blur();
             window.focus();
           } else if (forwarded.includes(e.key)) {
@@ -89,7 +145,7 @@ export function EmbedSlide({
     const doc = iframe.contentDocument;
     if (doc?.readyState === "complete" && doc.URL !== "about:blank") onLoad();
     return () => iframe.removeEventListener("load", onLoad);
-  }, [css, arrows]);
+  }, [css, arrows, onZoomKey]);
 
   return (
     <div
@@ -112,6 +168,28 @@ export function EmbedSlide({
           transformOrigin: "0 0",
         }}
       />
+      {focused && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            boxShadow: "inset 0 0 0 4px rgba(59, 130, 246, 0.55)",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              right: 12,
+              bottom: 10,
+              fontSize: 16,
+              color: "rgba(59, 130, 246, 0.9)",
+            }}
+          >
+            Esc to give the keys back
+          </div>
+        </div>
+      )}
     </div>
   );
 }
