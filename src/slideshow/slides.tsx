@@ -634,6 +634,8 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Live Code",
     transition: "fade",
+    // Its editor takes focus and keys on mount
+    preload: false,
     content: <LiveCodeSlide />,
   },
   {
