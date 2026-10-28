@@ -24,7 +24,6 @@ import {
   NoolClassicSlide,
   StepToggles,
   SupernoolSlide,
-  ThanksSlide,
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
@@ -69,7 +68,6 @@ import {
   draggable as listsInListsDraggable,
   initialState as listsInListsInitialState,
 } from "../demos/lists-in-lists";
-import nodesAndNoodlesDemo from "../demos/nodes-and-noodles";
 import {
   PERM_TALK_HEIGHT,
   PERM_TALK_WIDTH,
@@ -904,25 +902,6 @@ export const outline: (Slide | Heading)[] = [
       </Rails>
     ),
   },
-  // Nodes and Noodles (180-190s)
-  {
-    title: "Nodes & Noodles",
-    transition: "fade-white",
-    content: (
-      <Rails id="nodes-and-noodles">
-        (
-        <DemoSlide
-          width={500}
-          height={200}
-          overlayTitle="Nodes and Noodles"
-          demoId="nodes-and-noodles"
-        >
-          <nodesAndNoodlesDemo.Component />
-        </DemoSlide>
-        ),
-      </Rails>
-    ),
-  },
   // Animate Algebra (190-210s)
   {
     title: "Animate Algebra",
@@ -1115,9 +1094,10 @@ export const outline: (Slide | Heading)[] = [
     content: <NoolClassicSlide />,
   },
   {
-    title: "The whiteboard",
+    title: "The whiteboard (A: column)",
     transition: "fade",
     steps: 3,
+    // Concept A: the board moves left, close-ups stack beside it. Keep one of A, B, C.
     notes: `
       I eventually came up with a compelling scheme to make it draggable,
 
@@ -1129,7 +1109,27 @@ export const outline: (Slide | Heading)[] = [
 
       so it sat on my whiteboard for the next two years, haunting me every time I went to make a sandwich.
     `,
-    content: <WhiteboardSlide />,
+    content: <WhiteboardSlide variant="column" />,
+  },
+  {
+    title: "The whiteboard (B: lenses)",
+    transition: "fade",
+    steps: 3,
+    // Concept B: close-ups pop out as round lenses tied to the board. Keep one of A, B, C.
+    notes: `
+      // Same script as concept A
+    `,
+    content: <WhiteboardSlide variant="lenses" />,
+  },
+  {
+    title: "The whiteboard (C: pair)",
+    transition: "fade",
+    steps: 3,
+    // Concept C: the board shrinks left, close-ups side by side. Keep one of A, B, C.
+    notes: `
+      // Same script as concept A
+    `,
+    content: <WhiteboardSlide variant="pair" />,
   },
   {
     title: "A walk in Seattle",
@@ -1221,16 +1221,10 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     notes: `
       We'd love to hear about your experiences working with Dragology, or even just ideas about what you dream of making.
-    `,
-    content: <CallToActionSlide />,
-  },
-  {
-    title: "Thanks",
-    transition: "fade",
-    notes: `
+
       Thanks a bunch.
     `,
-    content: <ThanksSlide />,
+    content: <CallToActionSlide />,
   },
 ];
 
