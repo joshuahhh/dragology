@@ -1,4 +1,5 @@
 import dedent from "dedent";
+import _ from "lodash";
 import {
   useCallback,
   useEffect,
@@ -748,6 +749,32 @@ export function SlideshowPage() {
     videoOpacity.set(s.video.file, Math.max(prev, op));
   }
 
+  // The slides on the stage, each with its opacity: those the layers show,
+  // and, hidden, the one after the current one, so that its images and videos
+  // have loaded by the time we go on to it. Each is keyed by its index, not by
+  // layer, so a preloaded slide isn't remounted when a layer comes to show it.
+  // (Nor when we've gone on to it but the layers haven't caught up, so the
+  // current slide is on the stage too.) They go in order of index, so that
+  // React never moves a mounted one, which would pause its videos.
+  const stageSlideOpacity = new Map<number, number>();
+  for (const i of [0, 1] as const) {
+    const op = transitioning ? layerOpacity[i] : i === activeLayer ? 1 : 0;
+    const prev = stageSlideOpacity.get(layerSlides[i]) ?? 0;
+    stageSlideOpacity.set(layerSlides[i], Math.max(prev, op));
+  }
+  for (const i of [currentSlide, currentSlide + 1]) {
+    const s = slides[i];
+    if (
+      s &&
+      "content" in s &&
+      s.preload !== false &&
+      !stageSlideOpacity.has(i)
+    ) {
+      stageSlideOpacity.set(i, 0);
+    }
+  }
+  const stageSlides = _.sortBy([...stageSlideOpacity.keys()]);
+
   return (
     <div
       ref={containerRef}
@@ -820,23 +847,19 @@ export function SlideshowPage() {
             );
           })}
 
-          {/* Main slide area — two layers stacked via CSS grid so both get identical layout */}
+          {/* Main slide area — slides stacked via CSS grid so all get identical layout */}
           <div
             className="flex-1 min-h-0"
             style={{ display: "grid", isolation: "isolate" }}
           >
-            {([0, 1] as const).map((layerIdx) => {
-              const s = slides[layerSlides[layerIdx]];
-              const isActive = layerIdx === activeLayer;
-              const opacity = transitioning
-                ? layerOpacity[layerIdx]
-                : isActive
-                  ? 1
-                  : 0;
+            {stageSlides.map((slideIdx) => {
+              const s = slides[slideIdx];
+              const isActive = slideIdx === displaySlide;
+              const opacity = stageSlideOpacity.get(slideIdx)!;
               const visible = opacity > 0 || isActive;
               return (
                 <div
-                  key={layerIdx}
+                  key={slideIdx}
                   style={{
                     gridArea: "1 / 1",
                     display: "flex",
@@ -853,9 +876,7 @@ export function SlideshowPage() {
                   }}
                 >
                   {"content" in s && (
-                    <SlideStepContext.Provider
-                      value={stepOf(layerSlides[layerIdx])}
-                    >
+                    <SlideStepContext.Provider value={stepOf(slideIdx)}>
                       {s.content}
                     </SlideStepContext.Provider>
                   )}

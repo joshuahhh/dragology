@@ -37,6 +37,13 @@ export type Slide = {
    * `useSlideStep`.
    */
   steps?: number;
+  /**
+   * Whether the slide is mounted, hidden, while the slide before it shows, so
+   * that its images and videos have loaded by the time we get to it (default
+   * true). Turn it off for a slide that does something on mount that should
+   * wait until it's shown, like taking focus.
+   */
+  preload?: boolean;
 } & ({ content: ReactNode } | { video: VideoClip });
 
 /**
