@@ -90,12 +90,36 @@ function tryCompile(
   }
 }
 
+/** The live editor as a page of its own; the snippet is in the URL. */
 export function LiveCodePage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const snippetIdx = Math.min(
-    Math.max(Number(searchParams.get("s") ?? 0) || 0, 0),
-    snippets.length - 1,
+  const snippetIdx = clampSnippetIdx(Number(searchParams.get("s") ?? 0));
+  return (
+    <div style={{ height: "100vh" }}>
+      <LiveCode
+        snippetIdx={snippetIdx}
+        onSnippetIdx={(idx) => setSearchParams({ s: String(idx) })}
+      />
+    </div>
   );
+}
+
+export function clampSnippetIdx(idx: number) {
+  return Math.min(Math.max(idx || 0, 0), snippets.length - 1);
+}
+
+/**
+ * The live editor: code on the left, the diagram it draws on the right.
+ * It fills its container, and its toasts and help button pin to the
+ * nearest `contain: paint` ancestor (or the window, failing that).
+ */
+export function LiveCode({
+  snippetIdx,
+  onSnippetIdx,
+}: {
+  snippetIdx: number;
+  onSnippetIdx: (idx: number) => void;
+}) {
   const [bright, setBright] = useState(true);
   const baseSnippet = snippets[snippetIdx];
   const snippet = useMemo(
@@ -215,7 +239,7 @@ export function LiveCodePage() {
           snippets.length - 1,
         );
         cur.snippetIdx = next;
-        setSearchParams({ s: String(next) });
+        onSnippetIdx(next);
         showToast(snippets[next].title);
       };
       const actions: Record<string, () => void> = {
@@ -319,9 +343,10 @@ export function LiveCodePage() {
       action();
       return true;
     },
-    [setSearchParams, showToast],
+    [onSnippetIdx, showToast],
   );
 
+  const rootRef = useRef<HTMLDivElement>(null);
   // The controls panel, and the corner button that opens it.
   const [panelOpen, setPanelOpen] = useState(false);
   const panelOpenRef = useRef(panelOpen);
@@ -329,6 +354,9 @@ export function LiveCodePage() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // A hidden instance (the slideshow keeps the previous slide mounted
+      // out of sight) shouldn't take keys from a visible one.
+      if (rootRef.current && !rootRef.current.checkVisibility()) return;
       if (e.key === "Escape" && panelOpenRef.current) {
         e.preventDefault();
         e.stopPropagation();
@@ -364,11 +392,14 @@ export function LiveCodePage() {
   }, []);
   const [nearCorner, setNearCorner] = useState(false);
   useEffect(() => {
-    const onMove = (e: globalThis.PointerEvent) =>
+    const onMove = (e: globalThis.PointerEvent) => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
       setNearCorner(
-        window.innerWidth - e.clientX < HELP_CORNER_PX &&
-          window.innerHeight - e.clientY < HELP_CORNER_PX,
+        rect.right - e.clientX < HELP_CORNER_PX &&
+          rect.bottom - e.clientY < HELP_CORNER_PX,
       );
+    };
     const onLeave = () => setNearCorner(false);
     window.addEventListener("pointermove", onMove);
     document.documentElement.addEventListener("pointerleave", onLeave);
@@ -445,11 +476,13 @@ export function LiveCodePage() {
 
   return (
     <div
+      ref={rootRef}
       data-talk-root
       onPointerDown={() => panelOpen && setPanelOpen(false)}
       style={{
         display: "flex",
-        height: "100vh",
+        width: "100%",
+        height: "100%",
         background: "white",
         color: "#24292f",
         overflow: "hidden",
