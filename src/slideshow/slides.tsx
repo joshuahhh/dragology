@@ -668,6 +668,10 @@ export const outline: (Slide | Heading)[] = [
     title: "Speculative Rendering",
     notes: `
       Next, they specify, for each draggable element, a set of new model states the user should be able to access by dragging that element.
+
+      [TODO: these are states that take the dragged element out of the list, and reinsert it in each other position]
+
+      [TODO: add more labels on screen]
     `,
     video: { file: "model-driven-full.mp4", start: 7.5, end: 9 },
   },
