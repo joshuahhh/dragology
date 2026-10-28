@@ -170,7 +170,11 @@ export function useAudienceFeed(stageRef: RefObject<HTMLElement | null>) {
     } as DisplayMediaStreamOptions);
     const [track] = stream.getVideoTracks();
     track.addEventListener("ended", () => {
-      if (feed.stream === stream) feed.setStream(null);
+      if (feed.stream !== stream) return;
+      feed.setStream(null);
+      showError(
+        "The capture stopped: Stop Sharing was pressed, or the browser or the OS ended it. Press A to share again",
+      );
     });
     if (canCrop && stageRef.current) {
       // Still share it uncropped if cropping fails

@@ -11,6 +11,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTitle } from "../useTitle";
 import { useAudienceFeed } from "./audienceFeed";
 import { ErrorToasts } from "./ErrorToasts";
+import { toggleFullscreen } from "./fullscreen";
 import {
   SAVE_NOTES_PATH,
   type SaveNotesRequest,
@@ -29,7 +30,6 @@ import {
   STAGE_W,
 } from "./slide";
 import { numberedOutline, outline, slides } from "./slides";
-import { toggleFullscreen } from "./SlideshowAudiencePage";
 import { SlideThumb, useSlideSnapshots } from "./SlideThumb";
 import { StageInfo } from "./StageInfo";
 
