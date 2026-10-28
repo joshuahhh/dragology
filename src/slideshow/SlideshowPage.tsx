@@ -70,17 +70,40 @@ function isTyping(e: KeyboardEvent) {
   );
 }
 
-function useStageZoom() {
-  const compute = () =>
-    Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
-  const [zoom, setZoom] = useState(compute);
+/**
+ * Windows at least this wide for their height get the wide layout. (Narrower
+ * ones, like half a screen, keep everything in one column.)
+ */
+const WIDE_MIN_ASPECT = 1.2;
+/** In the wide layout, the room the stage leaves for the outline, at least */
+const OUTLINE_MIN_W = 320;
+/** In the wide layout, the room the stage leaves for the notes, at least */
+const NOTES_MIN_H = 200;
+
+/**
+ * The stage's zoom, and whether the window gets the wide layout. If it does,
+ * the outline goes to the stage's left, and the notes below it, the stage
+ * shrinking to leave them room. If not, the stage fills the window's width,
+ * with the notes and the outline in whatever room it leaves below.
+ */
+function useStageLayout() {
+  const compute = () => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const wide = w / h >= WIDE_MIN_ASPECT;
+    const zoom = wide
+      ? Math.min((w - OUTLINE_MIN_W) / STAGE_W, (h - NOTES_MIN_H) / STAGE_H)
+      : Math.min(w / STAGE_W, h / STAGE_H);
+    return { zoom, wide };
+  };
+  const [layout, setLayout] = useState(compute);
   useLayoutEffect(() => {
-    const update = () => setZoom(compute());
+    const update = () => setLayout(compute());
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
-  return zoom;
+  return layout;
 }
 
 function useVideoPlayer() {
@@ -138,9 +161,10 @@ const outlineIndexOfSlide = outline.flatMap((item, k) =>
 );
 
 /**
- * The current slide's speaker notes, between the stage and the outline. They
- * shrink (and scroll) before the stage does, so the stage stays as big as the
- * window allows.
+ * The current slide's speaker notes, below the stage. In the narrow layout,
+ * they're between the stage and the outline, and shrink (and scroll) before
+ * the stage does, so the stage stays as big as the window allows. In the wide
+ * layout, they fill the room below the stage.
  *
  * During dev they're an editor, saving to slides.tsx on blur, ⌘↵ or ⌘S
  * (vite-plugin-slide-notes.ts); Escape undoes the edit. A save that fails
@@ -149,10 +173,12 @@ const outlineIndexOfSlide = outline.flatMap((item, k) =>
 function SlideNotes({
   slideIdx,
   step,
+  wide,
   onUnsavedChange,
 }: {
   slideIdx: number;
   step: number;
+  wide: boolean;
   /** Whether there are edits that would be lost by leaving the page */
   onUnsavedChange: (unsaved: boolean) => void;
 }) {
@@ -244,8 +270,10 @@ function SlideNotes({
   if (!editable && !saved) return null;
   return (
     <div
-      className="self-stretch min-h-0 max-h-[40vh] overflow-y-auto px-4 py-3 border-b border-gray-800"
-      style={{ flex: "0 1 auto", position: "relative" }}
+      className={`self-stretch min-h-0 overflow-y-auto px-4 py-3 ${
+        wide ? "" : "max-h-[40vh] border-b border-gray-800"
+      }`}
+      style={{ flex: wide ? "1 1 0" : "0 1 auto", position: "relative" }}
     >
       {otherFailed && (
         <div className="text-red-400 text-sm mb-1">
@@ -351,15 +379,17 @@ const outlineSlides = (() => {
 
 /**
  * Every slide's snapshot, with the outline's headings in the gutters, for the
- * space the stage leaves below it: click one to go there. It's for whoever is
- * at the window, not the audience, so it's sized in window pixels, not stage
- * pixels.
+ * space the stage leaves below it (or, in the wide layout, to its left): click
+ * one to go there. It's for whoever is at the window, not the audience, so
+ * it's sized in window pixels, not stage pixels.
  */
 function SlideOutline({
   current,
+  wide,
   onSelect,
 }: {
   current: number;
+  wide: boolean;
   onSelect: (i: number) => void;
 }) {
   useSlideSnapshots();
@@ -390,8 +420,10 @@ function SlideOutline({
   return (
     <div
       ref={scrollRef}
-      className="self-stretch flex-1 min-h-0 overflow-y-auto"
-      style={{ position: "relative" }}
+      className={`self-stretch flex-1 min-h-0 min-w-0 overflow-y-auto ${
+        wide ? "border-r border-gray-800" : ""
+      }`}
+      style={{ position: "relative", order: wide ? -1 : undefined }}
     >
       <div className="grid gap-x-3 gap-y-7 px-3 pt-7 pb-3 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
         {outlineSlides.map(({ slide, num, headings }) => {
@@ -691,7 +723,7 @@ export function SlideshowPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [goNext, goPrev, navigate]);
 
-  const stageZoom = useStageZoom();
+  const { zoom: stageZoom, wide } = useStageLayout();
 
   // Start/stop video when active slide changes
   useEffect(() => {
@@ -719,138 +751,152 @@ export function SlideshowPage() {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 flex flex-col items-center select-none"
+      className={`fixed inset-0 flex ${wide ? "flex-row" : "flex-col"} items-center select-none`}
       style={{ overflow: "hidden", background: "#111" }}
     >
-      {/* The stage. Layout and paint containment make it the containing block
-          for position: fixed descendants (e.g. DemoSettingsBar), so they stay
-          inside the stage rather than pinning to the window. */}
+      {/* The stage and the notes: a column of their own in the wide layout,
+          and in the narrow one, part of the page's column. (Either way, the
+          stage keeps its place in the tree, so it isn't remounted when the
+          layout changes.) */}
       <div
-        className="bg-white flex flex-col"
+        className="flex-col items-center self-stretch"
         style={{
-          position: "relative",
-          width: STAGE_W,
-          height: STAGE_H,
+          display: wide ? "flex" : "contents",
+          width: STAGE_W * stageZoom,
           flexShrink: 0,
-          zoom: stageZoom,
-          contain: "layout paint",
         }}
       >
-        {/* Preloaded video elements (hidden when not on a video slide) */}
-        {videoFiles.map((file) => {
-          const opacity = videoOpacity.get(file) ?? 0;
-          return (
-            <video
-              key={file}
-              ref={(el) => {
-                if (el) videoEls.current.set(file, el);
-              }}
-              src={slideFileUrl(file)}
-              preload="auto"
-              muted
-              playsInline
-              onSeeked={() =>
-                setSeekedFiles((prev) =>
-                  prev.has(file) ? prev : new Set(prev).add(file),
-                )
-              }
-              onPlay={updatePlaying}
-              onPause={updatePlaying}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-                background: "white",
-                visibility: opacity > 0 ? "visible" : "hidden",
-                opacity,
-                transition: transitioning
-                  ? `opacity ${transitionMs}ms linear`
-                  : "none",
-                pointerEvents: opacity > 0 ? "auto" : "none",
-                zIndex: 5,
-              }}
-            />
-          );
-        })}
-
-        {/* Main slide area — two layers stacked via CSS grid so both get identical layout */}
+        {/* The stage. Layout and paint containment make it the containing block
+          for position: fixed descendants (e.g. DemoSettingsBar), so they stay
+          inside the stage rather than pinning to the window. */}
         <div
-          className="flex-1 min-h-0"
-          style={{ display: "grid", isolation: "isolate" }}
+          className="bg-white flex flex-col"
+          style={{
+            position: "relative",
+            width: STAGE_W,
+            height: STAGE_H,
+            flexShrink: 0,
+            zoom: stageZoom,
+            contain: "layout paint",
+          }}
         >
-          {([0, 1] as const).map((layerIdx) => {
-            const s = slides[layerSlides[layerIdx]];
-            const isActive = layerIdx === activeLayer;
-            const opacity = transitioning
-              ? layerOpacity[layerIdx]
-              : isActive
-                ? 1
-                : 0;
-            const visible = opacity > 0 || isActive;
+          {/* Preloaded video elements (hidden when not on a video slide) */}
+          {videoFiles.map((file) => {
+            const opacity = videoOpacity.get(file) ?? 0;
             return (
-              <div
-                key={layerIdx}
+              <video
+                key={file}
+                ref={(el) => {
+                  if (el) videoEls.current.set(file, el);
+                }}
+                src={slideFileUrl(file)}
+                preload="auto"
+                muted
+                playsInline
+                onSeeked={() =>
+                  setSeekedFiles((prev) =>
+                    prev.has(file) ? prev : new Set(prev).add(file),
+                  )
+                }
+                onPlay={updatePlaying}
+                onPause={updatePlaying}
                 style={{
-                  gridArea: "1 / 1",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative",
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  background: "white",
+                  visibility: opacity > 0 ? "visible" : "hidden",
                   opacity,
                   transition: transitioning
                     ? `opacity ${transitionMs}ms linear`
                     : "none",
-                  mixBlendMode: "plus-lighter",
-                  pointerEvents: isActive ? "auto" : "none",
-                  visibility: visible ? "visible" : "hidden",
+                  pointerEvents: opacity > 0 ? "auto" : "none",
+                  zIndex: 5,
                 }}
-              >
-                {"content" in s && (
-                  <SlideStepContext.Provider
-                    value={stepOf(layerSlides[layerIdx])}
-                  >
-                    {s.content}
-                  </SlideStepContext.Provider>
-                )}
-              </div>
+              />
             );
           })}
-        </div>
 
-        {/* Slide counter (minimal, bottom-left) */}
-        <div
-          className="fixed bottom-2 left-3 text-xs text-gray-300 select-none pointer-events-none"
-          style={{ zIndex: 30 }}
-        >
-          {currentSlide + 1}/{slides.length}
-          {slideSteps(slides[currentSlide]) > 1 &&
-            ` (${currentStep + 1}/${slideSteps(slides[currentSlide])})`}
-          <svg
-            width="8"
-            height="9"
-            viewBox="0 0 8 9"
-            fill="currentColor"
-            style={{
-              display: "inline",
-              verticalAlign: "middle",
-              marginLeft: 4,
-              opacity: videoPlaying ? 1 : 0,
-            }}
+          {/* Main slide area — two layers stacked via CSS grid so both get identical layout */}
+          <div
+            className="flex-1 min-h-0"
+            style={{ display: "grid", isolation: "isolate" }}
           >
-            <path d="M0 0.5L8 4.5L0 8.5Z" />
-          </svg>
-        </div>
-      </div>
+            {([0, 1] as const).map((layerIdx) => {
+              const s = slides[layerSlides[layerIdx]];
+              const isActive = layerIdx === activeLayer;
+              const opacity = transitioning
+                ? layerOpacity[layerIdx]
+                : isActive
+                  ? 1
+                  : 0;
+              const visible = opacity > 0 || isActive;
+              return (
+                <div
+                  key={layerIdx}
+                  style={{
+                    gridArea: "1 / 1",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    position: "relative",
+                    opacity,
+                    transition: transitioning
+                      ? `opacity ${transitionMs}ms linear`
+                      : "none",
+                    mixBlendMode: "plus-lighter",
+                    pointerEvents: isActive ? "auto" : "none",
+                    visibility: visible ? "visible" : "hidden",
+                  }}
+                >
+                  {"content" in s && (
+                    <SlideStepContext.Provider
+                      value={stepOf(layerSlides[layerIdx])}
+                    >
+                      {s.content}
+                    </SlideStepContext.Provider>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-      <SlideNotes
-        slideIdx={currentSlide}
-        step={currentStep}
-        onUnsavedChange={setNotesUnsaved}
-      />
-      <SlideOutline current={currentSlide} onSelect={goToSlide} />
+          {/* Slide counter (minimal, bottom-left) */}
+          <div
+            className="fixed bottom-2 left-3 text-xs text-gray-300 select-none pointer-events-none"
+            style={{ zIndex: 30 }}
+          >
+            {currentSlide + 1}/{slides.length}
+            {slideSteps(slides[currentSlide]) > 1 &&
+              ` (${currentStep + 1}/${slideSteps(slides[currentSlide])})`}
+            <svg
+              width="8"
+              height="9"
+              viewBox="0 0 8 9"
+              fill="currentColor"
+              style={{
+                display: "inline",
+                verticalAlign: "middle",
+                marginLeft: 4,
+                opacity: videoPlaying ? 1 : 0,
+              }}
+            >
+              <path d="M0 0.5L8 4.5L0 8.5Z" />
+            </svg>
+          </div>
+        </div>
+
+        <SlideNotes
+          slideIdx={currentSlide}
+          step={currentStep}
+          wide={wide}
+          onUnsavedChange={setNotesUnsaved}
+        />
+      </div>
+      <SlideOutline current={currentSlide} wide={wide} onSelect={goToSlide} />
     </div>
   );
 }
