@@ -46,9 +46,14 @@ function SlideInfo({ slide, num }: { slide: Slide; num: number }) {
         <span className="text-gray-400 tabular-nums">{num}</span>
         <span className="font-semibold">{slide.title}</span>
         <span className="ml-auto text-xs text-gray-400">
-          {"video" in slide && `video ${slide.video.start}–${slide.video.end}s`}
-          {"video" in slide && slide.transition && " · "}
-          {slide.transition}
+          {[
+            "video" in slide &&
+              `video ${slide.video.start}–${slide.video.end}s`,
+            slide.steps && slide.steps > 1 && `${slide.steps} steps`,
+            slide.transition,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </span>
       </div>
     </div>

@@ -1,11 +1,20 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { EditorSelection, EditorState, Prec } from "@codemirror/state";
+import {
+  EditorSelection,
+  EditorState,
+  Prec,
+  StateEffect,
+  StateField,
+  type Range,
+  type Text,
+} from "@codemirror/state";
 import {
   Decoration,
   EditorView,
   MatchDecorator,
   ViewPlugin,
+  WidgetType,
   keymap,
   type DecorationSet,
   type ViewUpdate,
@@ -44,6 +53,17 @@ const theme = EditorView.theme(
     ".cm-cursor": { borderLeftColor: "white" },
     ".cm-placeholder": { color: "#4b5563" },
     ".cm-notes-comment, .cm-notes-comment *": { color: "#6b7280 !important" },
+    ".cm-notes-inactive": { opacity: 0.35 },
+    ".cm-notes-stage-label": {
+      fontSize: "12px",
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: "0.05em",
+      color: "#6b7280",
+    },
+    "span.cm-notes-stage-label": { marginLeft: "8px" },
+    ".cm-notes-stage-label-active": { color: "#7dd3fc" },
+    ".cm-notes-stage-label-extra": { color: "#f87171" },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
       backgroundColor: "#374151",
     },
@@ -113,14 +133,166 @@ const slashComments = Prec.highest(
   EditorState.languageData.of(() => [{ commentTokens: { line: "//" } }]),
 );
 
+/** Where the slide is in its steps, which the notes have a stage for each of. */
+export type NotesStages = { current: number; count: number };
+
+// A line that's just --- starts the notes for the slide's next step
+const STAGE_BREAK = /^\s*---\s*$/;
+
+const setStages = StateEffect.define<NotesStages | null>();
+
+class StageLabel extends WidgetType {
+  constructor(
+    readonly stage: number,
+    readonly stages: NotesStages,
+    readonly block: boolean,
+  ) {
+    super();
+  }
+  eq(other: StageLabel) {
+    return (
+      other.stage === this.stage &&
+      other.block === this.block &&
+      other.stages.current === this.stages.current &&
+      other.stages.count === this.stages.count
+    );
+  }
+  toDOM() {
+    const { stage, stages } = this;
+    const el = document.createElement(this.block ? "div" : "span");
+    el.className = [
+      "cm-notes-stage-label",
+      stage === stages.current && "cm-notes-stage-label-active",
+      stage >= stages.count && "cm-notes-stage-label-extra",
+      // A label on a line of its own fades with its stage, as lines do
+      this.block && stage !== stages.current && "cm-notes-inactive",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    el.textContent =
+      stage < stages.count
+        ? `Stage ${stage + 1}`
+        : `Stage ${stage + 1} (slide has ${stages.count})`;
+    return el;
+  }
+}
+
+const inactiveLine = Decoration.line({ class: "cm-notes-inactive" });
+
+/**
+ * A label at the top of each stage ("Stage 1" above the notes, the rest after
+ * their --- lines), with the lines of the stages other than the current one
+ * faded.
+ */
+function stageDecorations(doc: Text, stages: NotesStages | null) {
+  if (!stages) return Decoration.none;
+  const label = (stage: number, block: boolean) =>
+    Decoration.widget({
+      widget: new StageLabel(stage, stages, block),
+      block,
+      side: block ? -1 : 1,
+    });
+  const decos: Range<Decoration>[] = [label(0, true).range(0)];
+  let stage = 0;
+  for (let i = 1; i <= doc.lines; i++) {
+    const line = doc.line(i);
+    const isBreak = STAGE_BREAK.test(line.text);
+    if (isBreak) stage++;
+    if (stage !== stages.current) decos.push(inactiveLine.range(line.from));
+    if (isBreak) decos.push(label(stage, false).range(line.to));
+  }
+  return Decoration.set(decos, true);
+}
+
+/** A stage's text, from its --- line to the line before the next. */
+function stageRange(doc: Text, stage: number) {
+  let from = stage === 0 ? 0 : null;
+  let to = doc.length;
+  let seen = 0;
+  for (let i = 1; i <= doc.lines; i++) {
+    const line = doc.line(i);
+    if (!STAGE_BREAK.test(line.text)) continue;
+    seen++;
+    if (seen === stage) from = line.from;
+    if (seen === stage + 1) {
+      to = Math.max(line.from - 1, 0);
+      break;
+    }
+  }
+  // Notes with fewer stages than the slide: the end of the notes
+  return from === null ? { from: doc.length, to: doc.length } : { from, to };
+}
+
+/**
+ * Scrolls whatever the editor scrolls in to show all of a range, or as much
+ * of it as fits from the top. (Not `EditorView.scrollIntoView`, which can't
+ * see the end of a range that's out of view, since CodeMirror doesn't draw
+ * it; the height map knows where it is.)
+ */
+function revealRange(view: EditorView, from: number, to: number) {
+  // Room for Stage 1's label, which sits above the text
+  const marginTop = 24;
+  const marginBottom = 8;
+  view.requestMeasure({
+    read(view) {
+      const scroller = scrollParent(view.dom);
+      if (!scroller) return null;
+      const box = scroller.getBoundingClientRect();
+      const top = view.documentTop + view.lineBlockAt(from).top - marginTop;
+      const bottom =
+        view.documentTop + view.lineBlockAt(to).bottom + marginBottom;
+      const boxBottom = box.top + scroller.clientHeight;
+      const delta =
+        top < box.top
+          ? top - box.top
+          : bottom > boxBottom
+            ? Math.min(bottom - boxBottom, top - box.top)
+            : 0;
+      return { scroller, delta };
+    },
+    write(m) {
+      if (m?.delta) m.scroller.scrollBy({ top: m.delta, behavior: "smooth" });
+    },
+  });
+}
+
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let cur = el.parentElement; cur; cur = cur.parentElement) {
+    if (
+      /auto|scroll/.test(getComputedStyle(cur).overflowY) &&
+      cur.scrollHeight > cur.clientHeight
+    )
+      return cur;
+  }
+  return null;
+}
+
+// (Block widgets can't come from a view plugin, so this is a state field.)
+const stagesField = StateField.define<{
+  stages: NotesStages | null;
+  decorations: DecorationSet;
+}>({
+  create: () => ({ stages: null, decorations: Decoration.none }),
+  update(value, tr) {
+    let { stages } = value;
+    for (const e of tr.effects) if (e.is(setStages)) stages = e.value;
+    if (stages === value.stages && !tr.docChanged) return value;
+    return { stages, decorations: stageDecorations(tr.state.doc, stages) };
+  },
+  provide: (f) => EditorView.decorations.from(f, (v) => v.decorations),
+});
+
 /**
  * A plain-text Markdown editor that shows the text formatted, with the markup
  * left in place (CodeMirror). ⌘↵ or ⌘S calls `onSave`; Escape calls `onCancel`
  * and leaves the editor. Typing * _ ` or ~ over a selection wraps it. ⌘/
- * toggles a // comment on the selected lines, and comments are dimmed.
+ * toggles a // comment on the selected lines, and comments are dimmed. With
+ * `stages`, --- lines divide the notes into stages, which are labeled, and
+ * those other than the current one are faded.
  */
 export function NotesEditor({
   value,
+  stages,
   editable,
   readOnly,
   placeholder,
@@ -130,6 +302,7 @@ export function NotesEditor({
   onCancel,
 }: {
   value: string;
+  stages: NotesStages | null;
   /** If false, the notes are just text: no cursor, no focus */
   editable: boolean;
   /** Takes no edits for now, but keeps focus and the cursor (while saving) */
@@ -160,14 +333,33 @@ export function NotesEditor({
     }
   }, [view, value]);
 
+  const stagesCurrent = stages?.current;
+  const stagesCount = stages?.count;
+  // A stage scrolls into view as it becomes current
+  useEffect(() => {
+    if (!view) return;
+    if (stagesCurrent === undefined || stagesCount === undefined) {
+      view.dispatch({ effects: setStages.of(null) });
+      return;
+    }
+    view.dispatch({
+      effects: setStages.of({ current: stagesCurrent, count: stagesCount }),
+    });
+    const { from, to } = stageRange(view.state.doc, stagesCurrent);
+    revealRange(view, from, to);
+  }, [view, stagesCurrent, stagesCount]);
+
   const extensions = useMemo(
     () => [
-      markdown(),
+      // No setext headings, so a --- under a line is a stage break rather
+      // than making the line a heading
+      markdown({ extensions: { remove: ["SetextHeading"] } }),
       syntaxHighlighting(highlightStyle),
       EditorView.lineWrapping,
       wrapSelection,
       dimComments,
       slashComments,
+      stagesField,
       Prec.highest(
         keymap.of([
           {
