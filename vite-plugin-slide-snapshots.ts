@@ -80,7 +80,11 @@ export function slideSnapshots(): Plugin {
         return false;
       };
 
+      // Only the first opening snapshots: after that the watcher keeps them
+      // current, and a page reloaded by new snapshots would otherwise ask for
+      // more, and reload again whenever they differ
       server.ws.on("slide-snapshots:open", () => {
+        if (active) return;
         active = true;
         schedule("outline opened");
       });
