@@ -19,6 +19,8 @@ import {
   notesFirstLine,
   type Slide,
   slideFileUrl,
+  SlideStepContext,
+  slideSteps,
   STAGE_H,
   STAGE_W,
 } from "./slide";
@@ -32,6 +34,33 @@ const FADE_WHITE_MS = 200;
 const videoFiles = [
   ...new Set(slides.flatMap((s) => ("video" in s ? [s.video.file] : []))),
 ];
+
+/** Where the slideshow is: a slide, and a step of it (both from 0). */
+type SlidePos = { slide: number; step: number };
+
+/**
+ * The URL's slide number, from 1, with ".N" for step N of a slide with steps
+ * (e.g. "12.3").
+ */
+function parseSlidePos(slideNum: string | undefined): SlidePos {
+  if (!slideNum) return { slide: 0, step: 0 };
+  const [s, t] = slideNum.split(".");
+  const slide = clamp(parseInt(s, 10) - 1, 0, slides.length - 1);
+  const step = t
+    ? clamp(parseInt(t, 10) - 1, 0, slideSteps(slides[slide]) - 1)
+    : 0;
+  return { slide, step };
+}
+
+function formatSlidePos({ slide, step }: SlidePos): string {
+  return slideSteps(slides[slide]) > 1
+    ? `${slide + 1}.${step + 1}`
+    : `${slide + 1}`;
+}
+
+function clamp(x: number, lo: number, hi: number) {
+  return Number.isNaN(x) ? lo : Math.max(lo, Math.min(x, hi));
+}
 
 /** Is this key going into a text field, rather than to the page? */
 function isTyping(e: KeyboardEvent) {
@@ -119,13 +148,16 @@ const outlineIndexOfSlide = outline.flatMap((item, k) =>
  */
 function SlideNotes({
   slideIdx,
+  step,
   onUnsavedChange,
 }: {
   slideIdx: number;
+  step: number;
   /** Whether there are edits that would be lost by leaving the page */
   onUnsavedChange: (unsaved: boolean) => void;
 }) {
   const notes = slides[slideIdx].notes;
+  const steps = slideSteps(slides[slideIdx]);
   const editable = !!import.meta.hot;
   // At most one slide's notes are being edited (or saved) at a time
   const [draft, setDraftState] = useState<Draft | null>(null);
@@ -237,6 +269,7 @@ function SlideNotes({
       <div className={unsaved ? "border-l-2 border-amber-400 pl-2" : ""}>
         <NotesEditor
           value={current ? current.text : saved}
+          stages={steps > 1 ? { current: step, count: steps } : null}
           editable={editable}
           readOnly={readOnly}
           placeholder="Add speaker notes…"
@@ -431,15 +464,30 @@ export function SlideshowPage() {
   const { slideNum } = useParams();
   const navigate = useNavigate();
 
-  const initialSlide = slideNum
-    ? Math.max(0, Math.min(parseInt(slideNum, 10) - 1, slides.length - 1))
-    : 0;
-  const [currentSlide, setCurrentSlide] = useState(initialSlide);
+  const [pos, setPos] = useState(() => parseSlidePos(slideNum));
+  const currentSlide = pos.slide;
+  const currentStep = pos.step;
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    navigate(`/slideshow/${currentSlide + 1}`, { replace: true });
-  }, [currentSlide, navigate]);
+    navigate(
+      `/slideshow/${formatSlidePos({ slide: currentSlide, step: currentStep })}`,
+      {
+        replace: true,
+      },
+    );
+  }, [currentSlide, currentStep, navigate]);
+
+  /**
+   * The step to show a slide at: a slide other than the current one is
+   * shown, while it fades in or out, at the step it was left at.
+   */
+  const stepOf = (slideIdx: number) =>
+    slideIdx === currentSlide
+      ? currentStep
+      : slideIdx < currentSlide
+        ? slideSteps(slides[slideIdx]) - 1
+        : 0;
 
   // ── Transition state ──
   // Two-layer system: layers[0] and layers[1] are always rendered in the same
@@ -601,11 +649,28 @@ export function SlideshowPage() {
   useConfirmLeave(notesUnsaved);
 
   const goNext = useCallback(() => {
-    setCurrentSlide((i) => Math.min(i + 1, slides.length - 1));
+    setPos(({ slide, step }) =>
+      step < slideSteps(slides[slide]) - 1
+        ? { slide, step: step + 1 }
+        : slide < slides.length - 1
+          ? { slide: slide + 1, step: 0 }
+          : { slide, step },
+    );
   }, []);
 
+  // Going back to a slide with steps lands on its last step
   const goPrev = useCallback(() => {
-    setCurrentSlide((i) => Math.max(i - 1, 0));
+    setPos(({ slide, step }) =>
+      step > 0
+        ? { slide, step: step - 1 }
+        : slide > 0
+          ? { slide: slide - 1, step: slideSteps(slides[slide - 1]) - 1 }
+          : { slide, step },
+    );
+  }, []);
+
+  const goToSlide = useCallback((slide: number) => {
+    setPos({ slide, step: 0 });
   }, []);
 
   useEffect(() => {
@@ -743,7 +808,13 @@ export function SlideshowPage() {
                   visibility: visible ? "visible" : "hidden",
                 }}
               >
-                {"content" in s && s.content}
+                {"content" in s && (
+                  <SlideStepContext.Provider
+                    value={stepOf(layerSlides[layerIdx])}
+                  >
+                    {s.content}
+                  </SlideStepContext.Provider>
+                )}
               </div>
             );
           })}
@@ -755,6 +826,8 @@ export function SlideshowPage() {
           style={{ zIndex: 30 }}
         >
           {currentSlide + 1}/{slides.length}
+          {slideSteps(slides[currentSlide]) > 1 &&
+            ` (${currentStep + 1}/${slideSteps(slides[currentSlide])})`}
           <svg
             width="8"
             height="9"
@@ -772,8 +845,12 @@ export function SlideshowPage() {
         </div>
       </div>
 
-      <SlideNotes slideIdx={currentSlide} onUnsavedChange={setNotesUnsaved} />
-      <SlideOutline current={currentSlide} onSelect={setCurrentSlide} />
+      <SlideNotes
+        slideIdx={currentSlide}
+        step={currentStep}
+        onUnsavedChange={setNotesUnsaved}
+      />
+      <SlideOutline current={currentSlide} onSelect={goToSlide} />
     </div>
   );
 }

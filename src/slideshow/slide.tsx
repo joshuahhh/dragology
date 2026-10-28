@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { createContext, ReactNode, useContext } from "react";
 import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
 
 // The slideshow is presented on a 1920×1080 screen. Everything is laid out in
@@ -30,6 +30,13 @@ export type Slide = {
   notes?: string;
   /** How to arrive at this slide when going forward. Going back always cuts. */
   transition?: Transition;
+  /**
+   * How many steps the slide goes through before going on to the next slide
+   * (default 1). The slide stays mounted throughout, so whatever it's doing
+   * carries on from step to step; its content reads the step with
+   * `useSlideStep`.
+   */
+  steps?: number;
 } & ({ content: ReactNode } | { video: VideoClip });
 
 /**
@@ -37,6 +44,17 @@ export type Slide = {
  * the slideshow. Level 2 is a subheading.
  */
 export type Heading = { heading: string; level?: 1 | 2 };
+
+export function slideSteps(slide: Slide) {
+  return slide.steps ?? 1;
+}
+
+export const SlideStepContext = createContext(0);
+
+/** The step (from 0) of a slide with `steps`. */
+export function useSlideStep() {
+  return useContext(SlideStepContext);
+}
 
 /** The URL of a file in public/slides. */
 export function slideFileUrl(file: string) {
