@@ -707,7 +707,19 @@ export function SlideshowPage() {
   }, []);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    // Ctrl+Left/Right always navigate: caught on the way down, before a
+    // focused editor or an embedded demo can take them, and while typing.
+    const forced = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "ArrowRight") goNext();
+      else if (e.key === "ArrowLeft") goPrev();
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    // The bare keys are conveniences that yield to whatever has focus.
+    const bare = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTyping(e)) return;
       if (e.key === "ArrowRight" || e.key === " ") {
         e.preventDefault();
@@ -720,8 +732,12 @@ export function SlideshowPage() {
         navigate("/slideshow-outline");
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", forced, { capture: true });
+    window.addEventListener("keydown", bare);
+    return () => {
+      window.removeEventListener("keydown", forced, { capture: true });
+      window.removeEventListener("keydown", bare);
+    };
   }, [goNext, goPrev, navigate]);
 
   const { zoom: stageZoom, wide } = useStageLayout();
