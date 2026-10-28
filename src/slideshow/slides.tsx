@@ -7,7 +7,13 @@ import {
 } from "../DragSpecTreeView";
 import { StudioHackContext } from "../studio/StudioHackContext";
 import { clampSnippetIdx, LiveCode } from "../talk/LiveCodePage";
-import { DemoSlide, type Heading, ImageSlide, type Slide } from "./slide";
+import {
+  DemoSlide,
+  type Heading,
+  ImageSlide,
+  type Slide,
+  useSlideStep,
+} from "./slide";
 
 /**
  * The live editor (#/talk/livecode) on the stage. The snippet index
@@ -50,6 +56,22 @@ import {
   initialState7,
 } from "../demos/twisted-trees/index";
 import { tree7 } from "../demos/twisted-trees/trees";
+
+// Stand-in for the Model-Driven slide's insets, one per step
+function ModelDrivenSteps() {
+  const step = useSlideStep();
+  return (
+    <>
+      <ImageSlide src="model-driven.jpg" />
+      <div
+        className="absolute top-8 right-12 text-9xl font-bold"
+        style={{ fontVariantNumeric: "tabular-nums" }}
+      >
+        {step + 1}
+      </div>
+    </>
+  );
+}
 
 function BeadsWhenFar() {
   const draggable = useMemo(
@@ -337,7 +359,8 @@ export const outline: (Slide | Heading)[] = [
     content: <div className="text-9xl">montage of drag+drop</div>,
   },
   {
-    content: <ImageSlide src="model-driven.jpg" />,
+    steps: 4,
+    content: <ModelDrivenSteps />,
     notes: `
       // Design concept: endless array of animated demos scrolls right to left in background, as we show insets: “Declarative Dragging”, “Model-Driven”, and “Composable”, “Dragology”
 
@@ -345,12 +368,18 @@ export const outline: (Slide | Heading)[] = [
 
       Declarative Dragging combines two ideas.
 
+      ---
+
       The first is defining drags in terms of semantic transformations, rather than low-level logic.
       We call that **model-driven dragging**.
 
+      ---
+
       To make it possible for model-driven dragging to express different drag-and-drop styles, we extend it with a powerful DSL of behaviors. We call that **composable dragging**.
 
-      The demos we’ve been giving you a taste of in the background here were made with a library called **Dragology**, based on these two ideas.
+      ---
+
+      The demos we’ve been teasing in the background here were made with a new library called **Dragology**, based on these two ideas.
 
       Let’s dive in and look at how these ideas work.
     `,
