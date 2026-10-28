@@ -19,8 +19,8 @@ import {
   type Heading,
   notesFirstLine,
   type Slide,
-  SlideActiveContext,
   slideFileUrl,
+  SlidePresenceContext,
   SlideStepContext,
   slideSteps,
   STAGE_H,
@@ -387,10 +387,13 @@ const outlineSlides = (() => {
  */
 function SlideOutline({
   current,
+  step,
   wide,
   onSelect,
 }: {
   current: number;
+  /** The current slide's step */
+  step: number;
   wide: boolean;
   onSelect: (i: number) => void;
 }) {
@@ -458,13 +461,19 @@ function SlideOutline({
                 onClick={() => onSelect(i)}
               >
                 <div
-                  className={`bg-white aspect-video ${
+                  className={`relative bg-white aspect-video ${
                     i === current
                       ? "ring-4 ring-amber-400 ring-offset-2 ring-offset-[#111]"
                       : "ring-1 ring-gray-700"
                   }`}
                 >
                   <SlideThumb slide={slide} num={num} />
+                  {slideSteps(slide) > 1 && (
+                    <StepBar
+                      steps={slideSteps(slide)}
+                      step={i === current ? step : null}
+                    />
+                  )}
                 </div>
                 <div
                   className={`flex gap-1.5 text-xs ${
@@ -489,6 +498,29 @@ function SlideOutline({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A slide's steps, as segments along the bottom of its thumbnail, filled
+ * through the step it's on (if it's the current slide).
+ */
+function StepBar({ steps, step }: { steps: number; step: number | null }) {
+  return (
+    <div
+      className={`absolute inset-x-0 bottom-0 flex gap-0.5 ${
+        step === null ? "h-[3px]" : "h-[5px]"
+      }`}
+    >
+      {_.range(steps).map((k) => (
+        <div
+          key={k}
+          className={`flex-1 ${
+            step !== null && k <= step ? "bg-amber-400" : "bg-black/30"
+          }`}
+        />
+      ))}
     </div>
   );
 }
@@ -708,7 +740,21 @@ export function SlideshowPage() {
   }, []);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    // Ctrl+Left/Right always navigate: caught on the way down, before a
+    // focused editor or an embedded demo can take them, and while typing.
+    // Shift may be held too (Ctrl+Shift+Arrow), for Macs where Mission
+    // Control's "move a space" shortcuts swallow the plain Ctrl+Arrow.
+    const forced = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "ArrowRight") goNext();
+      else if (e.key === "ArrowLeft") goPrev();
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    // The bare keys are conveniences that yield to whatever has focus.
+    const bare = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTyping(e)) return;
       // PageDown and PageUp are what presentation clickers send
       if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
@@ -722,8 +768,12 @@ export function SlideshowPage() {
         navigate("/slideshow-outline");
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", forced, { capture: true });
+    window.addEventListener("keydown", bare);
+    return () => {
+      window.removeEventListener("keydown", forced, { capture: true });
+      window.removeEventListener("keydown", bare);
+    };
   }, [goNext, goPrev, navigate]);
 
   const { zoom: stageZoom, wide } = useStageLayout();
@@ -878,11 +928,16 @@ export function SlideshowPage() {
                   }}
                 >
                   {"content" in s && (
-                    <SlideActiveContext.Provider value={isActive}>
+                    <SlidePresenceContext.Provider
+                      value={{
+                        shown: visible,
+                        current: slideIdx === currentSlide,
+                      }}
+                    >
                       <SlideStepContext.Provider value={stepOf(slideIdx)}>
                         {s.content}
                       </SlideStepContext.Provider>
-                    </SlideActiveContext.Provider>
+                    </SlidePresenceContext.Provider>
                   )}
                 </div>
               );
@@ -921,7 +976,12 @@ export function SlideshowPage() {
           onUnsavedChange={setNotesUnsaved}
         />
       </div>
-      <SlideOutline current={currentSlide} wide={wide} onSelect={goToSlide} />
+      <SlideOutline
+        current={currentSlide}
+        step={currentStep}
+        wide={wide}
+        onSelect={goToSlide}
+      />
     </div>
   );
 }

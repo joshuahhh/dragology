@@ -19,7 +19,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { useSlideActive, useSlideStep } from "./slide";
+import { useSlideCurrent, useSlideStep } from "./slide";
 
 /** A moment of a track. x and y are fractions of the stage. */
 export type Sample = { t: number; x: number; y: number; down: boolean };
@@ -80,7 +80,7 @@ if (typeof window !== "undefined") {
  */
 export function Rails({ id, children }: { id: string; children: ReactNode }) {
   const step = useSlideStep();
-  const active = useSlideActive();
+  const active = useSlideCurrent();
   const railsMode = useRailsMode();
   const frameRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);

@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { STAGE_H, STAGE_W, useSlideActive } from "./slide";
+import { STAGE_H, STAGE_W, useSlideCurrent } from "./slide";
 
 /**
  * Keys that, pressed inside an embed, go to the slideshow rather than the
@@ -26,7 +26,8 @@ const bridged = new WeakSet<Window>();
  * origin, which lets us reach into it to style it and catch keys.
  *
  * While the embed has focus, keys go to it, except those in SLIDESHOW_KEYS,
- * the arrow keys if `arrows` is "slideshow", and Escape, which takes focus out
+ * the arrow keys if `arrows` is "slideshow" (and with Ctrl either way), and
+ * Escape, which takes focus out
  * of the embed so that all keys go to the slideshow again. A ring around the
  * embed shows when it has focus. On the dev server, vite-plugin-embed-keys.ts
  * has the embedded page tell us its window exists before the app's scripts
@@ -62,7 +63,7 @@ export function EmbedSlide({
   focusOnShow?: boolean;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const active = useSlideActive();
+  const active = useSlideCurrent();
   const zoomKey = `embed-zoom:${src.split("/")[0]}`;
   const [zoom, setZoom] = useState(() => {
     try {
@@ -133,10 +134,23 @@ export function EmbedSlide({
         e.stopImmediatePropagation();
         iframeRef.current?.blur();
         window.focus();
-      } else if (forwarded.includes(e.key)) {
+      } else if (
+        forwarded.includes(e.key) ||
+        // Ctrl(+Shift)+Left/Right, which always navigate
+        (e.ctrlKey && ARROW_KEYS.includes(e.key))
+      ) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
+        const { key, ctrlKey, shiftKey, altKey, metaKey } = e;
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key,
+            ctrlKey,
+            shiftKey,
+            altKey,
+            metaKey,
+          }),
+        );
       }
     };
   }, [arrows, onZoomKey]);
