@@ -67,6 +67,7 @@ export const demoList: DemoListEntry[] = [
   "multi-circle-points",
   "multi-circle-points-vanilla",
   "chain-of-links",
+  "robot-arm",
   "nodes-and-noodles",
   "sprouting-tree",
   "weird-floating-vs-fixed",
