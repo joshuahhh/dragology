@@ -214,7 +214,7 @@ export const MONTAGE_PLAN_SPLIT: MontageStep[] = [
  * The montage as a slide's content, following the slide's step through a
  * plan. Give the slide `steps: plan.length`.
  */
-export function MontageSlide({
+export function ClosingMontageSlide({
   plan = MONTAGE_PLAN_TIMED,
   ...rest
 }: { plan?: MontageStep[] } & Omit<MontageCanvasProps, "view" | "highlight">) {

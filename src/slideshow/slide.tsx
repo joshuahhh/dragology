@@ -63,14 +63,25 @@ export function useSlideStep() {
   return useContext(SlideStepContext);
 }
 
-export const SlideActiveContext = createContext(true);
+export const SlidePresenceContext = createContext({
+  shown: true,
+  current: true,
+});
 
 /**
- * Whether the slide is the one being shown, rather than one fading out or
- * preloaded (mounted hidden) ahead of being shown.
+ * Whether the slide is on the stage for the audience, rather than mounted
+ * hidden to preload.
  */
-export function useSlideActive() {
-  return useContext(SlideActiveContext);
+export function useSlideShown() {
+  return useContext(SlidePresenceContext).shown;
+}
+
+/**
+ * Whether the slide is the one we're on. A slide fading out as we go on to
+ * the next one is shown but no longer current.
+ */
+export function useSlideCurrent() {
+  return useContext(SlidePresenceContext).current;
 }
 
 /** The URL of a file in public/slides. */

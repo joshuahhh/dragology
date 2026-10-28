@@ -7,7 +7,7 @@ import { DemoContext, type DemoToggleSettings } from "../demo/ui";
 import "../studio/shantell-sans";
 import { EmbedSlide } from "./EmbedSlide";
 import hazelProgram from "./hazel-demo-program.txt?raw";
-import { slideFileUrl, useSlideActive, useSlideStep } from "./slide";
+import { slideFileUrl, useSlideCurrent, useSlideStep } from "./slide";
 
 const HIGHLIGHT = "#d5e5a3";
 const EASE = "cubic-bezier(0.45, 0, 0.25, 1)";
@@ -162,7 +162,7 @@ export function ClipVideo({
   loop?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
-  const active = useSlideActive();
+  const active = useSlideCurrent();
   useEffect(() => {
     const video = ref.current!;
     if (active) {

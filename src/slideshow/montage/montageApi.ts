@@ -8,7 +8,7 @@ export type Rect = { x: number; y: number; w: number; h: number };
 export type MontageTile = Rect & {
   id: string;
   /**
-   * A video in public/slides (e.g. "montage/braid.mp4"), or null for a
+   * A video in public/slides (e.g. "closing-montage/braid.mp4"), or null for a
    * placeholder for a clip still to be recorded.
    */
   file: string | null;

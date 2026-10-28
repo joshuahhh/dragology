@@ -50,9 +50,9 @@ const SNAP_PX = 10;
 const HANDLE_PX = 14;
 const MIN_SIZE = 40;
 
-/** Every video in public/slides/montage, found at build time */
+/** Every video in public/slides/closing-montage, found at build time */
 const montageFiles = Object.keys(
-  import.meta.glob("/public/slides/montage/*.mp4"),
+  import.meta.glob("/public/slides/closing-montage/*.mp4"),
 )
   .map((p) => p.replace("/public/slides/", ""))
   .sort();
@@ -775,7 +775,7 @@ function TileInspector({
           <option value="">(placeholder: clip to come)</option>
           {montageFiles.map((f) => (
             <option key={f} value={f}>
-              {f.replace("montage/", "")}
+              {f.replace("closing-montage/", "")}
             </option>
           ))}
         </select>
@@ -865,7 +865,7 @@ function LayoutSummary({ layout }: { layout: MontageLayout }) {
         <>
           <div className="mt-3 text-xs text-gray-500">unused clips</div>
           {unused.map((f) => (
-            <div key={f}>{f.replace("montage/", "")}</div>
+            <div key={f}>{f.replace("closing-montage/", "")}</div>
           ))}
         </>
       )}
