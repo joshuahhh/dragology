@@ -1,7 +1,15 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { EditorSelection, Prec } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorSelection, EditorState, Prec } from "@codemirror/state";
+import {
+  Decoration,
+  EditorView,
+  MatchDecorator,
+  ViewPlugin,
+  keymap,
+  type DecorationSet,
+  type ViewUpdate,
+} from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import CodeMirror, { ExternalChange } from "@uiw/react-codemirror";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -35,6 +43,7 @@ const theme = EditorView.theme(
     ".cm-line": { padding: 0 },
     ".cm-cursor": { borderLeftColor: "white" },
     ".cm-placeholder": { color: "#4b5563" },
+    ".cm-notes-comment, .cm-notes-comment *": { color: "#6b7280 !important" },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
       backgroundColor: "#374151",
     },
@@ -76,10 +85,39 @@ const wrapSelection = EditorView.inputHandler.of((view, _from, _to, text) => {
   return true;
 });
 
+// A // at the start of a line, or after a space, comments out the rest of the
+// line. (Not one after a colon, so URLs aren't comments.)
+const COMMENT = /(?<=^|\s)\/\/.*/g;
+
+const commentMarks = new MatchDecorator({
+  regexp: COMMENT,
+  decoration: Decoration.mark({ class: "cm-notes-comment" }),
+});
+
+const dimComments = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = commentMarks.createDeco(view);
+    }
+    update(update: ViewUpdate) {
+      this.decorations = commentMarks.updateDeco(update, this.decorations);
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
+
+// Markdown's own comment is <!-- -->; this makes ⌘/ (toggleComment, in the
+// default keymap) toggle // on the selected lines instead.
+const slashComments = Prec.highest(
+  EditorState.languageData.of(() => [{ commentTokens: { line: "//" } }]),
+);
+
 /**
  * A plain-text Markdown editor that shows the text formatted, with the markup
  * left in place (CodeMirror). ⌘↵ or ⌘S calls `onSave`; Escape calls `onCancel`
- * and leaves the editor. Typing * _ ` or ~ over a selection wraps it.
+ * and leaves the editor. Typing * _ ` or ~ over a selection wraps it. ⌘/
+ * toggles a // comment on the selected lines, and comments are dimmed.
  */
 export function NotesEditor({
   value,
@@ -128,6 +166,8 @@ export function NotesEditor({
       syntaxHighlighting(highlightStyle),
       EditorView.lineWrapping,
       wrapSelection,
+      dimComments,
+      slashComments,
       Prec.highest(
         keymap.of([
           {
