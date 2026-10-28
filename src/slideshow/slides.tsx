@@ -323,6 +323,25 @@ export const outline: (Slide | Heading)[] = [
     content: <div className="text-9xl">montage of drag+drop</div>,
   },
   {
+    content: <ImageSlide src="model-driven.jpg" />,
+    notes: `
+      [Design concept: endless array of animated demos scrolls right to left in background, as we show insets: “Declarative Dragging”, “Model-Driven”, and “Composable”, “Dragology”]
+
+      So we’d like to share **Declarative Dragging**, a new approach which makes it possible to build higher quality drag-and-drop interfaces with less work.
+
+      Declarative Dragging combines two ideas.
+
+      The first is defining drags in terms of semantic transformations, rather than low-level logic.
+      We call that **model-driven dragging**.
+
+      To make it possible for model-driven dragging to express different drag-and-drop styles, we extend it with a powerful DSL of behaviors. We call that **composable dragging**.
+
+      The demos we’ve been giving you a taste of in the background here were made with a library called **Dragology**, based on these two ideas.
+
+      Let’s dive in and look at how these ideas work.
+    `,
+  },
+  {
     title: "Opening — Tessellations",
     subtitles: "How would you make a drag-and-drop interface like this?",
     content: (
