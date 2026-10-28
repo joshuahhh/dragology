@@ -15,7 +15,8 @@ import {
   type DragSpecTreeViewNodeProps,
 } from "../DragSpecTreeView";
 import { StudioHackContext } from "../studio/StudioHackContext";
-import { clampSnippetIdx, LiveCode } from "../talk/LiveCodePage";
+import { LiveCode } from "../talk/LiveCodePage";
+import { slideSnippet } from "../talk/snippets";
 import { robotoMono } from "./roboto-mono";
 import {
   DemoSlide,
@@ -30,15 +31,13 @@ import {
 } from "./slide";
 import { sourceSans } from "./source-sans";
 
-/**
- * The live editor (#/talk/livecode) on the stage. The snippet index
- * lives here rather than in the URL, which the slideshow owns.
- */
-function LiveCodeSlide({ snippet = 0 }: { snippet?: number }) {
-  const [snippetIdx, setSnippetIdx] = useState(clampSnippetIdx(snippet));
+/** The live editor (#/talk/livecode) on the stage, with just one code block. */
+function LiveCodeSlide() {
   return (
-    <div style={{ width: "100%", height: "100%" }}>
-      <LiveCode snippetIdx={snippetIdx} onSnippetIdx={setSnippetIdx} />
+    // Absolute, so the stage sizes it: in the slide's own flow, a longer
+    // program would grow the slide and push the diagram down.
+    <div style={{ position: "absolute", inset: 0 }}>
+      <LiveCode snippets={[slideSnippet]} />
     </div>
   );
 }

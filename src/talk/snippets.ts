@@ -75,7 +75,11 @@ const beadsLooks: Record<"original" | "bright", BeadsLook> = {
 };
 
 /** `spec` is the drag spec expression, or null for no drag. */
-function beadsCode(look: BeadsLook, spec: string | null): string {
+function beadsCode(
+  look: BeadsLook,
+  spec: string | null,
+  helpers: boolean,
+): string {
   const dragAttr = spec ? `dragologyOnDrag={() => ${spec}}` : "";
   return `const initialState = { beads: ["A", "B", "C", "D", "E"] };
 
@@ -92,17 +96,21 @@ function draggable({ state, d }) {
     </g>
   );
 }
-${spec ? beadsStateHelpers : ""}`;
+${helpers ? beadsStateHelpers : ""}`;
 }
 
-function beadsSnippet(title: string, spec: string | null): Snippet {
+function beadsSnippet(
+  title: string,
+  spec: string | null,
+  helpers = spec !== null,
+): Snippet {
   return {
     title,
     prelude: beadsLooks.original.prelude,
-    code: beadsCode(beadsLooks.original, spec),
+    code: beadsCode(beadsLooks.original, spec, helpers),
     bright: {
       prelude: beadsLooks.bright.prelude,
-      code: beadsCode(beadsLooks.bright, spec),
+      code: beadsCode(beadsLooks.bright, spec, helpers),
     },
     width: 300,
     height: 300,
@@ -125,8 +133,18 @@ const allSnippets: Snippet[] = [
 ];
 
 // No trailing newline: it would show as a blank last line in the editor.
-export const snippets: Snippet[] = allSnippets.map((s) => ({
-  ...s,
-  code: s.code.trimEnd(),
-  bright: s.bright && { ...s.bright, code: s.bright.code.trimEnd() },
-}));
+function trimSnippet(s: Snippet): Snippet {
+  return {
+    ...s,
+    code: s.code.trimEnd(),
+    bright: s.bright && { ...s.bright, code: s.bright.code.trimEnd() },
+  };
+}
+
+export const snippets: Snippet[] = allSnippets.map(trimSnippet);
+
+/** The slideshow's live-coding slide: the static ring, with the state
+ * helpers already below it, ready for a `dragologyOnDrag` to be typed in. */
+export const slideSnippet: Snippet = trimSnippet(
+  beadsSnippet("ring of beads", null, true),
+);

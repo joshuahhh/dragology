@@ -29,7 +29,7 @@ export const SHORTCUTS: Shortcut[] = [
   {
     codes: ["KeyO"],
     keys: "⌥O",
-    label: "Code ⟷ diagram highlighting",
+    label: "Code → diagram highlighting",
     section: "Show",
     kind: "toggle",
   },
@@ -157,7 +157,9 @@ export function ControlsPanel({
   perform: (code: string, delta?: number) => void;
   style?: CSSProperties;
 }) {
-  const sections = ["Snippet", "Show", "Style", "Actions"] as const;
+  const sections = (["Snippet", "Show", "Style", "Actions"] as const).filter(
+    (section) => section !== "Snippet" || values.snippetCount > 1,
+  );
   return (
     <div
       role="dialog"

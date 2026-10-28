@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { renderDraggableInert } from "../renderDraggable";
 import { compileLiveCode } from "./compile";
 import { formatCode, minimalChange } from "./format";
-import { snippets } from "./snippets";
+import { slideSnippet, snippets } from "./snippets";
 
-const variants = snippets.flatMap((s) => [
+const variants = [...snippets, slideSnippet].flatMap((s) => [
   { name: s.title, prelude: s.prelude, code: s.code },
   ...(s.bright ? [{ name: `${s.title} (bright)`, ...s.bright }] : []),
 ]);

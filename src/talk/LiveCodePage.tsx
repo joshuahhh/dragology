@@ -1,11 +1,4 @@
-import {
-  PointerEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { DraggableRenderer, DragStatus } from "../DraggableRenderer";
 import { DragSpecTreeView } from "../DragSpecTreeView";
@@ -27,7 +20,7 @@ import {
   highlightColors,
   highlightStyles,
 } from "./highlightStyles";
-import { snippets } from "./snippets";
+import { type Snippet, snippets as pageSnippets } from "./snippets";
 import { syntaxThemes } from "./syntaxThemes";
 
 /*
@@ -97,6 +90,7 @@ export function LiveCodePage() {
   return (
     <div style={{ height: "100vh" }}>
       <LiveCode
+        snippets={pageSnippets}
         snippetIdx={snippetIdx}
         onSnippetIdx={(idx) => setSearchParams({ s: String(idx) })}
       />
@@ -105,20 +99,23 @@ export function LiveCodePage() {
 }
 
 export function clampSnippetIdx(idx: number) {
-  return Math.min(Math.max(idx || 0, 0), snippets.length - 1);
+  return Math.min(Math.max(idx || 0, 0), pageSnippets.length - 1);
 }
 
 /**
  * The live editor: code on the left, the diagram it draws on the right.
  * It fills its container, and its toasts and help button pin to the
- * nearest `contain: paint` ancestor (or the window, failing that).
+ * nearest `contain: paint` ancestor (or the window, failing that). With
+ * one snippet, there's no snippet navigation.
  */
 export function LiveCode({
-  snippetIdx,
+  snippets,
+  snippetIdx = 0,
   onSnippetIdx,
 }: {
-  snippetIdx: number;
-  onSnippetIdx: (idx: number) => void;
+  snippets: Snippet[];
+  snippetIdx?: number;
+  onSnippetIdx?: (idx: number) => void;
 }) {
   const [bright, setBright] = useState(true);
   const baseSnippet = snippets[snippetIdx];
@@ -137,8 +134,9 @@ export function LiveCode({
   const [lastInitialState, setLastInitialState] = useState<string | null>(null);
 
   const [cursorLoc, setCursorLoc] = useState<number | null>(null);
-  const [hoverLoc, setHoverLoc] = useState<number | null>(null);
-  const [highlightOn, setHighlightOn] = useState(true);
+  const [pointerInDiagram, setPointerInDiagram] = useState(false);
+  // Off while typing, on (⌥O) while moving around the code.
+  const [highlightOn, setHighlightOn] = useState(false);
   const [foldStyling, setFoldStyling] = useState(true);
   const [styleIdx, setStyleIdx] = useState(0);
   const [syntaxIdx, setSyntaxIdx] = useState(0);
@@ -212,6 +210,7 @@ export function LiveCode({
   // key repeats don't read stale values between renders. The keyboard
   // and the controls panel both act through `perform`.
   const shortcutState = {
+    snippets,
     snippetIdx,
     highlightOn,
     foldStyling,
@@ -234,20 +233,21 @@ export function LiveCode({
       const cycle = (idx: number, length: number) =>
         (((idx + delta) % length) + length) % length;
       const go = (step: number) => {
+        if (cur.snippets.length < 2) return;
         const next = Math.min(
           Math.max(cur.snippetIdx + step, 0),
-          snippets.length - 1,
+          cur.snippets.length - 1,
         );
         cur.snippetIdx = next;
-        onSnippetIdx(next);
-        showToast(snippets[next].title);
+        onSnippetIdx?.(next);
+        showToast(cur.snippets[next].title);
       };
       const actions: Record<string, () => void> = {
         BracketLeft: () => go(-1),
         BracketRight: () => go(1),
         KeyP: () => {
           const settings = {
-            snippet: snippets[cur.snippetIdx].title,
+            snippet: cur.snippets[cur.snippetIdx].title,
             look: cur.bright ? "bright" : "original",
             highlighting: cur.highlightOn,
             highlightStyle: highlightStyles[cur.styleIdx].name,
@@ -409,9 +409,10 @@ export function LiveCode({
     };
   }, []);
 
-  // Highlighting: hover wins over the editor cursor.
+  // Highlighting follows the editor cursor, and is off while the pointer
+  // is over the diagram: it's there to drag things.
   const style = highlightStyles[styleIdx];
-  const activeLoc = highlightOn ? (hoverLoc ?? cursorLoc) : null;
+  const activeLoc = highlightOn && !pointerInDiagram ? cursorLoc : null;
   const highlightedLocs = useMemo(() => {
     if (!good || activeLoc === null) return [];
     const outer = good.locs[activeLoc];
@@ -420,15 +421,6 @@ export function LiveCode({
       loc.from >= outer.from && loc.to <= outer.to ? [i] : [],
     );
   }, [good, activeLoc]);
-
-  const onPointerMove = useCallback((e: PointerEvent) => {
-    if (e.buttons !== 0) {
-      setHoverLoc(null);
-      return;
-    }
-    const el = (e.target as Element).closest?.("[data-loc]");
-    setHoverLoc(el ? Number(el.getAttribute("data-loc")) : null);
-  }, []);
 
   // Diagram sizing.
   const paneRef = useRef<HTMLDivElement>(null);
@@ -535,6 +527,8 @@ export function LiveCode({
       </div>
 
       <div
+        onPointerEnter={() => setPointerInDiagram(true)}
+        onPointerLeave={() => setPointerInDiagram(false)}
         style={{
           flex: 1,
           minWidth: 0,
@@ -546,8 +540,6 @@ export function LiveCode({
         <div
           ref={paneRef}
           data-talk-diagram
-          onPointerMove={onPointerMove}
-          onPointerLeave={() => setHoverLoc(null)}
           style={{
             flex: 1,
             minHeight: 0,
