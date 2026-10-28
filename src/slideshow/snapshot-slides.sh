@@ -36,12 +36,21 @@ async (page) => {
     );
     for (let i = 0; i < 2; i++) await new Promise(requestAnimationFrame);
   });
-  // One screenshot of the whole page, cut into slides below, is much faster
-  // than a screenshot per slide.
-  await page.screenshot({ path: tmp + "/all.png", fullPage: true });
   const nums = await page.\$\$eval("[data-slide]", (els) =>
     els.map((el) => el.dataset.slide),
   );
+  // A few screenshots of the page, cut into slides below, are much faster
+  // than a screenshot per slide. A few, not one: Chrome captures at most
+  // 16384 px of height at a time, which is 30 stages.
+  const PER_SHOT = 30;
+  for (let i = 0; i * PER_SHOT < nums.length; i++) {
+    const count = Math.min(PER_SHOT, nums.length - i * PER_SHOT);
+    await page.screenshot({
+      path: tmp + "/all-" + String(i).padStart(3, "0") + ".png",
+      fullPage: true,
+      clip: { x: 0, y: i * PER_SHOT * 540, width: 960, height: count * 540 },
+    });
+  }
   return nums.join(" ");
 }
 EOF
@@ -54,7 +63,7 @@ playwright-cli -s="$SESSION" close >/dev/null
 [[ -n "$NUMS" ]] || exit 1
 
 # The stages are stacked down the page in order, so tile k is the k-th slide.
-magick "$TMP/all.png" -crop 960x540 +repage -quality 85 "$TMP/tile-%d.jpg"
+magick "$TMP"/all-*.png -crop 960x540 +repage -quality 85 "$TMP/tile-%d.jpg"
 rm -f "$OUT"/*.jpg
 k=0
 for n in $NUMS; do

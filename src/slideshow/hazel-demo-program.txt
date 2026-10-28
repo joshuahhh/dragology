@@ -1,0 +1,29 @@
+let cheap(price) =
+  if price < 900
+  then price
+  else 900
+in
+
+let ladder =
+  let alpha = 100 in
+  let bravo = 250 in
+  let gamma = 425 in
+  alpha + bravo + gamma
+in
+
+
+
+
+let blend(redx, greenx, bluex) =
+  redx + greenx * bluex in
+
+let mixture = blend(10, 20, 30) in
+
+let checkout(price) =
+  let tip = price / 5 in
+  let fee = 3 in
+  let rate = 8 in
+  price + tip + fee + price * rate / 100
+in
+
+cheap(500) + ladder + mixture + checkout(20)
