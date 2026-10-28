@@ -741,6 +741,8 @@ export function SlideshowPage() {
   useEffect(() => {
     // Ctrl+Left/Right always navigate: caught on the way down, before a
     // focused editor or an embedded demo can take them, and while typing.
+    // Shift may be held too (Ctrl+Shift+Arrow), for Macs where Mission
+    // Control's "move a space" shortcuts swallow the plain Ctrl+Arrow.
     const forced = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "ArrowRight") goNext();
