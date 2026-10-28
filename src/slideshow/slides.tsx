@@ -1,5 +1,12 @@
 import _ from "lodash";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { DemoDraggable } from "../demo/ui";
 import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
 import {
@@ -208,34 +215,62 @@ function VideoReelRow({
   // Tiles are sized from their videos' aspect ratios, once known
   const widths = files.map((f) => REEL_ROW_H * (aspects.get(f) ?? 16 / 9));
   const setW = _.sum(widths) + REEL_GAP * files.length;
-  // The track repeats the set of videos enough times to cover the stage and
-  // then some, and slides by one set's width per loop, so the loop has no seam.
-  const copies = files.length > 0 ? Math.ceil(STAGE_W / setW) + 1 : 0;
+  // Each tile wraps around on its own, jumping from one end of the row to the
+  // other while it's off-screen. That works so long as the row is wider than
+  // the stage plus any one tile, so no tile is ever needed at both ends at
+  // once; a row too short for that repeats its videos.
+  const copies =
+    files.length > 0 ? Math.ceil((STAGE_W + _.max(widths)!) / setW) : 0;
+  const loopW = copies * setW;
+  const tiles = _.range(copies).flatMap((c) =>
+    files.map((file, i) => ({
+      key: `${c}-${file}`,
+      file,
+      w: widths[i],
+      x: c * setW + _.sum(widths.slice(0, i)) + REEL_GAP * i,
+    })),
+  );
+
+  const tileEls = useRef(new Map<string, HTMLDivElement>());
+  const [startTime] = useState(() => performance.now());
+  const tilesKey = JSON.stringify(tiles);
+  useLayoutEffect(() => {
+    const sign = direction === "left" ? -1 : 1;
+    const place = () => {
+      const shift =
+        (sign * REEL_SPEED * (performance.now() - startTime)) / 1000;
+      for (const { key, w, x } of tiles) {
+        // Where the tile is, wrapped into [-w, loopW - w)
+        const wrapped = ((((x + shift + w) % loopW) + loopW) % loopW) - w;
+        const el = tileEls.current.get(key);
+        if (el) el.style.transform = `translateX(${wrapped}px)`;
+      }
+    };
+    place();
+    let raf = requestAnimationFrame(function tick() {
+      place();
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tilesKey, loopW, direction, startTime]);
+
   return (
-    <div style={{ height: REEL_ROW_H, overflow: "hidden" }}>
-      <div
-        style={
-          {
-            display: "flex",
-            gap: REEL_GAP,
-            width: "max-content",
-            height: "100%",
-            "--reel-set-w": `${setW}px`,
-            animation: `reel-${direction} ${setW / REEL_SPEED}s linear infinite`,
-          } as React.CSSProperties
-        }
-      >
-        {_.range(copies).flatMap((c) =>
-          files.map((file, i) => (
-            <LoopingVideo
-              key={`${c}-${file}`}
-              file={file}
-              width={widths[i]}
-              onAspect={onAspect}
-            />
-          )),
-        )}
-      </div>
+    <div
+      style={{ position: "relative", height: REEL_ROW_H, overflow: "hidden" }}
+    >
+      {tiles.map(({ key, file, w }) => (
+        <div
+          key={key}
+          ref={(el) => {
+            if (el) tileEls.current.set(key, el);
+            else tileEls.current.delete(key);
+          }}
+          style={{ position: "absolute", top: 0, left: 0, height: "100%" }}
+        >
+          <LoopingVideo file={file} width={w} onAspect={onAspect} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -252,10 +287,6 @@ function DeclarativeDraggingIntro() {
   );
   return (
     <div className="absolute inset-0 overflow-hidden">
-      <style>{`
-        @keyframes reel-left { from { transform: translateX(0) } to { transform: translateX(calc(-1 * var(--reel-set-w))) } }
-        @keyframes reel-right { from { transform: translateX(calc(-1 * var(--reel-set-w))) } to { transform: translateX(0) } }
-      `}</style>
       <div
         className="absolute inset-0 flex flex-col justify-center"
         style={{ gap: REEL_GAP }}
