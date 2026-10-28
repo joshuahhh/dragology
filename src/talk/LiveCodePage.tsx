@@ -506,6 +506,7 @@ export function LiveCode({
           <CodeEditor
             doc={snippet.code}
             docKey={docKey}
+            prelude={snippet.prelude}
             onDocChange={setSource}
             onCursorLoc={setCursorLoc}
             locs={good?.locs ?? []}

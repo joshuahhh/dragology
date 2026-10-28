@@ -1,9 +1,8 @@
 import {
+  acceptCompletion,
   autocompletion,
   closeBrackets,
   closeBracketsKeymap,
-  Completion,
-  CompletionContext,
   completionKeymap,
 } from "@codemirror/autocomplete";
 import {
@@ -24,6 +23,7 @@ import {
 import {
   Compartment,
   EditorState,
+  Prec,
   Range,
   StateEffect,
   StateField,
@@ -41,6 +41,7 @@ import { setStylingFolds, stylingFolding } from "./folds";
 import { formatCode, minimalChange } from "./format";
 import { CodeHighlightStyle, HIGHLIGHT_COLOR } from "./highlightStyles";
 import { syntaxThemes } from "./syntaxThemes";
+import { tsCompletions, tsHover, tsLinter, tsSync } from "./tsExtensions";
 
 // # Highlight state
 
@@ -139,41 +140,6 @@ function locAt(locs: SourceLoc[], pos: number): number | null {
   return best;
 }
 
-// # Completion
-
-const builderMethods: Completion[] = [
-  ["fixed", "(state) — always drop into this state"],
-  ["closest", "(specs) — snap to the closest target"],
-  ["between", "(states) — slide within the hull of targets"],
-  ["vary", "(state, param(...)) — continuously vary numbers"],
-  ["dropTarget", "(id, state) — drop onto an element"],
-  ["switchToStateAndFollow", "(state, id) — switch mid-drag"],
-].map(([label, detail]) => ({ label, detail, type: "method" }));
-
-const specMethods: Completion[] = [
-  ["withFloating", "() — detach and follow the pointer"],
-  ["whenFar", "(background, { gap }) — fallback when far"],
-  ["withSnapRadius", "(radius) — snap when close"],
-  ["onDrop", "(state) — state to commit on drop"],
-  ["withDropTransition", "(transition)"],
-  ["withBranchTransition", "(transition)"],
-  ["withChaining", "() — re-run the spec from new states"],
-  ["during", "(fn) — transform the preview state"],
-].map(([label, detail]) => ({ label, detail, type: "method" }));
-
-function dragologyCompletions(ctx: CompletionContext) {
-  // Not `ctx.matchBefore`, which only sees the current line: a chain
-  // often continues on the next line (`d.closest(states)` ⏎ `.with…`).
-  const before = ctx.state.sliceDoc(Math.max(0, ctx.pos - 200), ctx.pos);
-  const match = /(\bd|\))\s*\.(\w*)$/.exec(before);
-  if (!match) return null;
-  return {
-    from: ctx.pos - match[2].length,
-    options: match[1] === "d" ? builderMethods : specMethods,
-    validFor: /^\w*$/,
-  };
-}
-
 // # Theme
 
 const SCROLLBAR_THUMB = 10;
@@ -231,6 +197,13 @@ const theme = EditorView.theme({
   },
   ".cm-loc-dim": { opacity: 0.3 },
   ".cm-tooltip-autocomplete": { fontSize: "0.8em" },
+  ".cm-completionInfo": { fontSize: "0.8em", maxWidth: "40em" },
+  ".cm-tooltip-hover, .cm-tooltip-lint": {
+    fontSize: "0.8em",
+    maxWidth: "40em",
+  },
+  ".cm-tooltip-hover .cm-ts-details": { padding: "4px 8px" },
+  ".cm-ts-signature": { margin: 0, whiteSpace: "pre-wrap" },
   ".cm-foldPlaceholder": {
     background: "#f4f4f5",
     border: "none",
@@ -286,6 +259,7 @@ export type CodeEditorApi = { format(): void };
 export function CodeEditor({
   doc,
   docKey,
+  prelude,
   onDocChange,
   onCursorLoc,
   locs,
@@ -300,6 +274,8 @@ export function CodeEditor({
   /** The contents for `docKey`; swapped in whenever `docKey` changes. */
   doc: string;
   docKey: string;
+  /** Hidden code that runs before `doc`; completion sees its names. */
+  prelude: string;
   onDocChange: (doc: string) => void;
   onCursorLoc: (loc: number | null) => void;
   /** Locs from the last successful compile of `locsDoc`. */
@@ -320,6 +296,8 @@ export function CodeEditor({
   const callbacksRef = useRef({ onDocChange, onCursorLoc });
   callbacksRef.current = { onDocChange, onCursorLoc };
   const syntaxCompartment = useRef(new Compartment()).current;
+  const preludeRef = useRef(prelude);
+  preludeRef.current = prelude;
   const syntaxThemeRef = useRef(syntaxTheme);
   syntaxThemeRef.current = syntaxTheme;
 
@@ -370,11 +348,18 @@ export function CodeEditor({
           indentOnInput(),
           bracketMatching(),
           closeBrackets(),
-          autocompletion({ activateOnTypingDelay: 0 }),
+          autocompletion({
+            activateOnTypingDelay: 0,
+            icons: false,
+            override: [tsCompletions],
+          }),
+          // Tab accepts a completion, even inside a snippet's field (whose
+          // own Tab binding moves to the next field).
+          Prec.highest(keymap.of([{ key: "Tab", run: acceptCompletion }])),
+          tsSync(() => preludeRef.current),
+          tsHover,
+          tsLinter,
           javascript({ jsx: true, typescript: true }),
-          EditorState.languageData.of(() => [
-            { autocomplete: dragologyCompletions },
-          ]),
           syntaxCompartment.of(
             syntaxHighlighting(syntaxThemes[syntaxThemeRef.current].style),
           ),
