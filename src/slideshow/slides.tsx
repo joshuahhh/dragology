@@ -15,6 +15,7 @@ import {
 } from "../DragSpecTreeView";
 import { StudioHackContext } from "../studio/StudioHackContext";
 import { clampSnippetIdx, LiveCode } from "../talk/LiveCodePage";
+import { robotoMono } from "./roboto-mono";
 import {
   DemoSlide,
   type Heading,
@@ -89,29 +90,6 @@ const reelRows: { files: string[]; direction: "left" | "right" }[] = [
   { files: reelFiles.filter((_, i) => i % 2 === 1), direction: "right" },
 ];
 
-/** A placeholder inset: an illustration to come, over a title */
-function PlaceholderInset({ title }: { title: string }) {
-  return (
-    <div
-      className="flex flex-col items-center"
-      style={{
-        width: 480,
-        gap: 32,
-        padding: "48px 64px",
-        boxSizing: "content-box",
-      }}
-    >
-      <div
-        className="flex items-center justify-center text-3xl text-gray-400 border-2 border-dashed border-gray-300 rounded-xl"
-        style={{ width: 400, height: 380 }}
-      >
-        illustration
-      </div>
-      <div className="text-6xl italic">{title}</div>
-    </div>
-  );
-}
-
 /** An inset drawn as a whole, margins and all, in an image in public/slides */
 function ImageInset({ src }: { src: string }) {
   return (
@@ -138,7 +116,25 @@ const introInsets: ReactNode[] = [
   </div>,
   <ImageInset src="model-driven.png" />,
   <ImageInset src="composable.png" />,
-  <PlaceholderInset title="Dragology" />,
+  // The wordmark from the Dragology title slide
+  <div
+    className="flex flex-col items-end"
+    style={{ padding: "56px 72px 64px", whiteSpace: "nowrap" }}
+  >
+    <div style={{ fontFamily: robotoMono, fontSize: 144, lineHeight: 1 }}>
+      Dragology
+    </div>
+    <div
+      style={{
+        fontFamily: sourceSans,
+        fontSize: 44,
+        fontWeight: 300,
+        marginTop: 20,
+      }}
+    >
+      a library for Declarative Dragging
+    </div>
+  </div>,
 ];
 
 /**
