@@ -20,6 +20,7 @@ import {
   notesFirstLine,
   type Slide,
   slideFileUrl,
+  SlidePresenceContext,
   SlideStepContext,
   slideSteps,
   STAGE_H,
@@ -926,9 +927,16 @@ export function SlideshowPage() {
                   }}
                 >
                   {"content" in s && (
-                    <SlideStepContext.Provider value={stepOf(slideIdx)}>
-                      {s.content}
-                    </SlideStepContext.Provider>
+                    <SlidePresenceContext.Provider
+                      value={{
+                        shown: visible,
+                        current: slideIdx === currentSlide,
+                      }}
+                    >
+                      <SlideStepContext.Provider value={stepOf(slideIdx)}>
+                        {s.content}
+                      </SlideStepContext.Provider>
+                    </SlidePresenceContext.Provider>
                   )}
                 </div>
               );

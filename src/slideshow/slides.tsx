@@ -2,6 +2,7 @@ import _ from "lodash";
 import {
   type ReactNode,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -23,6 +24,8 @@ import {
   type Slide,
   slideFileUrl,
   STAGE_W,
+  useSlideCurrent,
+  useSlideShown,
   useSlideStep,
 } from "./slide";
 import { sourceSans } from "./source-sans";
@@ -69,6 +72,64 @@ import {
 } from "../demos/twisted-trees/index";
 import { tree7 } from "../demos/twisted-trees/trees";
 
+/** Every video in public/slides/montage, found at build time (only the names). */
+const montageFiles = Object.keys(
+  import.meta.glob("/public/slides/montage/*.mp4"),
+)
+  .map((p) => p.replace("/public/slides/", ""))
+  .sort();
+
+/**
+ * The montage of drag and drop: clips cut one to the next on black, in name
+ * order, round and round. It starts from the first clip each time it's shown.
+ * On its second step, a "Drag and Drop" inset comes in over it, low down,
+ * out of the way of the clips' action, which is mostly in the middle.
+ */
+function MontageSlide() {
+  const shown = useSlideShown();
+  const current = useSlideCurrent();
+  const [clip, setClip] = useState(0);
+  if (!shown && clip !== 0) setClip(0);
+  const videos = useRef<(HTMLVideoElement | null)[]>([]);
+
+  // Only the current clip plays; the others wait at their first frame, so a
+  // cut to one shows it at once
+  useEffect(() => {
+    videos.current.forEach((video, i) => {
+      if (!video) return;
+      if (shown && i === clip) {
+        video.play()?.catch(() => {});
+      } else {
+        video.pause();
+        if (video.currentTime !== 0) video.currentTime = 0;
+      }
+    });
+  }, [shown, clip]);
+
+  return (
+    <div className="absolute inset-0" style={{ background: "black" }}>
+      {montageFiles.map((file, i) => (
+        <video
+          key={file}
+          ref={(el) => {
+            videos.current[i] = el;
+          }}
+          src={slideFileUrl(file)}
+          preload="auto"
+          muted
+          playsInline
+          // Once we've gone on, a clip that ends holds on its last frame, so
+          // there's no cut while the slide fades out
+          onEnded={() => current && setClip((i + 1) % montageFiles.length)}
+          className="absolute inset-0 w-full h-full object-contain"
+          style={{ visibility: i === clip ? "visible" : "hidden" }}
+        />
+      ))}
+      <SlideInsets insets={[null, dragAndDropInset]} bottom={96} />
+    </div>
+  );
+}
+
 // The Declarative Dragging slide: two rows of demo videos scroll endlessly in
 // opposite directions behind an inset that changes with each step.
 
@@ -102,18 +163,127 @@ function ImageInset({ src }: { src: string }) {
   );
 }
 
+/**
+ * Insets over a slide's background, one per step, each fading in as its step
+ * comes. A step whose inset is null shows just the background.
+ */
+function SlideInsets({
+  insets,
+  bottom,
+}: {
+  insets: ReactNode[];
+  /**
+   * How far above the stage's bottom edge to put the insets, rather than in
+   * the middle
+   */
+  bottom?: number;
+}) {
+  const step = useSlideStep();
+  return insets.map(
+    (inset, i) =>
+      inset != null && (
+        <div
+          key={i}
+          className={`absolute inset-0 flex justify-center ${
+            bottom === undefined ? "items-center" : "items-end"
+          }`}
+          style={{
+            paddingBottom: bottom,
+            transformOrigin: bottom === undefined ? undefined : "bottom",
+            opacity: i === step ? 1 : 0,
+            transform: i === step ? "scale(1)" : "scale(0.94)",
+            transition: "opacity 400ms ease, transform 400ms ease",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            className="bg-white"
+            style={{ boxShadow: "0 30px 80px rgba(0,0,0,0.35)" }}
+          >
+            {inset}
+          </div>
+        </div>
+      ),
+  );
+}
+
+/** An inset that's a line of title text, after an optional icon */
+function TitleInset({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="flex items-center"
+      style={{
+        fontFamily: sourceSans,
+        fontSize: 96,
+        whiteSpace: "nowrap",
+        padding: "48px 64px",
+        gap: 40,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Lucide's "grab" icon (ISC license), a closed hand
+const grabHandPaths = [
+  "M18 11.5V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1.4",
+  "M14 10V8a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2",
+  "M10 9.9V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v5",
+  "M6 14a2 2 0 0 0-2-2a2 2 0 0 0-2 2",
+  "M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8 2 2 0 1 1 4 0",
+];
+
+/**
+ * A grabbing hand carrying a card away from the dashed outline of where it
+ * was
+ */
+function DragAndDropIcon({ size }: { size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 36 36"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x={2} y={18} width={14} height={14} rx={2} strokeDasharray="3 3" />
+      <rect
+        x={12}
+        y={4}
+        width={14}
+        height={14}
+        rx={2}
+        fill="currentColor"
+        fillOpacity={0.15}
+      />
+      <g transform="translate(12 9) scale(0.95)">
+        {/* The hand's outline is open, so fill it in a pass of its own, under
+            the strokes, to hide the card behind it */}
+        {grabHandPaths.map((d) => (
+          <path key={`fill-${d}`} d={d} fill="white" stroke="none" />
+        ))}
+        {grabHandPaths.map((d) => (
+          <path key={d} d={d} />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+const dragAndDropInset = (
+  <TitleInset>
+    <DragAndDropIcon size={120} />
+    Drag and Drop
+  </TitleInset>
+);
+
 /** The insets, one per step */
 const introInsets: ReactNode[] = [
-  <div
-    style={{
-      fontFamily: sourceSans,
-      fontSize: 96,
-      whiteSpace: "nowrap",
-      padding: "48px 64px",
-    }}
-  >
-    Declarative Dragging
-  </div>,
+  <TitleInset>Declarative Dragging</TitleInset>,
   <ImageInset src="model-driven.png" />,
   <ImageInset src="composable.png" />,
   // The wordmark from the Dragology title slide
@@ -272,7 +442,6 @@ function VideoReelRow({
 }
 
 function DeclarativeDraggingIntro() {
-  const step = useSlideStep();
   const [aspects, setAspects] = useState(() => new Map<string, number>());
   const onAspect = useCallback(
     (file: string, aspect: number) =>
@@ -296,25 +465,7 @@ function DeclarativeDraggingIntro() {
           />
         ))}
       </div>
-      {introInsets.map((inset, i) => (
-        <div
-          key={i}
-          className="absolute inset-0 flex items-center justify-center"
-          style={{
-            opacity: i === step ? 1 : 0,
-            transform: i === step ? "scale(1)" : "scale(0.94)",
-            transition: "opacity 400ms ease, transform 400ms ease",
-            pointerEvents: "none",
-          }}
-        >
-          <div
-            className="bg-white"
-            style={{ boxShadow: "0 30px 80px rgba(0,0,0,0.35)" }}
-          >
-            {inset}
-          </div>
-        </div>
-      ))}
+      <SlideInsets insets={introInsets} />
     </div>
   );
 }
@@ -596,16 +747,19 @@ export const outline: (Slide | Heading)[] = [
 
       And unlike photographs, interfaces let us reach into these worlds, tug things around, and see how they respond.
 
+      ---
       Often, we do this with drag and drop, which give us virtual hands to act in virtual worlds
 
       But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. It takes complex, cross-cutting choreography to build interactions with the fluidity and tangibility of the physical world.
 
       We think interface inventors need better infrastructure.
     `,
-    content: <div className="text-9xl">montage of drag+drop</div>,
+    steps: 2,
+    content: <MontageSlide />,
   },
   {
     steps: 4,
+    transition: "fade-white",
     content: <DeclarativeDraggingIntro />,
     notes: `
       // Design concept: endless array of animated demos scrolls right to left in background, as we show insets: “Declarative Dragging”, “Model-Driven”, and “Composable”, “Dragology”
