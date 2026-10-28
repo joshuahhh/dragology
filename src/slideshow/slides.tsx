@@ -941,7 +941,6 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: (
       <Rails id="scheduler">
-        (
         <>
           <DemoSlide
             width={560}
@@ -958,7 +957,6 @@ export const outline: (Slide | Heading)[] = [
             {'(state, param("meetings", i, "end"))'}
           </CodeCallout>
         </>
-        ),
       </Rails>
     ),
   },
@@ -984,7 +982,6 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: (
       <Rails id="lists-in-lists">
-        (
         <>
           <DemoSlide
             width={400}
@@ -1004,7 +1001,6 @@ export const outline: (Slide | Heading)[] = [
             <Hl at={[1]}>)</Hl>
           </CodeCallout>
         </>
-        ),
       </Rails>
     ),
   },
@@ -1026,7 +1022,6 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: (
       <Rails id="tactile-tessellations">
-        (
         <>
           <DemoSlide
             width={900}
@@ -1043,50 +1038,6 @@ export const outline: (Slide | Heading)[] = [
             {'("trash", without)'}
           </CodeCallout>
         </>
-        ),
-      </Rails>
-    ),
-  },
-  // Animate Algebra (190-210s)
-  {
-    title: "Animate Algebra",
-    transition: "fade-white",
-    steps: 3,
-    notes: `
-      These drags are created with three operators.
-      First, the "between" operator makes tracks to the destination states.
-
-      ---
-
-      The "closest", which we've seen before, reappears to combine these tracks together.
-
-      ---
-
-      And finally, Dragology's "chaining" feature lets you drag through multiple model states in a single gesture, instead of having to drop and drag again in intermediate states.
-    `,
-    content: (
-      <Rails id="animate-algebra">
-        (
-        <>
-          <DemoSlide
-            width={300}
-            height={350}
-            overlayTitle="Animate Algebra"
-            demoId="animate-algebra-tree"
-          >
-            <AnimateAlgebraClean />
-          </DemoSlide>
-          <CodeCallout>
-            {"d."}
-            <Hl at={[1]}>closest</Hl>
-            {"(newTrees.map((t) =>\n  d."}
-            <Hl at={[0]}>between</Hl>
-            {"([state, t])))\n .withSnapRadius(1, { "}
-            <Hl at={[2]}>chain: true</Hl>
-            {" })"}
-          </CodeCallout>
-        </>
-        ),
       </Rails>
     ),
   },
@@ -1109,7 +1060,6 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: (
       <Rails id="twisted-trees">
-        (
         <DemoSlide
           width={400}
           height={600}
@@ -1121,7 +1071,47 @@ export const outline: (Slide | Heading)[] = [
             byStep={[{ showDebugOverlay: false }, { showDebugOverlay: true }]}
           />
         </DemoSlide>
-        ),
+      </Rails>
+    ),
+  },
+  // Animate Algebra (190-210s)
+  {
+    title: "Animate Algebra",
+    transition: "fade-white",
+    steps: 3,
+    notes: `
+      These drags are created with three operators.
+      First, the "between" operator makes tracks to the destination states.
+
+      ---
+
+      The "closest", which we've seen before, reappears to combine these tracks together.
+
+      ---
+
+      And finally, Dragology's "chaining" feature lets you drag through multiple model states in a single gesture, instead of having to drop and drag again in intermediate states.
+    `,
+    content: (
+      <Rails id="animate-algebra">
+        <>
+          <DemoSlide
+            width={300}
+            height={350}
+            overlayTitle="Animate Algebra"
+            demoId="animate-algebra-tree"
+          >
+            <AnimateAlgebraClean />
+          </DemoSlide>
+          <CodeCallout>
+            {"d."}
+            <Hl at={[1]}>closest</Hl>
+            {"(newTrees.map((t) =>\n  d."}
+            <Hl at={[0]}>between</Hl>
+            {"([state, t])))\n .withSnapRadius(1, { "}
+            <Hl at={[2]}>chain: true</Hl>
+            {" })"}
+          </CodeCallout>
+        </>
       </Rails>
     ),
   },
@@ -1144,7 +1134,6 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: (
       <Rails id="permutation-lab">
-        (
         <DemoSlide
           width={PERM_TALK_WIDTH}
           height={PERM_TALK_HEIGHT}
@@ -1153,7 +1142,6 @@ export const outline: (Slide | Heading)[] = [
         >
           <PermutationLabTalk />
         </DemoSlide>
-        ),
       </Rails>
     ),
   },
@@ -1175,7 +1163,6 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: (
       <Rails id="drag-spec-designer">
-        (
         <DemoSlide
           width={600}
           height={400}
@@ -1184,7 +1171,6 @@ export const outline: (Slide | Heading)[] = [
         >
           <dragSpecDesignerDemo.Component />
         </DemoSlide>
-        ),
       </Rails>
     ),
   },
