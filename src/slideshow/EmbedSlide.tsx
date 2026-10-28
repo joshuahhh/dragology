@@ -135,14 +135,17 @@ export function EmbedSlide({
       } else if (
         forwarded.includes(e.key) ||
         // Ctrl(+Shift)+arrows, which always navigate
-        (e.ctrlKey && CTRL_ARROW_KEYS.includes(e.key))
+        (e.ctrlKey && CTRL_ARROW_KEYS.includes(e.key)) ||
+        // The slideshow's Ctrl+Shift+<letter> hotkeys, which work everywhere
+        (e.ctrlKey && e.shiftKey && e.code.startsWith("Key"))
       ) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const { key, ctrlKey, shiftKey, altKey, metaKey } = e;
+        const { key, code, ctrlKey, shiftKey, altKey, metaKey } = e;
         window.dispatchEvent(
           new KeyboardEvent("keydown", {
             key,
+            code,
             ctrlKey,
             shiftKey,
             altKey,
