@@ -745,14 +745,16 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     notes: `
-      Interfaces can show you worlds of information, worlds of imagination, structures, patterns, simulation.
+      // prob 38 sec total
+
+      Interfaces can show you worlds of information, imagination, structures, patterns, simulation.
 
       And unlike photographs, interfaces let us reach into these worlds, tug things around, and see how they respond.
 
       ---
       Often, we do this with drag and drop, which give us virtual hands to act in virtual worlds
 
-      But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. It takes complex, cross-cutting choreography to build interactions with the fluidity and tangibility of the physical world.
+      But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. If you want interactions with the fluidity and tangibility of an imagined world, you'll need complex and cross-cutting choreography.
 
       We think interface inventors need better infrastructure.
     `,
@@ -821,9 +823,7 @@ export const outline: (Slide | Heading)[] = [
     notes: `
       Next, they specify, for each draggable element, a set of new model states the user should be able to access by dragging that element.
 
-      [TODO: these are states that take the dragged element out of the list, and reinsert it in each other position]
-
-      [TODO: add more labels on screen]
+      In this case, that means states that move the dragged element to a new position in the array.
     `,
     content: <ModelDrivenSlide from={7.5} to={9} />,
   },
