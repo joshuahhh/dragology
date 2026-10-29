@@ -13,6 +13,7 @@ import { DraggableRenderer, type DragStatus } from "../../DraggableRenderer";
 import { Vec2 } from "../../math/vec2";
 import { OverlayVis } from "../../OverlayVis";
 import { drawLayered, LayeredSvgx } from "../../svgx/layers";
+import { highlightColors } from "../../talk/highlightStyles";
 import { robotoMono } from "../roboto-mono";
 import { STAGE_H, STAGE_W } from "../slide";
 import { sourceSans } from "../source-sans";
@@ -89,16 +90,22 @@ export const script = {
   viewsIn: [14.8, 15.32],
   viewArrowsBlink: { start: 15.42, period: 0.6, count: 3 },
   /** Where the element lands in each view */
-  targetsIn: [18.0, 18.45],
-  targetsBlink: { start: 18.5, period: 0.6, count: 3 },
-  /** Code, arrows and cursor go; the start view gets its target too */
+  /** First everything else fades from the views, leaving the element alone */
+  othersOut: [18.0, 18.45],
+  /** Then, view by view, it bounces, and gets its halo */
+  bounces: { start: 18.55, stagger: 0.22, duration: 0.4, scale: 1.3 },
+  /** Code, arrows and cursor go */
   codeOut: [20.68, 21.15],
   toRow: [21.17, 21.71],
-  /** Each view's target flies down to the big view, one after another */
+  /** Each view, now just its element, flies down to the big view, one after
+   * another */
   flights: { start: 21.72, stagger: 0.25, duration: 0.27 },
-  liveIn: [23.0, 23.5],
-  targetsOut: [23.62, 24.05],
-  overlayIn: [23.25, 23.5],
+  /** The landed elements go, leaving their halos to mark where they were */
+  landedOut: [23.0, 23.25],
+  liveIn: [23.2, 23.6],
+  overlayIn: [23.45, 23.7],
+  /** ...and then the halos go too */
+  targetsOut: [23.8, 24.2],
   /** When the debug overlay goes away, mid-drag */
   overlayCut: 25.85,
 } as const;
@@ -153,12 +160,13 @@ export function ModelDrivenScene<T extends object>({
   /** A point on the canvas, in a view with frame `f` */
   const toStage = (f: Frame, p: Vec2) =>
     Vec2(f.x, f.y).add(p.sub(canvasCenter).mul(f.scale));
-  /** Half the size of the mark around where the element lands */
-  const targetHalf = (f: Frame) =>
-    analysis.elementHalfSize.mul(f.scale).add(Vec2(4 + 5 * f.scale));
-
   // The states, in the spec's order, and the ones other than the start
   const { candidates } = analysis;
+  /** Each state's view, split so the dragged element can be singled out */
+  const parts = useMemo(
+    () => candidates.map((c) => splitLayers(c.layered, draggedId)),
+    [candidates, draggedId],
+  );
   const others = candidates.filter((c) => !c.isStart);
   const startIdx = Math.max(
     0,
@@ -249,10 +257,23 @@ export function ModelDrivenScene<T extends object>({
       s.viewArrowsBlink.period,
       s.viewArrowsBlink.count,
     );
-  const targetsOpacity =
-    progress(t, s.targetsIn) *
-    blink(t, s.targetsBlink.start, s.targetsBlink.period, s.targetsBlink.count);
-  const startTargetOpacity = progress(t, s.codeOut);
+  const othersOpacity = 1 - progress(t, s.othersOut);
+  /** The views bounce in order: the start view, then the others */
+  const bounceSpan = (i: number) => {
+    const k = candidates[i].isStart ? 0 : others.indexOf(candidates[i]) + 1;
+    const start = s.bounces.start + s.bounces.stagger * k;
+    return [start, start + s.bounces.duration] as const;
+  };
+  const bounceOf = (i: number): Bounce => ({
+    at: candidates[i].pos,
+    scale:
+      1 +
+      (s.bounces.scale - 1) * Math.sin(Math.PI * progress(t, bounceSpan(i))),
+  });
+  const haloOpacityOf = (i: number) => {
+    const [start] = bounceSpan(i);
+    return progress(t, [start, start + 0.12]);
+  };
   const cursorOpacity = progress(t, s.cursorIn) * codeOpacity;
 
   const startPos = toStage(startFrame, analysis.start.pos);
@@ -303,6 +324,7 @@ export function ModelDrivenScene<T extends object>({
               floodOpacity={0.3}
             />
           </filter>
+          <HaloFilter />
         </defs>
 
         {/* The model state, and its view */}
@@ -314,13 +336,17 @@ export function ModelDrivenScene<T extends object>({
             style={modelCode}
             markOpacity={candidatesOpacity}
           />
-          <Label rect={startBox}>View</Label>
+          <Label rect={startBox} below>
+            View
+          </Label>
         </g>
         <ViewBox
           box={startBox}
           frame={startFrame}
           canvasCenter={canvasCenter}
-          layered={analysis.start.layered}
+          parts={parts[startIdx]}
+          othersOpacity={othersOpacity}
+          bounce={bounceOf(startIdx)}
         />
         <g opacity={codeOpacity}>
           <DownArrow
@@ -372,10 +398,19 @@ export function ModelDrivenScene<T extends object>({
                 box={box}
                 frame={frame}
                 canvasCenter={canvasCenter}
-                layered={c.layered}
+                parts={parts[i]}
+                othersOpacity={othersOpacity}
+                bounce={bounceOf(i)}
               />
             );
           })}
+          {others.length > 0 && (
+            <g opacity={codeOpacity}>
+              <Label rect={thumbAt(0, candidates.indexOf(others[0])).box} below>
+                Speculatively rendered views
+              </Label>
+            </g>
+          )}
         </g>
         <g opacity={viewArrowsOpacity * codeOpacity}>
           {others.map((_c, j) => {
@@ -392,24 +427,19 @@ export function ModelDrivenScene<T extends object>({
         </g>
 
         {/* Where the element lands in each view */}
-        <g opacity={targetsOpacity}>
-          {others.map((c, j) => {
-            const { frame } = thumbAt(j, candidates.indexOf(c));
-            return (
-              <TargetMark
-                key={j}
-                center={toStage(frame, c.pos)}
-                half={targetHalf(frame)}
-              />
-            );
-          })}
-        </g>
-        <g opacity={startTargetOpacity}>
-          <TargetMark center={startPos} half={targetHalf(startFrame)} />
-        </g>
+        {candidates.map((_c, i) => (
+          <g key={i} opacity={haloOpacityOf(i)}>
+            <TargetHalo
+              frame={viewFrameOf(i)}
+              canvasCenter={canvasCenter}
+              layered={parts[i].dragged}
+              bounce={bounceOf(i)}
+            />
+          </g>
+        ))}
 
-        {/* The views' backgrounds, flying down with their targets */}
-        {candidates.map((c, i) => {
+        {/* Each view's background and element, flying down to the big view */}
+        {candidates.map((_c, i) => {
           const span = flightSpan(i);
           if (t < span[0]) return null;
           const u = eased(t, span, flightEase);
@@ -420,17 +450,49 @@ export function ModelDrivenScene<T extends object>({
             i === 0
               ? lerp(0.6, 1, u) * (1 - liveOpacity)
               : 0.6 * (1 - progress(t, [lerp(span[0], span[1], 0.6), span[1]]));
-          if (opacity <= 0) return null;
           return (
-            <g key={i} opacity={opacity}>
-              <CanvasView
-                frame={frame}
-                canvasCenter={canvasCenter}
-                layered={backgroundOnly(c.layered)}
-              />
+            <g key={i}>
+              {opacity > 0 && (
+                <g opacity={opacity}>
+                  <CanvasView
+                    frame={frame}
+                    canvasCenter={canvasCenter}
+                    layered={parts[i].background}
+                  />
+                </g>
+              )}
+              <g opacity={1 - progress(t, s.landedOut)}>
+                <CanvasView
+                  frame={frame}
+                  canvasCenter={canvasCenter}
+                  layered={parts[i].dragged}
+                />
+              </g>
             </g>
           );
         })}
+
+        {/* Their halos in flight, and landed: under the live view, so they
+            glow around its elements */}
+        <g opacity={1 - progress(t, s.targetsOut)}>
+          {candidates.map((_c, i) => {
+            const span = flightSpan(i);
+            if (t < span[0]) return null;
+            const frame = lerpFrame(
+              viewFrameOf(i),
+              big,
+              eased(t, span, flightEase),
+            );
+            return (
+              <TargetHalo
+                key={i}
+                frame={frame}
+                canvasCenter={canvasCenter}
+                layered={parts[i].dragged}
+              />
+            );
+          })}
+        </g>
       </svg>
 
       {live && (
@@ -450,26 +512,6 @@ export function ModelDrivenScene<T extends object>({
         height={STAGE_H}
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
       >
-        {/* The targets in flight, and landed */}
-        <g opacity={1 - progress(t, s.targetsOut)}>
-          {candidates.map((c, i) => {
-            const span = flightSpan(i);
-            if (t < span[0]) return null;
-            const frame = lerpFrame(
-              viewFrameOf(i),
-              big,
-              eased(t, span, flightEase),
-            );
-            return (
-              <TargetMark
-                key={i}
-                center={toStage(frame, c.pos)}
-                half={targetHalf(frame)}
-              />
-            );
-          })}
-        </g>
-
         {cursorOpacity > 0 && (
           <Cursor
             at={startPos.add(Vec2(s.cursor.dx, s.cursor.dy))}
@@ -482,30 +524,59 @@ export function ModelDrivenScene<T extends object>({
   );
 }
 
-/** A state's root layer alone: what it draws besides its id'd elements */
-function backgroundOnly(layered: LayeredSvgx): LayeredSvgx {
-  const root = layered.byId.get("");
-  return {
-    byId: new Map(root ? [["", root]] : []),
+/**
+ * A state's view in three parts: its root layer (what it draws besides its
+ * id'd elements), the dragged element (with any id'd elements inside it),
+ * and everything else
+ */
+type ViewParts = {
+  background: LayeredSvgx;
+  dragged: LayeredSvgx;
+  others: LayeredSvgx;
+};
+
+function splitLayers(layered: LayeredSvgx, draggedId: string): ViewParts {
+  const mine = new Set([
+    draggedId,
+    ...(layered.descendents?.get(draggedId) ?? []),
+  ]);
+  const pick = (keep: (id: string) => boolean): LayeredSvgx => ({
+    byId: new Map([...layered.byId].filter(([id]) => keep(id))),
     descendents: null,
+  });
+  return {
+    background: pick((id) => id === ""),
+    dragged: pick((id) => mine.has(id)),
+    others: pick((id) => id !== "" && !mine.has(id)),
   };
+}
+
+/** A scaling about a point on the canvas, for a bounce */
+type Bounce = { at: Vec2; scale: number };
+
+function bounceTransform(bounce: Bounce | undefined) {
+  if (!bounce || bounce.scale === 1) return undefined;
+  const { at, scale } = bounce;
+  return `translate(${at.x} ${at.y}) scale(${scale}) translate(${-at.x} ${-at.y})`;
 }
 
 function CanvasView({
   frame,
   canvasCenter,
   layered,
+  bounce,
 }: {
   frame: Frame;
   canvasCenter: Vec2;
   layered: LayeredSvgx;
+  bounce?: Bounce;
 }) {
   const drawn = useMemo(() => drawLayered(layered), [layered]);
   return (
     <g
       transform={`translate(${frame.x} ${frame.y}) scale(${frame.scale}) translate(${-canvasCenter.x} ${-canvasCenter.y})`}
     >
-      {drawn}
+      <g transform={bounceTransform(bounce)}>{drawn}</g>
     </g>
   );
 }
@@ -514,17 +585,28 @@ function ViewBox({
   box,
   frame,
   canvasCenter,
-  layered,
+  parts,
+  othersOpacity,
+  bounce,
 }: {
   box: Rect;
   frame: Frame;
   canvasCenter: Vec2;
-  layered: LayeredSvgx;
+  parts: ViewParts;
+  othersOpacity: number;
+  bounce: Bounce;
 }) {
+  const view = { frame, canvasCenter };
   return (
     <g>
       <BoxRect rect={box} />
-      <CanvasView frame={frame} canvasCenter={canvasCenter} layered={layered} />
+      <CanvasView {...view} layered={parts.background} />
+      {othersOpacity > 0 && (
+        <g opacity={othersOpacity}>
+          <CanvasView {...view} layered={parts.others} />
+        </g>
+      )}
+      <CanvasView {...view} layered={parts.dragged} bounce={bounce} />
     </g>
   );
 }
@@ -545,12 +627,23 @@ function BoxRect({ rect }: { rect: Rect }) {
   );
 }
 
-/** A box's name, just above its top-left corner */
-function Label({ rect, children }: { rect: Rect; children: string }) {
+/**
+ * A box's name, just above its top-left corner (code boxes), or just below
+ * its bottom-left corner (views, whose tops the arrows come in at)
+ */
+function Label({
+  rect,
+  below = false,
+  children,
+}: {
+  rect: Rect;
+  below?: boolean;
+  children: string;
+}) {
   return (
     <text
       x={rect.x + 4}
-      y={rect.y - 14}
+      y={below ? rect.y + rect.h + 40 : rect.y - 14}
       fontFamily={sourceSans}
       fontWeight={700}
       fontSize={36}
@@ -724,28 +817,64 @@ function GreyArrow({ from, to }: { from: Vec2; to: Vec2 }) {
   );
 }
 
+const HALO_FILTER_ID = "md-halo";
+
 /**
- * A dashed outline around where the element lands: a rounded rect with
- * fully rounded ends, so a circle around a round element.
+ * The live-code slide's "halo fill" highlight (LiveCodePage's HaloFilter):
+ * a silhouette grown by GAP, in translucent magenta. Unlike there, it draws
+ * the halo alone, without the element, so it can fly on its own. And it
+ * grows the silhouette by blurring it and cutting the blur off at a low
+ * alpha, not with feMorphology, whose square kernel squares off big round
+ * shapes.
  */
-function TargetMark({ center, half }: { center: Vec2; half: Vec2 }) {
-  const r = Math.min(half.x, half.y);
-  const perimeter = 4 * (half.x - r) + 4 * (half.y - r) + 2 * Math.PI * r;
-  // Square dashes about 7px apart, evenly round it
-  const n = Math.max(8, Math.round(perimeter / 7));
+function HaloFilter() {
+  const GAP = 5;
+  const FILL_OPACITY = 0.3;
+  // A straight edge's blur falls to 5% alpha 1.645σ out
+  const sigma = GAP / 1.645;
+  const CUTOFF = 0.05;
+  // Ramp from 0 to 1 over alpha CUTOFF ± 0.02, for a crisp but smooth edge
+  const slope = 1 / 0.04;
   return (
-    <rect
-      x={center.x - half.x}
-      y={center.y - half.y}
-      width={2 * half.x}
-      height={2 * half.y}
-      rx={r}
-      fill="none"
-      stroke={MAGENTA}
-      strokeWidth={3.6}
-      pathLength={n}
-      strokeDasharray="0.52 0.48"
-    />
+    <filter id={HALO_FILTER_ID} x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation={sigma} />
+      <feComponentTransfer result="grown">
+        <feFuncA type="linear" slope={slope} intercept={0.5 - slope * CUTOFF} />
+      </feComponentTransfer>
+      <feFlood
+        floodColor={highlightColors[0].color}
+        floodOpacity={FILL_OPACITY}
+        result="color"
+      />
+      <feComposite in="color" in2="grown" operator="in" />
+    </filter>
+  );
+}
+
+/**
+ * Where the element lands: its halo, in a view with frame `frame`. The
+ * filter goes inside the view's scaling, so the halo scales with the view.
+ */
+function TargetHalo({
+  frame,
+  canvasCenter,
+  layered,
+  bounce,
+}: {
+  frame: Frame;
+  canvasCenter: Vec2;
+  layered: LayeredSvgx;
+  bounce?: Bounce;
+}) {
+  const drawn = useMemo(() => drawLayered(layered), [layered]);
+  return (
+    <g
+      transform={`translate(${frame.x} ${frame.y}) scale(${frame.scale}) translate(${-canvasCenter.x} ${-canvasCenter.y})`}
+    >
+      <g transform={bounceTransform(bounce)}>
+        <g filter={`url(#${HALO_FILTER_ID})`}>{drawn}</g>
+      </g>
+    </g>
   );
 }
 
