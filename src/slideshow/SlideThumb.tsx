@@ -45,6 +45,21 @@ export function SlideThumb({ slide, num }: { slide: Slide; num: number }) {
   );
 }
 
+/** A corner folded down on a slide's thumbnail, for a slide with a TODO */
+export function TodoCorner() {
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 18 18"
+      className="absolute top-0 right-0"
+    >
+      <title>This slide has a TODO</title>
+      <path d="M0 0H18V18Z" fill="#f97316" />
+    </svg>
+  );
+}
+
 /** Tells the dev server to keep the snapshots current. */
 export function useSlideSnapshots() {
   useEffect(() => {

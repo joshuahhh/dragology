@@ -17,7 +17,7 @@ import { toggleFullscreen } from "./fullscreen";
 import {
   SAVE_NOTES_PATH,
   type SaveNotesRequest,
-  type SaveNotesResponse,
+  type SaveResponse,
 } from "./notesApi";
 import { NotesEditor } from "./NotesEditor";
 import {
@@ -27,14 +27,21 @@ import {
   PREV_KEYS,
   type Slide,
   slideFileUrl,
+  slideHasTodo,
   SlidePresenceContext,
   SlideStepContext,
   slideSteps,
   STAGE_H,
   STAGE_W,
 } from "./slide";
-import { numberedOutline, outline, slides } from "./slides";
-import { SlideThumb, useSlideSnapshots } from "./SlideThumb";
+import { numberedOutline, outlineIndexOfSlide, slides } from "./slides";
+import { SlideThumb, TodoCorner, useSlideSnapshots } from "./SlideThumb";
+import {
+  SlideTimeBadge,
+  TimingClock,
+  type TimingRun,
+  useTimingRun,
+} from "./timing";
 
 const FADE_MS = 300;
 const FADE_WHITE_MS = 200;
@@ -117,6 +124,9 @@ function useStageLayout(stageOnly: boolean) {
   return layout;
 }
 
+/** Run-throughs can be timed during dev, which saves their times to the slides */
+const timingEnabled = !!import.meta.hot;
+
 const PANEL_OPEN_KEY = "slideshow-panel-open";
 
 /**
@@ -189,11 +199,6 @@ function useVideoPlayer() {
 
   return { videoEls, playSlide, stop, playing, updatePlaying };
 }
-
-/** Each slide's index in `outline`, which counts headings too. */
-const outlineIndexOfSlide = outline.flatMap((item, k) =>
-  "heading" in item ? [] : [k],
-);
 
 /**
  * The current slide's speaker notes, below the stage. In the narrow layout,
@@ -286,8 +291,8 @@ function SlideNotes({
       notes: d.text,
     };
     void fetch(SAVE_NOTES_PATH, { method: "POST", body: JSON.stringify(req) })
-      .then((res) => res.json() as Promise<SaveNotesResponse>)
-      .catch((e): SaveNotesResponse => ({ error: String(e) }))
+      .then((res) => res.json() as Promise<SaveResponse>)
+      .catch((e): SaveResponse => ({ error: String(e) }))
       .then(({ error, changed }) => {
         const d = draftRef.current;
         if (d?.status !== "saving" || d.slideIdx !== slideIdx) return;
@@ -350,7 +355,15 @@ function SlideNotes({
       <div className={unsaved ? "border-l-2 border-amber-400 pl-2" : ""}>
         <NotesEditor
           value={current ? current.text : saved}
-          stages={steps > 1 ? { current: step, count: steps } : null}
+          stages={
+            steps > 1
+              ? {
+                  current: step,
+                  count: steps,
+                  times: slides[slideIdx].timing,
+                }
+              : null
+          }
           editable={editable}
           readOnly={readOnly}
           placeholder="Add speaker notes…"
@@ -440,12 +453,15 @@ function SlideOutline({
   current,
   step,
   wide,
+  run,
   onSelect,
 }: {
   current: number;
   /** The current slide's step */
   step: number;
   wide: boolean;
+  /** The timed run-through on, if any, whose times the slides show */
+  run: TimingRun | null;
   onSelect: (i: number) => void;
 }) {
   useSlideSnapshots();
@@ -519,6 +535,8 @@ function SlideOutline({
                   }`}
                 >
                   <SlideThumb slide={slide} num={num} />
+                  {slideHasTodo(slide) && <TodoCorner />}
+                  <SlideTimeBadge slide={slide} slideIdx={i} run={run} />
                   {slideSteps(slide) > 1 && (
                     <StepBar
                       steps={slideSteps(slide)}
@@ -600,10 +618,13 @@ export function SlideshowPage() {
   const {
     feed: audienceFeed,
     share: shareWithAudience,
-    errors: audienceErrors,
-    showError: showAudienceError,
-    dismissError: dismissAudienceError,
+    errors: shownErrors,
+    showError,
+    dismissError,
   } = useAudienceFeed(stageRef);
+  const timing = useTimingRun(pos, showError);
+  const timingRef = useRef(timing);
+  timingRef.current = timing;
 
   useEffect(() => {
     navigate(
@@ -829,8 +850,12 @@ export function SlideshowPage() {
       else if (!e.shiftKey) return;
       else if (e.code === "KeyP") setPanelOpen((open) => !open);
       else if (e.code === "KeyA") shareWithAudience();
-      else if (e.code === "KeyF") toggleFullscreen(showAudienceError);
-      else if (e.code === "KeyR") {
+      else if (e.code === "KeyF") toggleFullscreen(showError);
+      else if (e.code === "KeyT" && timingEnabled) {
+        const { run, start, stop } = timingRef.current;
+        if (run) stop();
+        else start();
+      } else if (e.code === "KeyR") {
         const { slide } = posRef.current;
         setReloads((prev) =>
           new Map(prev).set(slide, (prev.get(slide) ?? 0) + 1),
@@ -870,7 +895,7 @@ export function SlideshowPage() {
     stageOnly,
     setPanelOpen,
     shareWithAudience,
-    showAudienceError,
+    showError,
   ]);
 
   const { zoom: stageZoom, wide } = useStageLayout(stageOnly);
@@ -1084,6 +1109,7 @@ export function SlideshowPage() {
           current={currentSlide}
           step={currentStep}
           wide={wide}
+          run={timing.run}
           onSelect={goToSlide}
         />
       )}
@@ -1091,14 +1117,16 @@ export function SlideshowPage() {
         className="fixed bottom-3 right-3 flex flex-col items-end gap-2"
         style={{ zIndex: 100 }}
       >
-        <ErrorToasts errors={audienceErrors} onDismiss={dismissAudienceError} />
+        <ErrorToasts errors={shownErrors} onDismiss={dismissError} />
         {panelOpen && (
           <ControlPanel
             stageRef={stageRef}
             feed={audienceFeed}
+            timing={timingEnabled ? timing : null}
             onClose={() => setPanelOpen(false)}
           />
         )}
+        {timing.run && !stageOnly && <TimingClock run={timing.run} />}
         <ControlPanelButton
           open={panelOpen}
           onToggle={() => setPanelOpen((open) => !open)}

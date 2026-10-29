@@ -1391,6 +1391,11 @@ export const outline: (Slide | Heading)[] = [
 
 export const slides = outline.filter((s): s is Slide => !("heading" in s));
 
+/** Each slide's index in `outline`, which counts headings too. */
+export const outlineIndexOfSlide = outline.flatMap((item, k) =>
+  "heading" in item ? [] : [k],
+);
+
 /** The outline, with each slide's number in the slideshow (from 1). */
 export const numberedOutline: (Heading | { slide: Slide; num: number })[] =
   (() => {

@@ -1,6 +1,7 @@
 import { type RefObject } from "react";
 import { type AudienceFeed } from "./audienceFeed";
 import { StageInfo } from "./StageInfo";
+import { formatSeconds, savedTotal, type TimingMode } from "./timing";
 
 /**
  * A hotkey as the panel lists it: its alternative key combos, each a list of
@@ -30,6 +31,7 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
       { combos: [["⌃", "⇧", "F"]], does: "Fullscreen" },
       { combos: [["⌃", "⇧", "S"]], does: "Stage only" },
       { combos: [["⌃", "⇧", "R"]], does: "Reload this slide" },
+      { combos: [["⌃", "⇧", "T"]], does: "Time a run-through" },
       { combos: [["⌃", "⇧", "P"]], does: "This panel" },
     ],
   },
@@ -50,17 +52,19 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
 
 /**
  * The presenter's control panel, opened from the button in the bottom-right
- * corner (or Ctrl+Shift+P): the hotkeys, and how the stage reaches the
- * audience. Only the arrow keys and Space yield to a focused editor or demo;
+ * corner (or Ctrl+Shift+P): the hotkeys, timing (during dev), and how the
+ * stage reaches the audience. Only the arrow keys and Space yield to a focused editor or demo;
  * the Ctrl+Shift keys work everywhere.
  */
 export function ControlPanel({
   stageRef,
   feed,
+  timing,
   onClose,
 }: {
   stageRef: RefObject<HTMLElement | null>;
   feed: AudienceFeed;
+  timing: TimingMode | null;
   onClose: () => void;
 }) {
   return (
@@ -112,10 +116,53 @@ export function ControlPanel({
             </div>
           </section>
         ))}
+        {timing && (
+          <section>
+            <SectionTitle>Timing</SectionTitle>
+            <TimingControls timing={timing} />
+          </section>
+        )}
         <section>
           <SectionTitle>Stage size</SectionTitle>
           <StageInfo stageRef={stageRef} feed={feed} />
         </section>
+      </div>
+    </div>
+  );
+}
+
+function TimingControls({ timing }: { timing: TimingMode }) {
+  const { run, saving, start, stop, discard } = timing;
+  const total = savedTotal();
+  const button =
+    "rounded border border-white/15 bg-white/5 px-2 py-0.5 text-zinc-200 hover:bg-white/10 disabled:opacity-50";
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="text-zinc-400">
+        {total.slides > 0
+          ? `Latest timings: ${formatSeconds(total.seconds)} over ${total.slides} slides`
+          : "No slides timed yet"}
+      </div>
+      <div className="flex gap-1.5">
+        {run ? (
+          <>
+            <button
+              type="button"
+              className={button}
+              onClick={stop}
+              disabled={saving}
+            >
+              {saving ? "Saving…" : "Stop and save"}
+            </button>
+            <button type="button" className={button} onClick={discard}>
+              Discard run
+            </button>
+          </>
+        ) : (
+          <button type="button" className={button} onClick={start}>
+            Start timing
+          </button>
+        )}
       </div>
     </div>
   );

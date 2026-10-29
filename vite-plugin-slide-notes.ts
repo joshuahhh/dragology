@@ -1,19 +1,22 @@
 import fs from "node:fs/promises";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import ts from "typescript";
 import type { Plugin } from "vite";
 import {
   SAVE_NOTES_PATH,
+  SAVE_TIMINGS_PATH,
   type SaveNotesRequest,
-  type SaveNotesResponse,
+  type SaveResponse,
+  type SaveTimingsRequest,
 } from "./src/slideshow/notesApi";
 
 const SLIDES = "src/slideshow/slides.tsx";
 
 /**
- * Lets the slideshow edit speaker notes during dev: on a request from the
- * page, rewrites a slide's `notes` in slides.tsx, which then reaches the page
- * by HMR like any other edit.
+ * Lets the slideshow write to its slides during dev: on a request from the
+ * page, rewrites a slide's `notes`, or the `timing`s from a timed run-through,
+ * in slides.tsx, which then reaches the page by HMR like any other edit.
  */
 export function slideNotes(): Plugin {
   return {
@@ -21,24 +24,27 @@ export function slideNotes(): Plugin {
     apply: "serve",
     configureServer(server) {
       const file = path.join(server.config.root, SLIDES);
-      server.middlewares.use(SAVE_NOTES_PATH, (req, res) => {
-        let body = "";
-        req.on("data", (chunk) => (body += chunk));
-        req.on("end", async () => {
-          let reply: SaveNotesResponse;
-          try {
-            const save: SaveNotesRequest = JSON.parse(body);
-            const text = await fs.readFile(file, "utf8");
-            const next = setNotes(text, save);
-            if (next !== text) await fs.writeFile(file, next);
-            reply = { changed: next !== text };
-          } catch (e) {
-            reply = { error: e instanceof Error ? e.message : String(e) };
-          }
-          res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify(reply));
-        });
-      });
+      const rewriteWith =
+        <Req>(edit: (text: string, req: Req) => string) =>
+        (req: IncomingMessage, res: ServerResponse) => {
+          let body = "";
+          req.on("data", (chunk) => (body += chunk));
+          req.on("end", async () => {
+            let reply: SaveResponse;
+            try {
+              const text = await fs.readFile(file, "utf8");
+              const next = edit(text, JSON.parse(body));
+              if (next !== text) await fs.writeFile(file, next);
+              reply = { changed: next !== text };
+            } catch (e) {
+              reply = { error: e instanceof Error ? e.message : String(e) };
+            }
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify(reply));
+          });
+        };
+      server.middlewares.use(SAVE_NOTES_PATH, rewriteWith(setNotes));
+      server.middlewares.use(SAVE_TIMINGS_PATH, rewriteWith(setTimings));
     },
   };
 }
@@ -48,33 +54,10 @@ export function setNotes(
   text: string,
   { index, old, notes }: SaveNotesRequest,
 ): string {
-  const sf = ts.createSourceFile(
-    SLIDES,
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const sf = parse(text);
+  const slide = slideAt(sf, index);
 
-  let outline: ts.Expression | undefined;
-  sf.forEachChild(function visit(node) {
-    if (ts.isVariableDeclaration(node) && node.name.getText(sf) === "outline") {
-      outline = node.initializer;
-    }
-    node.forEachChild(visit);
-  });
-  if (!outline || !ts.isArrayLiteralExpression(outline)) {
-    throw new Error("`outline` in slides.tsx isn't an array literal");
-  }
-  const slide = outline.elements[index];
-  if (!slide || !ts.isObjectLiteralExpression(slide)) {
-    throw new Error(`Slide ${index} in \`outline\` isn't an object literal`);
-  }
-
-  const prop = slide.properties.find(
-    (p): p is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(p) && p.name.getText(sf) === "notes",
-  );
+  const prop = findProp(sf, slide, "notes");
   const init = prop?.initializer;
   if (
     init &&
@@ -88,12 +71,7 @@ export function setNotes(
   }
 
   // Indented like the slide's other properties, as a block of its own
-  const firstProp = slide.properties[0];
-  const indent = " ".repeat(
-    firstProp
-      ? sf.getLineAndCharacterOfPosition(firstProp.getStart(sf)).character
-      : 4,
-  );
+  const indent = propIndent(sf, slide);
   const lines = notes
     .replace(/^\s*\n/, "")
     .trimEnd()
@@ -116,14 +94,115 @@ export function setNotes(
   }
   if (empty) return text;
   // New notes go before the slide's content
-  const anchor = slide.properties.find(
-    (p) =>
-      ts.isPropertyAssignment(p) &&
-      ["content", "video"].includes(p.name.getText(sf)),
-  );
-  if (!anchor) throw new Error(`Slide ${index} has no content or video`);
+  const anchor = findContent(sf, slide, index);
   const at = anchor.getStart(sf);
   return splice(text, at, at, `notes: ${literal},\n${indent}`);
+}
+
+/**
+ * slides.tsx's text, with each of `slides`' `timing` set. Each slide is found
+ * by its index and checked by its title, in case the outline changed during
+ * the run-through; if any doesn't match, none are set.
+ */
+export function setTimings(
+  text: string,
+  { slides }: SaveTimingsRequest,
+): string {
+  const sf = parse(text);
+  const edits = slides.map(({ index, title, timing }) => {
+    const slide = slideAt(sf, index);
+    const titleProp = findProp(sf, slide, "title")?.initializer;
+    const fileTitle =
+      titleProp && ts.isStringLiteralLike(titleProp)
+        ? titleProp.text
+        : undefined;
+    if (fileTitle !== title) {
+      throw new Error(
+        `Slide ${index} in \`outline\` is ${
+          fileTitle ? `“${fileTitle}”` : "untitled"
+        }, not ${title ? `“${title}”` : "untitled"}; has the outline changed?`,
+      );
+    }
+    const literal = `[${timing.join(", ")}]`;
+    const init = findProp(sf, slide, "timing")?.initializer;
+    if (init) return { start: init.getStart(sf), end: init.end, literal };
+    // New timings go before the notes, or else the content
+    const anchor =
+      findProp(sf, slide, "notes") ?? findContent(sf, slide, index);
+    const at = anchor.getStart(sf);
+    return {
+      start: at,
+      end: at,
+      literal: `timing: ${literal},\n${propIndent(sf, slide)}`,
+    };
+  });
+  // From the end, so each edit leaves the positions of those before it alone
+  return edits
+    .sort((a, b) => b.start - a.start)
+    .reduce(
+      (t, { start, end, literal }) => splice(t, start, end, literal),
+      text,
+    );
+}
+
+function parse(text: string) {
+  return ts.createSourceFile(
+    SLIDES,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+}
+
+/** Entry `index` of `outline` (which counts headings too). */
+function slideAt(sf: ts.SourceFile, index: number) {
+  let outline: ts.Expression | undefined;
+  sf.forEachChild(function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(sf) === "outline") {
+      outline = node.initializer;
+    }
+    node.forEachChild(visit);
+  });
+  if (!outline || !ts.isArrayLiteralExpression(outline)) {
+    throw new Error("`outline` in slides.tsx isn't an array literal");
+  }
+  const slide = outline.elements[index];
+  if (!slide || !ts.isObjectLiteralExpression(slide)) {
+    throw new Error(`Slide ${index} in \`outline\` isn't an object literal`);
+  }
+  return slide;
+}
+
+function findProp(
+  sf: ts.SourceFile,
+  slide: ts.ObjectLiteralExpression,
+  name: string,
+) {
+  return slide.properties.find(
+    (p): p is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(p) && p.name.getText(sf) === name,
+  );
+}
+
+function findContent(
+  sf: ts.SourceFile,
+  slide: ts.ObjectLiteralExpression,
+  index: number,
+) {
+  const anchor = findProp(sf, slide, "content") ?? findProp(sf, slide, "video");
+  if (!anchor) throw new Error(`Slide ${index} has no content or video`);
+  return anchor;
+}
+
+/** The indent of the slide's properties */
+function propIndent(sf: ts.SourceFile, slide: ts.ObjectLiteralExpression) {
+  const firstProp = slide.properties[0];
+  return " ".repeat(
+    firstProp
+      ? sf.getLineAndCharacterOfPosition(firstProp.getStart(sf)).character
+      : 4,
+  );
 }
 
 function escape(line: string) {

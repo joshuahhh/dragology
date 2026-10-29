@@ -32,6 +32,11 @@ export type Slide = {
   title?: string;
   /** Speaker notes, in Markdown. */
   notes?: string;
+  /**
+   * Seconds spent on each step in the latest timed run-through that reached
+   * the slide. The slideshow's timing mode writes these (timing.ts).
+   */
+  timing?: number[];
   /** How to arrive at this slide when going forward. Going back always cuts. */
   transition?: Transition;
   /**
@@ -96,6 +101,11 @@ export function slideFileUrl(file: string) {
 /** A line of notes without its // comment, if it has one (see NotesEditor) */
 function stripNotesComment(line: string): string {
   return line.replace(/(?<=^|\s)\/\/.*/, "");
+}
+
+/** Whether a slide's title or notes say there's something left to do. */
+export function slideHasTodo(slide: Slide): boolean {
+  return [slide.title, slide.notes].some((s) => s && /\bto-?do\b/i.test(s));
 }
 
 /** The first line of a slide's notes, as plain text, for at-a-glance views. */
