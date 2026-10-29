@@ -1,14 +1,15 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import path from "node:path";
 import type { EnvironmentModuleNode, Plugin } from "vite";
 
-const SCRIPT = "src/slideshow/snapshot-slides.sh";
+const SCRIPT = "src/slideshow/snapshot-slides.ts";
 const SNAPSHOT_PAGE = "src/slideshow/SlideshowSnapshotPage.tsx";
 
 /**
  * Keeps the slideshow outline's snapshots current during dev: once an outline
- * page has been opened, re-runs snapshot-slides.sh on any change to a file the
- * slides are rendered from.
+ * page has been opened, re-runs snapshot-slides.ts on any change to a file the
+ * slides are rendered from. One run at a time: changes during a run queue one
+ * more run after it.
  */
 export function slideSnapshots(): Plugin {
   return {
@@ -19,34 +20,38 @@ export function slideSnapshots(): Plugin {
       const root = server.config.root;
       const snapshotPage = path.join(root, SNAPSHOT_PAGE);
       let active = false;
-      let running = false;
+      let running: ChildProcess | undefined;
       let again = false;
+      let closed = false;
       // What changed since the last run started, for the log
       let reasons = new Set<string>();
       let timer: ReturnType<typeof setTimeout> | undefined;
 
       const run = () => {
         const url = server.resolvedUrls?.local[0];
-        if (!url) return;
+        if (!url || closed) return;
         if (running) {
           again = true;
           return;
         }
-        running = true;
         const why = [...reasons].join(", ");
         reasons = new Set();
-        const child = spawn(SCRIPT, [url], { cwd: root });
+        const child = spawn(process.execPath, [SCRIPT, url], { cwd: root });
+        running = child;
         let output = "";
         child.stdout.on("data", (d) => (output += d));
         child.stderr.on("data", (d) => (output += d));
-        child.on("close", (code) => {
-          running = false;
+        child.on("close", (code, signal) => {
+          running = undefined;
+          if (closed) return;
           if (code === 0) {
             server.config.logger.info(`[slide-snapshots] updated (${why})`, {
               timestamp: true,
             });
           } else {
-            server.config.logger.error(`[slide-snapshots] failed:\n${output}`);
+            server.config.logger.error(
+              `[slide-snapshots] failed (${signal ?? `exit ${code}`}):\n${output}`,
+            );
           }
           if (again) {
             again = false;
@@ -54,6 +59,14 @@ export function slideSnapshots(): Plugin {
           }
         });
       };
+      // A restart closes this server and starts another with a fresh plugin,
+      // which wouldn't know about this run, so it ends with the server.
+      server.httpServer?.once("close", () => {
+        closed = true;
+        clearTimeout(timer);
+        running?.kill();
+      });
+
       const schedule = (reason: string) => {
         reasons.add(reason);
         clearTimeout(timer);
