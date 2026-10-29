@@ -1,4 +1,6 @@
 import { CSSProperties, ReactNode } from "react";
+import { sourceSans } from "../slideshow/source-sans";
+import { CODE_FONT } from "./fonts";
 
 /**
  * Every shortcut on the live-coding page, in the order the controls
@@ -37,6 +39,13 @@ export const SHORTCUTS: Shortcut[] = [
     codes: ["KeyB"],
     keys: "⌥B",
     label: "Bright look",
+    section: "Show",
+    kind: "toggle",
+  },
+  {
+    codes: ["KeyG"],
+    keys: "⌥G",
+    label: "Operators as in the paper",
     section: "Show",
     kind: "toggle",
   },
@@ -80,13 +89,6 @@ export const SHORTCUTS: Shortcut[] = [
     codes: ["KeyC"],
     keys: "⌥C",
     label: "Syntax colors",
-    section: "Style",
-    kind: "cycle",
-  },
-  {
-    codes: ["KeyL"],
-    keys: "⌥L",
-    label: "Letter font",
     section: "Style",
     kind: "cycle",
   },
@@ -164,7 +166,7 @@ export function ControlsPanel({
         borderRadius: 12,
         boxShadow: "0 12px 40px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06)",
         padding: "8px 0",
-        fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+        fontFamily: sourceSans,
         fontSize: 14,
         color: INK,
         userSelect: "none",
@@ -393,7 +395,7 @@ function Kbd({
   return (
     <kbd
       style={{
-        font: "12px ui-monospace, SFMono-Regular, Menlo, monospace",
+        font: `12px ${CODE_FONT}`,
         color: "#52525b",
         background: "#f4f4f5",
         border: `1px solid ${LINE}`,
@@ -522,7 +524,7 @@ export function HelpButton({
         border: `1px solid ${open ? "#a1a1aa" : LINE}`,
         background: "white",
         color: open ? INK : MUTED,
-        font: "600 17px ui-sans-serif, system-ui, sans-serif",
+        font: `600 17px ${sourceSans}`,
         cursor: "pointer",
         boxShadow: "0 1px 2px rgba(0,0,0,.05)",
         opacity: visible ? 1 : 0,

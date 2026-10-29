@@ -58,8 +58,10 @@ import {
   setFade,
 } from "./excerpt";
 import { setStylingFolds, stylingFolding } from "./folds";
+import { CODE_FONT } from "./fonts";
 import { formatCode, minimalChange } from "./format";
 import { CodeHighlightStyle, HIGHLIGHT_COLOR } from "./highlightStyles";
+import { opMarks } from "./opMarks";
 import { syntaxThemes } from "./syntaxThemes";
 import { tsCompletions, tsLinter, tsSync } from "./tsExtensions";
 
@@ -169,7 +171,7 @@ const theme = EditorView.theme({
   // `formatWidthRef`), so its scrollbar would land on the diagram's far
   // edge. It still scrolls, by wheel and with the cursor.
   ".cm-scroller": {
-    fontFamily: '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace',
+    fontFamily: CODE_FONT,
     lineHeight: "1.45",
     scrollbarWidth: "none",
   },
@@ -474,6 +476,7 @@ export function CodeEditor({
           codeFolding({ placeholderText: "…" }),
           stylingFolding,
           locField,
+          opMarks,
           excerpting,
           theme,
           EditorView.updateListener.of((update) => {

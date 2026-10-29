@@ -9,20 +9,15 @@ import {
   useState,
 } from "react";
 import { DemoDraggable } from "../demo/ui";
-import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
-import {
-  DragSpecTreeView,
-  type DragSpecTreeViewNodeProps,
-} from "../DragSpecTreeView";
+import { DraggableRenderer } from "../DraggableRenderer";
+import { LETTER_FONT } from "../talk/fonts";
 import {
   CODE_FLEX,
   DIAGRAM_FILL,
   DIAGRAM_FLEX,
-  letterFonts,
   LiveCode,
 } from "../talk/LiveCodePage";
 import { slideSnippet } from "../talk/snippets";
-import { TreeViewLayout } from "../talk/TreeViewLayout";
 import {
   CallToActionSlide,
   CodeCallout,
@@ -115,7 +110,7 @@ function DragologyTitleSlide() {
         </div>
       </div>
       <style>
-        {`[data-title-ring] text[data-loc] { font-family: ${letterFonts[0].family}; }`}
+        {`[data-title-ring] text[data-loc] { font-family: ${LETTER_FONT}; }`}
       </style>
       <div
         data-title-ring
@@ -581,134 +576,6 @@ function BeadsFloating() {
   );
 }
 
-// Labeled beads with spec tree inspector (slides 15-17)
-// Layout follows studio/RingOfBeadsSection
-
-const BEADS_W = 300;
-const BEADS_H = 300;
-
-type BeadsState = typeof beadsInitialState;
-
-function Highlight({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{ backgroundColor: "#d5e5a3", padding: "0 4px" }}>
-      {children}
-    </span>
-  );
-}
-
-function BeadsWithTreeView({
-  stage,
-  label,
-  thumbArea,
-  treeWidth = 500,
-  nodeProps,
-  simulateDrag = false,
-}: {
-  stage: Parameters<typeof makeDraggable>[0];
-  label: React.ReactNode;
-  thumbArea: number;
-  treeWidth?: number;
-  nodeProps?: Record<string, DragSpecTreeViewNodeProps>;
-  simulateDrag?: boolean;
-}) {
-  const draggable = useMemo(() => makeDraggable(stage), [stage]);
-  const [dragStatus, setDragStatus] = useState<DragStatus<BeadsState> | null>(
-    null,
-  );
-  const draggingStatus = dragStatus?.type === "dragging" ? dragStatus : null;
-
-  return (
-    <TreeViewLayout
-      treeWidth={treeWidth}
-      label={
-        <pre
-          style={{
-            fontFamily: "monospace",
-            fontSize: 22,
-            fontWeight: "bold",
-            margin: 0,
-            lineHeight: 1.4,
-          }}
-        >
-          {label}
-        </pre>
-      }
-      diagram={
-        <DraggableRenderer
-          key={simulateDrag ? "simulating" : "not-simulating"}
-          draggable={draggable}
-          initialState={beadsInitialState}
-          width={BEADS_W}
-          height={BEADS_H}
-          onDragStatus={setDragStatus}
-          simulateDrag={simulateDrag ? { id: "A" } : undefined}
-        />
-      }
-      tree={
-        draggingStatus && (
-          <DragSpecTreeView
-            op={draggingStatus.result.op}
-            activePath={draggingStatus.result.activePath}
-            colorMap={null}
-            svgWidth={BEADS_W}
-            svgHeight={BEADS_H}
-            thumbArea={thumbArea}
-            nodeProps={nodeProps}
-          />
-        )
-      }
-    />
-  );
-}
-
-function BeadsClosestLabeled() {
-  return (
-    <BeadsWithTreeView
-      stage="d.closest()"
-      thumbArea={25000}
-      label={
-        <>
-          d.<Highlight>closest</Highlight>(newStates)
-        </>
-      }
-    />
-  );
-}
-
-function BeadsWithFloatingLabeled() {
-  return (
-    <BeadsWithTreeView
-      stage="d.closest().withFloating()"
-      thumbArea={18000}
-      label={
-        <>
-          {"d.closest(newStates)\n"} <Highlight>.withFloating()</Highlight>
-        </>
-      }
-    />
-  );
-}
-
-function BeadsWhenFarLabeled() {
-  return (
-    <BeadsWithTreeView
-      stage="d.closest().whenFar().withFloating()"
-      thumbArea={9000}
-      nodeProps={{
-        "withFloating/whenFar/bg/": { width: 150 },
-      }}
-      label={
-        <>
-          {"d.closest(newStates)\n"}{" "}
-          <Highlight>.whenFar(removedState)</Highlight>
-          {"\n .withFloating()"}
-        </>
-      }
-    />
-  );
-}
-
 // @ts-expect-error -- kept around for a possible d.between slide
 function BeadsBetween() {
   const draggable = useMemo(() => makeDraggable("d.between()"), []);
@@ -928,8 +795,8 @@ export const outline: (Slide | Heading)[] = [
     title: "Live Code",
     transition: "fade",
     // Highlighting is on for the first stage, off after. The third
-    // shows just the drag spec, with the spec tree, as on the studio's
-    // tree-view slides.
+    // shows just the drag spec, with the spec tree, in the studio's
+    // layout.
     steps: 3,
     // Its editor takes focus and keys on mount
     preload: false,
@@ -955,33 +822,6 @@ export const outline: (Slide | Heading)[] = [
        }}
     `,
     content: <LiveCodeSlide />,
-  },
-  {
-    title: "d.closest — Ring of Beads",
-    transition: "fade",
-    content: (
-      <DemoSlide width={960} height={540} demoId="ring-of-beads">
-        <BeadsClosestLabeled />
-      </DemoSlide>
-    ),
-  },
-  {
-    title: "withFloating — Ring of Beads",
-    transition: "fade",
-    content: (
-      <DemoSlide width={960} height={540}>
-        <BeadsWithFloatingLabeled />
-      </DemoSlide>
-    ),
-  },
-  {
-    title: "whenFar — Ring of Beads",
-    transition: "fade",
-    content: (
-      <DemoSlide width={960} height={540}>
-        <BeadsWhenFarLabeled />
-      </DemoSlide>
-    ),
   },
   {
     title: "Drag Behaviors",

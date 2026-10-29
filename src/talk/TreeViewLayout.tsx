@@ -39,6 +39,7 @@ export function TreeViewLayout({
   tree,
   treeWidth = TREE_LAYOUT.treeWidth,
   avoid = [],
+  paperOps = false,
 }: {
   label: ReactNode;
   diagram: ReactNode;
@@ -48,6 +49,8 @@ export function TreeViewLayout({
   /** Points the tree mustn't cover, or reach below and right of, in
    * layout units: e.g. the ends of lines of code. */
   avoid?: { right: number; bottom: number }[];
+  /** Style op names as the paper does (see `StudioHackSettings`). */
+  paperOps?: boolean;
 }) {
   const { width, height, pad, diagramZoom, treePad, treeBottom } = TREE_LAYOUT;
 
@@ -112,7 +115,7 @@ export function TreeViewLayout({
   }
 
   return (
-    <StudioHackContext.Provider value={{ tightFixed: true }}>
+    <StudioHackContext.Provider value={{ tightFixed: true, paperOps }}>
       <div style={{ display: "flex", width, height }}>
         <div
           style={{

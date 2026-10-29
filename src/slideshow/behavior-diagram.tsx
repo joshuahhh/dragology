@@ -11,7 +11,7 @@ import { drawLayered, LayeredSvgx } from "../svgx/layers";
 import { assignPaths, getPath } from "../svgx/path";
 import { localToGlobal } from "../svgx/transform";
 import { compileLiveCode } from "../talk/compile";
-import { letterFonts } from "../talk/LiveCodePage";
+import { LETTER_FONT } from "../talk/fonts";
 import { snippets } from "../talk/snippets";
 import { assertDefined } from "../utils/assert";
 import { Cursor } from "./model-driven/ModelDrivenScene";
@@ -154,7 +154,7 @@ export function BehaviorDiagramSlide() {
       style={{ position: "absolute", inset: 0, background: "white" }}
     >
       <style>
-        {`[data-behavior-diagram] text[data-loc] { font-family: ${letterFonts[0].family}; }`}
+        {`[data-behavior-diagram] text[data-loc] { font-family: ${LETTER_FONT}; }`}
       </style>
       <svg
         width={STAGE_W}
