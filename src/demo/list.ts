@@ -25,6 +25,8 @@ export const demoList: DemoListEntry[] = [
   "two-kinds-of-tree",
   "kanban",
   "ring-of-beads",
+  "ring-of-beads-vanilla",
+  "ring-of-beads-vanilla-js",
   "insert-and-remove",
   "insert-and-remove-original",
   "tiles",
