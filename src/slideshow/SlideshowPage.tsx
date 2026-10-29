@@ -590,6 +590,11 @@ export function SlideshowPage() {
   const currentStep = pos.step;
   const posRef = useRef(pos);
   posRef.current = pos;
+  // How many times each slide has been reloaded (Ctrl+Shift+R), as a key
+  // that remounts its content.
+  const [reloads, setReloads] = useState<ReadonlyMap<number, number>>(
+    new Map(),
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const {
@@ -820,7 +825,12 @@ export function SlideshowPage() {
       else if (e.code === "KeyP") setPanelOpen((open) => !open);
       else if (e.code === "KeyA") shareWithAudience();
       else if (e.code === "KeyF") toggleFullscreen(showAudienceError);
-      else if (e.code === "KeyS") {
+      else if (e.code === "KeyR") {
+        const { slide } = posRef.current;
+        setReloads((prev) =>
+          new Map(prev).set(slide, (prev.get(slide) ?? 0) + 1),
+        );
+      } else if (e.code === "KeyS") {
         const path = `/slideshow/${formatSlidePos(posRef.current)}`;
         navigate(stageOnly ? path : `${path}?stage`, { replace: true });
       } else if (e.code === "KeyO") {
@@ -1014,6 +1024,7 @@ export function SlideshowPage() {
                 >
                   {"content" in s && (
                     <SlidePresenceContext.Provider
+                      key={reloads.get(slideIdx) ?? 0}
                       value={{
                         shown: visible,
                         current: slideIdx === currentSlide,
