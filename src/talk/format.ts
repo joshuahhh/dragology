@@ -1,8 +1,36 @@
+/** A one-line `initialState` declaration at the top, and the space after it. */
+const INITIAL_STATE_LINE = /^const initialState\b[^\n]*;[ \t]*\n\s*/;
+
 /**
- * Formats live TSX with Prettier at a given width. Prettier is loaded
- * on first use to keep it out of the main bundle.
+ * Formats live TSX with Prettier at a given width. A one-line
+ * `initialState` declaration at the top is left as written, however
+ * long, so the state reads at a glance while the code below it wraps.
  */
 export async function formatCode(
+  code: string,
+  cursorOffset: number,
+  printWidth: number,
+): Promise<{ formatted: string; cursorOffset: number }> {
+  const head = code.match(INITIAL_STATE_LINE)?.[0] ?? "";
+  if (head && code.length > head.length) {
+    const tail = await formatWhole(
+      code.slice(head.length),
+      Math.max(cursorOffset - head.length, 0),
+      printWidth,
+    );
+    return {
+      formatted: head + tail.formatted,
+      cursorOffset:
+        cursorOffset < head.length
+          ? cursorOffset
+          : head.length + tail.cursorOffset,
+    };
+  }
+  return formatWhole(code, cursorOffset, printWidth);
+}
+
+/** Prettier is loaded on first use to keep it out of the main bundle. */
+async function formatWhole(
   code: string,
   cursorOffset: number,
   printWidth: number,

@@ -31,6 +31,9 @@ is SHORTCUTS in ControlsPanel.tsx.
 */
 
 const COMPILE_DELAY_MS = 250;
+/** How the width splits between the code and the diagram. */
+const CODE_FLEX = 3;
+const DIAGRAM_FLEX = 2;
 /** How long the ? stays up after the page loads. */
 const HELP_INTRO_MS = 4000;
 /** How close (px, from each edge) the pointer must come to the
@@ -145,7 +148,7 @@ export function LiveCode({
   const [showState, setShowState] = useState(!!snippet.showState);
   const [showTree, setShowTree] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
-  const [fontSize, setFontSize] = useState(24);
+  const [fontSize, setFontSize] = useState(32);
   const [toast, setToast] = useState<{ text: string; key: number } | null>(
     null,
   );
@@ -159,6 +162,7 @@ export function LiveCode({
 
   const docKey = `${snippetIdx}-${bright}`;
   const editorApiRef = useRef<CodeEditorApi | null>(null);
+  const codeBoxRef = useRef<HTMLDivElement>(null);
 
   // Load a snippet. The diagram state carries over if the new snippet
   // has the same initial state (e.g. between stages of one example).
@@ -486,29 +490,44 @@ export function LiveCode({
       <HaloFilter />
       <div
         style={{
-          flex: 3,
+          flex: CODE_FLEX,
           minWidth: 0,
           display: "flex",
           flexDirection: "column",
           fontSize,
         }}
       >
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <CodeEditor
-            doc={snippet.code}
-            docKey={docKey}
-            prelude={snippet.prelude}
-            onDocChange={setSource}
-            onCursorLoc={setCursorLoc}
-            locs={good?.locs ?? []}
-            locsDoc={good?.source ?? ""}
-            active={activeLoc}
-            style={style.code}
-            syntaxTheme={syntaxIdx}
-            foldStyling={foldStyling}
-            fontSize={fontSize}
-            apiRef={editorApiRef}
-          />
+        {/* The code wraps to this box, but the editor runs on under the
+            diagram, so a line too long to wrap (initialState) overflows
+            into it rather than being cut off. */}
+        <div
+          ref={codeBoxRef}
+          style={{ flex: 1, minHeight: 0, position: "relative" }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              right: `calc(-100% * ${DIAGRAM_FLEX} / ${CODE_FLEX})`,
+            }}
+          >
+            <CodeEditor
+              doc={snippet.code}
+              docKey={docKey}
+              prelude={snippet.prelude}
+              onDocChange={setSource}
+              onCursorLoc={setCursorLoc}
+              locs={good?.locs ?? []}
+              locsDoc={good?.source ?? ""}
+              active={activeLoc}
+              style={style.code}
+              syntaxTheme={syntaxIdx}
+              foldStyling={foldStyling}
+              fontSize={fontSize}
+              formatWidthRef={codeBoxRef}
+              apiRef={editorApiRef}
+            />
+          </div>
         </div>
         <div
           style={{
@@ -527,11 +546,13 @@ export function LiveCode({
 
       <div
         style={{
-          flex: 2,
+          flex: DIAGRAM_FLEX,
           minWidth: 0,
           display: "flex",
           flexDirection: "column",
-          borderLeft: "1px solid #eee",
+          // Above the editor, which runs on underneath it
+          position: "relative",
+          zIndex: 1,
         }}
       >
         <div

@@ -63,7 +63,7 @@ const beadsLooks: Record<"original" | "bright", BeadsLook> = {
       const INK = { A: "#b91c1c", B: "#1d4ed8", C: "#a16207", D: "#15803d", E: "#6d28d9" };
       const radPos = (t: number) => Vec2.polarDeg(100, t * 360 - 90);
     `,
-    ring: `<circle r={100} fill="none" stroke="#e4e4e7" strokeWidth={30} />`,
+    ring: `<circle r={100} fill="none" stroke="#e4e4e7" strokeWidth={15} />`,
     bead: normalizeIndent`
       <circle r={27} fill={FILL[bead]} stroke={EDGE[bead]} strokeWidth={2} />
       <text textAnchor="middle" dominantBaseline="central"

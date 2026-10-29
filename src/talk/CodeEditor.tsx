@@ -142,31 +142,17 @@ function locAt(locs: SourceLoc[], pos: number): number | null {
 
 // # Theme
 
-const SCROLLBAR_THUMB = 10;
-const SCROLLBAR_INSET = 3;
-
 const theme = EditorView.theme({
   "&": { fontSize: "inherit", height: "100%", background: "transparent" },
   "&.cm-focused": { outline: "none" },
+  // No scrollbars: the editor can run on under the diagram (see
+  // `formatWidthRef`), so its scrollbar would land on the diagram's far
+  // edge. It still scrolls, by wheel and with the cursor.
   ".cm-scroller": {
     fontFamily: '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace',
     lineHeight: "1.45",
+    scrollbarWidth: "none",
   },
-  // A rounded thumb with no track. (These pseudo-elements only apply
-  // while the standard scrollbar-width / scrollbar-color are unset.) The
-  // padding lives inside the scroller, on .cm-content, so the scrollbar
-  // runs the pane's full height.
-  ".cm-scroller::-webkit-scrollbar": {
-    width: `${SCROLLBAR_THUMB + 2 * SCROLLBAR_INSET}px`,
-  },
-  ".cm-scroller::-webkit-scrollbar-track": { background: "transparent" },
-  ".cm-scroller::-webkit-scrollbar-thumb": {
-    background: "#d4d4d8",
-    backgroundClip: "content-box",
-    border: `${SCROLLBAR_INSET}px solid transparent`,
-    borderRadius: `${SCROLLBAR_THUMB}px`,
-  },
-  ".cm-scroller::-webkit-scrollbar-thumb:hover": { background: "#a1a1aa" },
   ".cm-content": { caretColor: "#333", padding: "40px 24px 40px 8px" },
   // The fold-marker gutter sits in the left margin, invisible but for its
   // markers (which show only on hover).
@@ -219,11 +205,16 @@ const theme = EditorView.theme({
 const FORMAT_DELAY_MS = 150;
 
 /**
- * How many characters fit across the editor. (We measure the character
+ * How many characters fit across `box` (by default, the editor). Lines
+ * don't wrap, so this measures the box rather than the content, which
+ * can be wider. (We measure the character
  * width ourselves; CodeMirror's `defaultCharacterWidth` can still be a
  * placeholder before its first measurement.)
  */
-function availableColumns(view: EditorView): number {
+function availableColumns(
+  view: EditorView,
+  box: HTMLElement | null = view.scrollDOM,
+): number {
   const horizontalPadding = (el: Element) => {
     const style = getComputedStyle(el);
     return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
@@ -231,10 +222,13 @@ function availableColumns(view: EditorView): number {
   const padding =
     horizontalPadding(view.contentDOM) +
     horizontalPadding(view.contentDOM.querySelector(".cm-line")!);
+  const gutters =
+    view.dom.querySelector<HTMLElement>(".cm-gutters")?.offsetWidth ?? 0;
   const ctx = document.createElement("canvas").getContext("2d")!;
   ctx.font = getComputedStyle(view.contentDOM).font;
   const charWidth = ctx.measureText("0".repeat(100)).width / 100;
-  return Math.floor((view.contentDOM.clientWidth - padding) / charWidth - 1);
+  const width = (box ?? view.scrollDOM).clientWidth - gutters - padding;
+  return Math.floor(width / charWidth - 1);
 }
 
 async function formatToWidth(view: EditorView, printWidth: number) {
@@ -269,6 +263,7 @@ export function CodeEditor({
   syntaxTheme,
   foldStyling,
   fontSize,
+  formatWidthRef,
   apiRef,
 }: {
   /** The contents for `docKey`; swapped in whenever `docKey` changes. */
@@ -289,6 +284,9 @@ export function CodeEditor({
   foldStyling: boolean;
   /** The code is reformatted to fit when this or the width changes. */
   fontSize: number;
+  /** The box the code is formatted to fit, if not the editor itself
+   * (which may run on beyond it). */
+  formatWidthRef?: RefObject<HTMLElement | null>;
   apiRef?: RefObject<CodeEditorApi | null>;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -313,6 +311,8 @@ export function CodeEditor({
 
   // Reformat when the number of columns that fit changes.
   const formattedWidthRef = useRef<number | null>(null);
+  const formatWidthRefRef = useRef(formatWidthRef);
+  formatWidthRefRef.current = formatWidthRef;
   const formatTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -321,7 +321,7 @@ export function CodeEditor({
     formatTimerRef.current = setTimeout(() => {
       const view = viewRef.current;
       if (!view) return;
-      const width = availableColumns(view);
+      const width = availableColumns(view, formatWidthRefRef.current?.current);
       if (!force && width === formattedWidthRef.current) return;
       formattedWidthRef.current = width;
       void formatToWidth(view, width).then(() => {
@@ -374,7 +374,6 @@ export function CodeEditor({
           indentUnit.of(" "),
           codeFolding({ placeholderText: "…" }),
           stylingFolding,
-          EditorView.lineWrapping,
           locField,
           theme,
           EditorView.updateListener.of((update) => {
@@ -424,7 +423,9 @@ export function CodeEditor({
     if (!view || loadedKeyRef.current === docKey) return;
     loadedKeyRef.current = docKey;
     let cancelled = false;
-    const width = formattedWidthRef.current ?? availableColumns(view);
+    const width =
+      formattedWidthRef.current ??
+      availableColumns(view, formatWidthRef?.current);
     void formatCode(doc, 0, width)
       .then(
         (result) => result.formatted,
