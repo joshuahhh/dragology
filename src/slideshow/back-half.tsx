@@ -253,6 +253,9 @@ export function HazelSlide() {
       // About twice what Hazel draws itself; ⌘+ and ⌘− adjust it on the slide
       zoom={2.5}
       css={HAZEL_CSS}
+      // Space advances the talk even after a click into Hazel; the demo only
+      // drags, so Hazel doesn't need it
+      space="slideshow"
     />
   );
 }

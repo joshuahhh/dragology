@@ -28,7 +28,8 @@ const bridged = new WeakSet<Window>();
  * origin, which lets us reach into it to style it and catch keys.
  *
  * While the embed has focus, keys go to it, except the arrow keys if `arrows`
- * is "slideshow" (and with Ctrl either way), and Escape, which takes focus
+ * is "slideshow" (and with Ctrl either way), Space if `space` is
+ * "slideshow", and Escape, which takes focus
  * out of the embed so that all keys go to the slideshow again. A ring around the
  * embed shows when it has focus. On the dev server, vite-plugin-embed-keys.ts
  * has the embedded page tell us its window exists before the app's scripts
@@ -44,6 +45,7 @@ export function EmbedSlide({
   zoom: defaultZoom = 1,
   css,
   arrows = "slideshow",
+  space = "app",
   focusOnShow = false,
 }: {
   /** The page to show, relative to public/embeds, e.g. "hazel/index.html" */
@@ -60,6 +62,8 @@ export function EmbedSlide({
   css?: string;
   /** Whether the arrow keys go to the slideshow or to the embedded app */
   arrows?: "slideshow" | "app";
+  /** Whether Space goes to the slideshow (to advance) or to the embedded app */
+  space?: "slideshow" | "app";
   /** Whether to give the embed focus when its slide is shown */
   focusOnShow?: boolean;
 }) {
@@ -123,7 +127,10 @@ export function EmbedSlide({
   // The embedded window's keys, each pressed before the app sees it
   const onKey = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
-    const forwarded = arrows === "slideshow" ? ARROW_KEYS : [];
+    const forwarded = [
+      ...(arrows === "slideshow" ? ARROW_KEYS : []),
+      ...(space === "slideshow" ? [" "] : []),
+    ];
     onKey.current = (e) => {
       if (onZoomKey(e)) {
         e.stopImmediatePropagation();
@@ -154,7 +161,7 @@ export function EmbedSlide({
         );
       }
     };
-  }, [arrows, onZoomKey]);
+  }, [arrows, space, onZoomKey]);
 
   // Catch the embedded window's keys: as soon as it exists if the page says
   // so (see vite-plugin-embed-keys.ts), else once it has loaded. Listeners in
