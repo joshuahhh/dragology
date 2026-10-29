@@ -836,15 +836,24 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     title: "Drag Synthesis",
+    // The dragged element singled out in each view; then the views line up
+    // and send its positions down onto one ring
+    steps: 2,
     notes: `
       ... and examines where the dragged element ends up in each of these hypothetical future worlds.
+
+      Putting all this information together...
+
+      ---
+      // keep going
     `,
-    content: <ModelDrivenSlide from={17.5} to={23} />,
+    content: <ModelDrivenSlide from={17.5} stops={[20.6]} to={23} />,
   },
   {
     title: "Live Drag",
     notes: `
-      These views and positions provide the engine with enough information to run a high-quality animated drag-and-drop interaction.
+      // These views and positions provide 
+      ... the engine has enough information to run a high-quality animated drag-and-drop interaction.
 
       ---
 
@@ -894,6 +903,8 @@ export const outline: (Slide | Heading)[] = [
         const states = reinsertions(state, idx);
         return d.closest(states);
        }}
+
+       // [TODO] rest of presenter notes
     `,
     content: <LiveCodeSlide />,
   },
