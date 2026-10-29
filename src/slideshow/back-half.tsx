@@ -15,7 +15,7 @@ import {
 } from "../studio/sticky-notes";
 import { EmbedSlide } from "./EmbedSlide";
 import hazelProgram from "./hazel-demo-program.txt?raw";
-import { type Sample } from "./rails";
+import { type Sample, useRailsMode } from "./rails";
 import {
   DemoSlide,
   slideFileUrl,
@@ -198,6 +198,91 @@ export function ClipVideo({
       muted
       playsInline
       loop={loop}
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        objectFit: "contain",
+        background: "white",
+      }}
+    />
+  );
+}
+
+/** The videos in public/slides/back-half, found at build time (only the names) */
+const backHalfVideos = new Set(
+  Object.keys(import.meta.glob("/public/slides/back-half/*.mp4")).map((p) =>
+    p.replace(/^.*\//, ""),
+  ),
+);
+
+/**
+ * A slide that is live in live mode and a recording in rails mode (R): each
+ * step plays the video `name` (in public/slides/back-half) from `stops[step]`
+ * to the next stop, or to the end at the last one, and holds there. Steps past
+ * the last stop hold too. Until the video exists, rails mode shows the live
+ * slide as well.
+ */
+export function RailsVideo({
+  name,
+  stops = [0],
+  children,
+}: {
+  name: string;
+  stops?: number[];
+  children: ReactNode;
+}) {
+  const railsMode = useRailsMode();
+  const recorded = railsMode === "rails" && backHalfVideos.has(name);
+  return recorded ? (
+    <SteppedVideo name={name} stops={stops} />
+  ) : (
+    <>{children}</>
+  );
+}
+
+function SteppedVideo({ name, stops }: { name: string; stops: number[] }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const step = useSlideStep();
+  const current = useSlideCurrent();
+  // Read when the step changes, not watched: a re-render with an equal (new)
+  // array mustn't replay a section that has finished
+  const stopsRef = useRef(stops);
+  stopsRef.current = stops;
+  useEffect(() => {
+    const video = ref.current!;
+    const stops = stopsRef.current;
+    if (!current) {
+      video.pause();
+      video.currentTime = stops[0];
+      return;
+    }
+    if (step >= stops.length) return;
+    const start = stops[step];
+    const end = stops[step + 1] ?? Infinity;
+    // Carry straight on from the previous step's stop, without a seek
+    if (Math.abs(video.currentTime - start) > 0.1) video.currentTime = start;
+    video.play()?.catch(() => {});
+    let frame = 0;
+    const check = () => {
+      if (video.currentTime >= end) {
+        video.pause();
+        video.currentTime = end;
+      } else {
+        frame = video.requestVideoFrameCallback(check);
+      }
+    };
+    frame = video.requestVideoFrameCallback(check);
+    return () => video.cancelVideoFrameCallback(frame);
+  }, [current, step]);
+  return (
+    <video
+      ref={ref}
+      src={file(name)}
+      muted
+      playsInline
+      preload="auto"
       style={{
         position: "absolute",
         inset: 0,

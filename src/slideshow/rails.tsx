@@ -50,11 +50,28 @@ const savedTracks: Record<string, Tracks> = Object.fromEntries(
 
 export type RailsMode = "live" | "rails";
 
-let mode: RailsMode = "live";
+// Remembered, so a reload (or a hot update that reloads) doesn't quietly drop
+// back to live, and shared with other windows on the slideshow
+const MODE_KEY = "rails-mode";
+
+let mode: RailsMode = loadMode();
 const listeners = new Set<() => void>();
+
+function loadMode(): RailsMode {
+  try {
+    return localStorage.getItem(MODE_KEY) === "rails" ? "rails" : "live";
+  } catch {
+    return "live";
+  }
+}
 
 function setMode(m: RailsMode) {
   mode = m;
+  try {
+    localStorage.setItem(MODE_KEY, m);
+  } catch {
+    // Not remembered, then
+  }
   listeners.forEach((l) => l());
 }
 
@@ -78,6 +95,11 @@ if (typeof window !== "undefined") {
       return;
     }
     setMode(mode === "live" ? "rails" : "live");
+  });
+  window.addEventListener("storage", (e) => {
+    if (e.key !== MODE_KEY) return;
+    mode = loadMode();
+    listeners.forEach((l) => l());
   });
 }
 
@@ -107,27 +129,48 @@ export function Rails({
   // Bumped to start the demo over, from its initial state
   const [generation, setGeneration] = useState(0);
 
-  // Rails: play the step's track when we get to it. Step 0 starts over.
-  // Scripted steps play in either mode.
+  const [runner] = useState(() => new Runner(frameRef, cursorRef));
+  // The step the demo has played up to (its track may still be playing), or
+  // null when it's been started over and has played nothing
+  const playedRef = useRef<number | null>(null);
+  // What the effect below last ran for. Fast Refresh re-runs effects on every
+  // hot update (which, in dev, any saved file can set off), and that mustn't
+  // replay or restart anything
+  const ranForRef = useRef<unknown[]>([]);
+
+  // Rails: play the step's track when we get to it. Moving on before it's done
+  // rushes it to its end first, so the next step starts from where it
+  // expects. Arriving any other way (onto the slide, back a step, a jump, or
+  // switching to rails) starts the demo over and rushes through the steps
+  // before. Scripted steps play in live mode too.
   useEffect(() => {
-    if (!active) return;
-    const scripted = script?.[step];
-    if (railsMode !== "rails" && !scripted) return;
-    if (railsMode === "rails" && step === 0) setGeneration((g) => g + 1);
-    // Give a restarted demo a frame to mount
-    let raf = requestAnimationFrame(() => {
-      const track = scripted ? scripted(frameRef.current!) : tracks[step];
-      if (!track || track.length === 0) return;
-      const player = new TrackPlayer(
-        track,
-        frameRef.current!,
-        cursorRef.current!,
-      );
-      raf = requestAnimationFrame(function tick() {
-        if (player.advance()) raf = requestAnimationFrame(tick);
-      });
-    });
-    return () => cancelAnimationFrame(raf);
+    const ranFor = [active, railsMode, step, tracks];
+    if (ranFor.every((v, i) => v === ranForRef.current[i])) return;
+    ranForRef.current = ranFor;
+    if (!active) {
+      runner.clear();
+      playedRef.current = null;
+      return;
+    }
+    const make = (k: number) => () =>
+      script?.[k] ? script[k](frameRef.current!) : (tracks[k] ?? null);
+    if (railsMode !== "rails") {
+      // Not leaving a track halfway (a drag held), on switching to live
+      runner.rushAll();
+      playedRef.current = null;
+      if (script?.[step]) runner.enqueue(make(step), false);
+      return;
+    }
+    if (playedRef.current !== null && playedRef.current === step - 1) {
+      runner.rushAll();
+    } else {
+      // Give the restarted demo a couple of frames to mount
+      runner.clear(2);
+      setGeneration((g) => g + 1);
+      for (let k = 0; k < step; k++) runner.enqueue(make(k), true);
+    }
+    runner.enqueue(make(step), false);
+    playedRef.current = step;
     // Not on `script`, which is made anew on each render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, railsMode, step, tracks]);
@@ -143,11 +186,13 @@ export function Rails({
       ) {
         return;
       }
+      runner.clear();
+      playedRef.current = null;
       setGeneration((g) => g + 1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active]);
+  }, [active, runner]);
 
   // Recording, in dev: Shift+R starts and stops
   useEffect(() => {
@@ -240,9 +285,77 @@ export function Rails({
   );
 }
 
+type Ref<T> = { readonly current: T | null };
+
+/** Plays tracks one after another, a frame apart. */
+class Runner {
+  private queue: { make: () => Sample[] | null; rush: boolean }[] = [];
+  private player: TrackPlayer | null = null;
+  private raf = 0;
+  /** Frames to wait before starting the next track */
+  private wait = 0;
+
+  constructor(
+    private frame: Ref<HTMLElement>,
+    private cursor: Ref<HTMLElement>,
+  ) {}
+
+  /** Plays a track after the ones queued. It's made when it starts, from the stage as it is then. */
+  enqueue(make: () => Sample[] | null, rush: boolean) {
+    this.queue.push({ make, rush });
+    this.kick();
+  }
+
+  /** Hurries what's playing and queued to its end */
+  rushAll() {
+    if (this.player) this.player.rush = true;
+    for (const q of this.queue) q.rush = true;
+  }
+
+  /** Drops what's playing (letting go, if pressed) and what's queued */
+  clear(waitFrames = 0) {
+    this.player?.abandon();
+    this.player = null;
+    this.queue = [];
+    this.wait = waitFrames;
+  }
+
+  private kick() {
+    if (!this.raf) this.raf = requestAnimationFrame(this.tick);
+  }
+
+  private tick = () => {
+    this.raf = 0;
+    // Unmounted (the slideshow has gone): stop, rather than dispatch events at
+    // wherever a detached frame claims to be
+    if (!this.frame.current?.isConnected) {
+      this.player = null;
+      this.queue = [];
+      return;
+    }
+    if (this.wait > 0) {
+      this.wait--;
+    } else if (this.player) {
+      if (!this.player.advance()) this.player = null;
+    } else {
+      const next = this.queue.shift();
+      if (!next) return;
+      const track = next.make();
+      const frame = this.frame.current;
+      const cursor = this.cursor.current;
+      if (track && track.length > 0 && frame && cursor) {
+        this.player = new TrackPlayer(track, frame, cursor, next.rush);
+      }
+    }
+    this.kick();
+  };
+}
+
 /** Plays a track: dispatches its pointer events, in time, and moves the cursor. */
 class TrackPlayer {
-  private start = performance.now();
+  private last = performance.now();
+  /** How far into the track we are, in its own ms */
+  private elapsed = 0;
   private next = 0;
   private down = false;
   private target: Element | null = null;
@@ -251,11 +364,25 @@ class TrackPlayer {
     private track: Sample[],
     private frame: HTMLElement,
     private cursor: HTMLElement,
+    /** Play fast: catching up, not for watching */
+    public rush = false,
   ) {}
+
+  /** Lets go, if pressed, and hides the cursor */
+  abandon() {
+    const prev = this.track[this.next - 1];
+    if (this.down && prev) this.dispatch({ ...prev, down: false });
+    this.cursor.style.display = "none";
+  }
 
   /** Plays what's due; returns whether there's more to play. */
   advance(): boolean {
-    const elapsed = performance.now() - this.start;
+    const now = performance.now();
+    // Rushed, drags go 4x (fast, but with each move still a frame or so
+    // apart, so drags land as they would) and the moves between them 20x
+    this.elapsed += (now - this.last) * (this.rush ? (this.down ? 4 : 20) : 1);
+    this.last = now;
+    const elapsed = this.elapsed;
     // Moves only need their latest position. Presses and releases happen
     // where they happened, one a frame, since DraggableRenderer only starts
     // listening for moves and releases once it's re-rendered after a press.
@@ -295,8 +422,12 @@ class TrackPlayer {
     if (type === "pointerdown") this.target = under;
     // While pressed, events go where the press started, as with pointer
     // capture; DraggableRenderer listens on document, which they reach either
-    // way
-    const target = (this.down ? this.target : under) ?? document.body;
+    // way. Unless a re-render has since removed that element (a shape dragged
+    // over the trash): events on it no longer bubble to document, so the
+    // release would be lost
+    const target =
+      (this.down && this.target?.isConnected ? this.target : under) ??
+      document.body;
     target.dispatchEvent(
       new PointerEvent(type, {
         bubbles: true,

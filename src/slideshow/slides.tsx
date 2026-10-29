@@ -30,6 +30,7 @@ import {
   HazelSlide,
   Hl,
   NoolClassicSlide,
+  RailsVideo,
   StepToggles,
   studyExit,
   StudySlide,
@@ -799,7 +800,11 @@ function AnimateAlgebraClean() {
   const draggable = useMemo(
     () =>
       algebraDraggableFactory({
-        activeRewriteSets: rewriteSets.map((rs) => rs.defaultEnabled ?? false),
+        // The defaults, plus associativity's "pull up/down operand" (sets 5
+        // and 6), so an operand can chain its way around the tree
+        activeRewriteSets: rewriteSets.map(
+          (rs, i) => (rs.defaultEnabled ?? false) || i === 5 || i === 6,
+        ),
         enableEmergeAnimation: true,
         forceTransformScale: false,
       }),
@@ -1134,18 +1139,14 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Twisted Trees",
     transition: "fade-white",
-    steps: 3,
+    steps: 2,
     notes: `
-      Our next operator, "between", interpolates between previews as you drag. In this diagram of an order-preserving map between trees, the black dots can be dragged freely between the gray bubbles. As you drag a dot, bubbles grow, anticipating its arrival.
+      Our next operator, called "between", interpolates between previews as you drag. In this diagram of an order-preserving map between trees, the black dots can be dragged freely between the gray bubbles. As you drag, bubbles grow, anticipating the arrival of the dot.
 
       ---
 
       // purple overlay comes on
-      "Between" produces this interpolation
-
-      ---
-
-      by tracking the dot's position in a triangulation of target positions.
+      "Between" produces this interpolation by tracking the dot's position in a triangulation of target positions.
     `,
     content: (
       <Rails id="twisted-trees">
@@ -1189,6 +1190,7 @@ export const outline: (Slide | Heading)[] = [
             demoId="animate-algebra-tree"
           >
             <AnimateAlgebraClean />
+            <StepToggles byStep={[{}, { showDebugOverlay: true }]} />
           </DemoSlide>
           <CodeCallout>
             {"d."}
@@ -1324,24 +1326,20 @@ export const outline: (Slide | Heading)[] = [
 
       To tell you about the other place declarative dragging has found a home, we need to go back to the year 2022.
     `,
-    content: <HazelSlide />,
+    // In rails mode, once recorded: hazel-demo.mp4, a stop per step
+    content: (
+      <RailsVideo name="hazel-demo.mp4" stops={[0]}>
+        <HazelSlide />
+      </RailsVideo>
+    ),
   },
 
   { heading: "Origins" },
   {
     title: "Nool classic",
     transition: "fade-white",
-    steps: 3,
     notes: `
-      I had a prototype of a tangible math game. It had a lot to say for it,
-
-      ---
-
-      but the fundamental mechanic, based on selecting transformations from a menu,
-
-      ---
-
-      lacked the tactility I craved.
+      I had a prototype of a tangible math game. It had a lot to say for it, but the fundamental mechanic, based on selecting transformations from a menu, lacked the tactility I craved.
     `,
     content: <NoolClassicSlide />,
   },
@@ -1350,7 +1348,7 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade",
     steps: 3,
     notes: `
-      I eventually came up with a compelling scheme to make it draggable,
+      I eventually came up with a  scheme to make it draggable,
 
       ---
 
@@ -1424,7 +1422,12 @@ export const outline: (Slide | Heading)[] = [
 
       In this encounter, I drag to simplify expressions, which, now exorcised, return to the platonic realm.
     `,
-    content: <SupernoolSlide />,
+    // In rails mode, once recorded: supernool-demo.mp4
+    content: (
+      <RailsVideo name="supernool-demo.mp4">
+        <SupernoolSlide />
+      </RailsVideo>
+    ),
   },
 
   { heading: "Close" },
@@ -1439,7 +1442,7 @@ export const outline: (Slide | Heading)[] = [
 
       Our study suggests people from diverse disciplines want the same thing: from educators, to game designers, to mathematicians, to creative tool builders.
 
-      We hope declarative dragging, and infrastructures like it, will let them work in the semantic worlds they inhabit, helping them turn the rules of their worlds into rich tactile interactions in ours.
+      We hope declarative dragging will let them work in the semantic worlds they live in, helping them turn the rules of their worlds into rich tangible  interactions in ours.
 
       ---
 
@@ -1451,7 +1454,7 @@ export const outline: (Slide | Heading)[] = [
     title: "Call to action",
     transition: "fade-white",
     notes: `
-      We'd love to hear about your experiences working with Dragology, or even just ideas about what you dream of making.
+      If you give Dragology a try we'd love to here about it, or even just your ideas of what you dream about making.
 
       Thanks a bunch.
     `,

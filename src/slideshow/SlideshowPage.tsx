@@ -451,9 +451,18 @@ function SlideOutline({
   useSlideSnapshots();
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // The slide last scrolled to. Fast Refresh re-runs effects on every hot
+  // update, which mustn't yank the outline back from wherever you've scrolled
+  // it.
+  const scrolledToRef = useRef<number | null>(null);
+
   // Keep the current slide in view. (Not scrollIntoView, which would also
   // scroll the page's overflow: hidden container.)
   useEffect(() => {
+    if (scrolledToRef.current === current) return;
+    // On opening, jump there rather than sweep down from the top
+    const behavior = scrolledToRef.current === null ? "instant" : "smooth";
+    scrolledToRef.current = current;
     const container = scrollRef.current;
     const el = container?.querySelector<HTMLElement>(
       `[data-slide="${current}"]`,
@@ -464,11 +473,11 @@ function SlideOutline({
     const top = el.offsetTop - 28;
     const bottom = el.offsetTop + el.offsetHeight + pad;
     if (top < container.scrollTop) {
-      container.scrollTo({ top, behavior: "smooth" });
+      container.scrollTo({ top, behavior });
     } else if (bottom > container.scrollTop + container.clientHeight) {
       container.scrollTo({
         top: bottom - container.clientHeight,
-        behavior: "smooth",
+        behavior,
       });
     }
   }, [current]);
