@@ -11,6 +11,7 @@ export const highlightColors: { name: string; color: string }[] = [
 
 export type CodeHighlightStyle = "bar" | "tint" | "dim";
 export type DiagramHighlightStyle =
+  | "halo-fill"
   | "halo"
   | "halo-fade"
   | "lift"
@@ -25,8 +26,9 @@ export const highlightStyles: {
   code: CodeHighlightStyle;
   diagram: DiagramHighlightStyle;
 }[] = [
-  { name: "glow", code: "bar", diagram: "glow" },
+  { name: "halo fill", code: "bar", diagram: "halo-fill" },
   { name: "halo", code: "bar", diagram: "halo" },
+  { name: "glow", code: "bar", diagram: "glow" },
   { name: "halo + fade", code: "dim", diagram: "halo-fade" },
   { name: "lift", code: "bar", diagram: "lift" },
   { name: "tint + outline", code: "tint", diagram: "outline" },
@@ -34,8 +36,9 @@ export const highlightStyles: {
   { name: "spotlight + glow", code: "dim", diagram: "dim-glow" },
 ];
 
-/** The SVG filter the halo styles reference; see `HaloFilter`. */
+/** The SVG filters the halo styles reference; see `HaloFilter`. */
 export const HALO_FILTER_ID = "talk-halo";
+export const HALO_FILL_FILTER_ID = "talk-halo-fill";
 
 const SHAPES = "circle,ellipse,rect,path,line,polyline,polygon,text";
 
@@ -64,6 +67,8 @@ export function diagramHighlightCss(
   const fade = `${miss} { filter: grayscale(1) opacity(0.35) !important; }`;
   const halo = `${outermost} { filter: url(#${HALO_FILTER_ID}) !important; }`;
   switch (style) {
+    case "halo-fill":
+      return `${outermost} { filter: url(#${HALO_FILL_FILTER_ID}) !important; }`;
     case "halo":
       return halo;
     case "halo-fade":

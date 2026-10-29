@@ -15,6 +15,7 @@ import {
 } from "./ControlsPanel";
 import {
   diagramHighlightCss,
+  HALO_FILL_FILTER_ID,
   HALO_FILTER_ID,
   HIGHLIGHT_COLOR,
   highlightColors,
@@ -134,7 +135,6 @@ export function LiveCode({
   const [lastInitialState, setLastInitialState] = useState<string | null>(null);
 
   const [cursorLoc, setCursorLoc] = useState<number | null>(null);
-  const [pointerInDiagram, setPointerInDiagram] = useState(false);
   // Off while typing, on (⌥O) while moving around the code.
   const [highlightOn, setHighlightOn] = useState(false);
   const [foldStyling, setFoldStyling] = useState(true);
@@ -409,10 +409,9 @@ export function LiveCode({
     };
   }, []);
 
-  // Highlighting follows the editor cursor, and is off while the pointer
-  // is over the diagram: it's there to drag things.
+  // Highlighting follows the editor cursor.
   const style = highlightStyles[styleIdx];
-  const activeLoc = highlightOn && !pointerInDiagram ? cursorLoc : null;
+  const activeLoc = highlightOn ? cursorLoc : null;
   const highlightedLocs = useMemo(() => {
     if (!good || activeLoc === null) return [];
     const outer = good.locs[activeLoc];
@@ -487,7 +486,7 @@ export function LiveCode({
       <HaloFilter />
       <div
         style={{
-          flex: 1,
+          flex: 3,
           minWidth: 0,
           display: "flex",
           flexDirection: "column",
@@ -527,10 +526,8 @@ export function LiveCode({
       </div>
 
       <div
-        onPointerEnter={() => setPointerInDiagram(true)}
-        onPointerLeave={() => setPointerInDiagram(false)}
         style={{
-          flex: 1,
+          flex: 2,
           minWidth: 0,
           display: "flex",
           flexDirection: "column",
@@ -662,14 +659,17 @@ export function LiveCode({
 /**
  * A thin ring around an element's silhouette, a little way out from it:
  * the shape's alpha grown by two amounts, one subtracted from the other.
- * Units are the diagram's own (before it's scaled up to fit the pane).
+ * The fill variant instead lays the grown silhouette over the element,
+ * translucent. Units are the diagram's own (before it's scaled up to fit
+ * the pane).
  */
 function HaloFilter() {
-  const GAP = 3;
-  const WIDTH = 1;
+  const GAP = 5;
+  const WIDTH = 1.5;
+  const FILL_OPACITY = 0.3;
   return (
     <svg width={0} height={0} style={{ position: "absolute" }} aria-hidden>
-      <filter id={HALO_FILTER_ID} x="-25%" y="-25%" width="150%" height="150%">
+      <filter id={HALO_FILTER_ID} x="-50%" y="-50%" width="200%" height="200%">
         <feMorphology
           in="SourceAlpha"
           operator="dilate"
@@ -688,6 +688,29 @@ function HaloFilter() {
         <feMerge>
           <feMergeNode in="SourceGraphic" />
           <feMergeNode in="halo" />
+        </feMerge>
+      </filter>
+      <filter
+        id={HALO_FILL_FILTER_ID}
+        x="-50%"
+        y="-50%"
+        width="200%"
+        height="200%"
+      >
+        <feMorphology
+          in="SourceAlpha"
+          operator="dilate"
+          radius={GAP}
+          result="grown"
+        />
+        <feFlood
+          style={{ floodColor: HIGHLIGHT_COLOR, floodOpacity: FILL_OPACITY }}
+          result="color"
+        />
+        <feComposite in="color" in2="grown" operator="in" result="fill" />
+        <feMerge>
+          <feMergeNode in="SourceGraphic" />
+          <feMergeNode in="fill" />
         </feMerge>
       </filter>
     </svg>
