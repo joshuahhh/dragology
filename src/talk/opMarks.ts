@@ -11,7 +11,7 @@ import { DragSpecBuilder, DragSpecMethods } from "../DragSpec";
 
 /** Drag spec operators' names (`d.closest`, `.withFloating`, ...): the
  * builder's and specs' getters. */
-const OP_NAMES = new Set(
+export const OP_NAMES = new Set(
   [DragSpecBuilder.prototype, DragSpecMethods.prototype].flatMap((proto) =>
     Object.getOwnPropertyNames(proto).filter(
       (name) => Object.getOwnPropertyDescriptor(proto, name)?.get,

@@ -6,16 +6,17 @@ import {
   makeDraggableProps,
 } from "../draggable";
 import { Vec2 } from "../math/vec2";
+import { PAPER_OP_STYLE } from "../studio/StudioHackContext";
 import { findElement } from "../svgx";
 import { drawLayered, LayeredSvgx } from "../svgx/layers";
 import { assignPaths, getPath } from "../svgx/path";
 import { localToGlobal } from "../svgx/transform";
 import { compileLiveCode } from "../talk/compile";
-import { LETTER_FONT } from "../talk/fonts";
+import { CODE_FONT, LETTER_FONT } from "../talk/fonts";
+import { OP_NAMES } from "../talk/opMarks";
 import { snippets } from "../talk/snippets";
 import { assertDefined } from "../utils/assert";
 import { Cursor } from "./model-driven/ModelDrivenScene";
-import { robotoMono } from "./roboto-mono";
 import { STAGE_H, STAGE_W, useSlideStep } from "./slide";
 import { sourceSans } from "./source-sans";
 
@@ -83,8 +84,6 @@ const INK = "#1d1d24";
 const MUTED = "#71717a";
 const WIRE = "#52525b";
 const PANEL_FILL = "#f2f2f4";
-// The green the earlier slides highlight `.withFloating()` with
-const HIGHLIGHT = "#d5e5a3";
 // The bright beads' ink colors (talk/snippets.ts)
 const BEAD_INK: Record<string, string> = {
   A: "#b91c1c",
@@ -93,7 +92,7 @@ const BEAD_INK: Record<string, string> = {
   D: "#15803d",
   E: "#6d28d9",
 };
-const MONO_ADVANCE = 0.6; // Roboto Mono's characters are all 0.6em wide
+const MONO_ADVANCE = 0.602; // DejaVu Sans Mono's characters are all this wide
 
 const PANEL_W = 1660;
 const PANEL_H = 330;
@@ -111,8 +110,7 @@ const CHIP = { x: 970, h: 60, size: 26, padX: 20 };
 const CHIP_Y = THUMB.y + THUMB.size + 22;
 const CAPTION_GAP = 32;
 
-const OP = { h: 92, size: 44, padX: 44 };
-const OP_TEXT = ".withFloating()";
+const OP = { h: 92, size: 54, padX: 44 };
 
 /**
  * A drag behavior (pointer position in, preview and drop state out), and
@@ -144,7 +142,6 @@ export function BehaviorDiagramSlide() {
 
   // The operator sits on a heavy spine from one behavior's panel to the other
   const spineX = STAGE_W / 2;
-  const opW = OP_TEXT.length * OP.size * MONO_ADVANCE + 2 * OP.padX;
   const opY = TOP_Y + PANEL_H + (GAP - OP.h) / 2;
   const SPINE_GAP = 14;
 
@@ -180,7 +177,7 @@ export function BehaviorDiagramSlide() {
 
         <g transform={`translate(${PANEL_X} ${TOP_Y})`}>
           <BehaviorPanel
-            spec={["d.closest(newStates)"]}
+            spec={["d.closest(states)"]}
             size={outputs.size}
             output={outputs.closest}
           />
@@ -194,8 +191,7 @@ export function BehaviorDiagramSlide() {
         >
           <g transform={`translate(${PANEL_X} ${BOTTOM_Y})`}>
             <BehaviorPanel
-              spec={["d.closest(newStates)", ".withFloating()"]}
-              highlightLine={1}
+              spec={["d.closest(states)", ".withFloating()"]}
               size={outputs.size}
               output={outputs.floating}
             />
@@ -210,40 +206,67 @@ export function BehaviorDiagramSlide() {
             y0={opY + OP.h + SPINE_GAP}
             y1={BOTTOM_Y - SPINE_GAP}
           />
-          <rect
-            x={spineX - opW / 2}
-            y={opY}
-            width={opW}
-            height={OP.h}
-            rx={OP.h / 2}
-            fill={HIGHLIGHT}
-          />
-          <text
-            x={spineX}
-            y={opY + OP.h / 2}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontFamily={robotoMono}
-            fontSize={OP.size}
-            fontWeight={600}
-            fill={INK}
-          >
-            {OP_TEXT}
-          </text>
-          <text
-            x={spineX + opW / 2 + CAPTION_GAP}
-            y={opY + OP.h / 2}
-            dominantBaseline="central"
-            fontFamily={sourceSans}
-            fontStyle="italic"
-            fontSize={38}
-            fill={MUTED}
-          >
-            an operator
-          </text>
+          <foreignObject x={0} y={opY} width={STAGE_W} height={OP.h}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                height: "100%",
+              }}
+            >
+              <div
+                style={{
+                  ...PAPER_OP_STYLE,
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  fontSize: OP.size,
+                  padding: `0 ${OP.padX}px`,
+                  borderRadius: OP.h / 2,
+                }}
+              >
+                withFloating
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `calc(100% + ${CAPTION_GAP}px)`,
+                    whiteSpace: "nowrap",
+                    fontFamily: sourceSans,
+                    fontWeight: 400,
+                    fontSize: 38,
+                    color: MUTED,
+                  }}
+                >
+                  an operator
+                </div>
+              </div>
+            </div>
+          </foreignObject>
         </g>
       </svg>
     </div>
+  );
+}
+
+/** Code, its operators' names styled as the live-code slide styles them */
+function Code({ code }: { code: string }) {
+  // Split around the names after dots: ["d.", "closest", "(states)"]
+  const parts = code.split(/(?<=\.)(\w+)/);
+  return (
+    <span style={{ fontFamily: CODE_FONT, whiteSpace: "pre" }}>
+      {parts.map((part, i) =>
+        i % 2 === 1 && OP_NAMES.has(part) ? (
+          <span
+            key={i}
+            style={{ ...PAPER_OP_STYLE, padding: "0 2px", borderRadius: 2 }}
+          >
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </span>
   );
 }
 
@@ -324,13 +347,11 @@ function Card({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
 
 function BehaviorPanel({
   spec,
-  highlightLine,
   size,
   output,
 }: {
   /** The spec's code, a line each */
   spec: string[];
-  highlightLine?: number;
   size: Vec2;
   output: { preview: LayeredSvgx; dropState: BeadsState };
 }) {
@@ -340,7 +361,6 @@ function BehaviorPanel({
   const dropText = `{ beads: [${output.dropState.beads.join(", ")}] }`;
   const chipW = dropText.length * CHIP.size * MONO_ADVANCE + 2 * CHIP.padX;
   const inputY = MID_Y - INPUT.size / 2;
-  const codeSize = 22;
   return (
     <g>
       <rect width={PANEL_W} height={PANEL_H} rx={36} fill={PANEL_FILL} />
@@ -371,7 +391,7 @@ function BehaviorPanel({
           y={size.y * 0.68}
           textAnchor="middle"
           dominantBaseline="central"
-          fontFamily={robotoMono}
+          fontFamily={CODE_FONT}
           fontSize={46}
           fill={INK}
         >
@@ -408,35 +428,24 @@ function BehaviorPanel({
       >
         behavior
       </text>
-      {spec.map((line, i) => {
-        const y = MID_Y + 32 + (i - (spec.length - 1) / 2) * 30;
-        const w = line.length * codeSize * MONO_ADVANCE;
-        return (
-          <g key={i}>
-            {i === highlightLine && (
-              <rect
-                x={BOX.x + BOX.w / 2 - w / 2 - 5}
-                y={y - 15}
-                width={w + 10}
-                height={30}
-                rx={4}
-                fill={HIGHLIGHT}
-              />
-            )}
-            <text
-              x={BOX.x + BOX.w / 2}
-              y={y}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontFamily={robotoMono}
-              fontSize={codeSize}
-              fill={i === highlightLine ? INK : MUTED}
-            >
-              {line}
-            </text>
-          </g>
-        );
-      })}
+      <foreignObject x={BOX.x} y={MID_Y + 2} width={BOX.w} height={66}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100%",
+            fontSize: 22,
+            lineHeight: "30px",
+            color: "#3f3f46",
+          }}
+        >
+          {spec.map((line, i) => (
+            <Code key={i} code={line} />
+          ))}
+        </div>
+      </foreignObject>
 
       {/* Preview and drop state out */}
       <Wire
@@ -473,7 +482,7 @@ function BehaviorPanel({
         // On the alphabetic baseline, not "central": the colored letters'
         // tspans would each work out their own center, a little higher
         y={CHIP_Y + CHIP.h / 2 + CHIP.size * 0.36}
-        fontFamily={robotoMono}
+        fontFamily={CODE_FONT}
         fontSize={CHIP.size}
         fill={INK}
       >
