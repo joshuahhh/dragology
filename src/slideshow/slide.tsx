@@ -208,7 +208,7 @@ export function ImageSlide({ src }: { src: string }) {
   );
 }
 
-function DemoLink({ demoId }: { demoId: string }) {
+export function DemoLink({ demoId }: { demoId: string }) {
   return (
     <InStatusBar>
       <a

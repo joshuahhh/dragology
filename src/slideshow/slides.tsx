@@ -37,11 +37,15 @@ import {
 import { BehaviorDiagramSlide } from "./behavior-diagram";
 import { beadsSubject } from "./model-driven/beads";
 import { script as modelDrivenScript } from "./model-driven/ModelDrivenScene";
-import { ModelDrivenSlide } from "./model-driven/ModelDrivenSlide";
+import {
+  LiveDragLoop,
+  ModelDrivenSlide,
+} from "./model-driven/ModelDrivenSlide";
 import { ClosingMontageSlide } from "./montage/MontageCanvas";
 import { Rails } from "./rails";
 import { robotoMono } from "./roboto-mono";
 import {
+  DemoLink,
   DemoSlide,
   type Heading,
   ImageSlide,
@@ -731,18 +735,6 @@ function DeclarativeDraggingIntro() {
   );
 }
 
-/** The ring of beads as it's live-coded later, and explained in between */
-function BeadsFloating() {
-  return (
-    <DemoDraggable
-      draggable={beadsSubject.draggable}
-      initialState={beadsSubject.state}
-      width={beadsSubject.width}
-      height={beadsSubject.height}
-    />
-  );
-}
-
 /**
  * The ring of beads written without Dragology or React, from where a drag
  * starts to its event listeners, comments dropped: what you'd write
@@ -937,12 +929,11 @@ export const outline: (Slide | Heading)[] = [
       Traditionally you would make this manually, by adding listeners to pointer events, and managing ephemeral state during the drag.
     `,
     content: (
-      <>
-        <DemoSlide width={300} height={300} demoId="ring-of-beads">
-          <BeadsFloating />
-        </DemoSlide>
+      <div className="absolute inset-0 bg-white">
+        <LiveDragLoop frame={{ x: STAGE_W / 2, y: STAGE_H / 2, scale: 3 }} />
+        <DemoLink demoId="ring-of-beads" />
         <SlideInsets insets={[null, <VanillaDragCode />]} />
-      </>
+      </div>
     ),
   },
   {
