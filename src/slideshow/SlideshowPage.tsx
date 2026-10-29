@@ -807,8 +807,13 @@ export function SlideshowPage() {
     );
   }, []);
 
+  // Going to the slide we're on cycles through its steps
   const goToSlide = useCallback((slide: number) => {
-    setPos({ slide, step: 0 });
+    setPos((pos) =>
+      pos.slide === slide
+        ? { slide, step: (pos.step + 1) % slideSteps(slides[slide]) }
+        : { slide, step: 0 },
+    );
   }, []);
 
   useEffect(() => {
