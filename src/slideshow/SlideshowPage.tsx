@@ -1,3 +1,4 @@
+import { EditorView } from "@codemirror/view";
 import dedent from "dedent";
 import _ from "lodash";
 import {
@@ -307,7 +308,25 @@ function SlideNotes({
       className={`self-stretch min-h-0 overflow-y-auto px-4 py-3 ${
         wide ? "" : "max-h-[40vh] border-b border-gray-800"
       }`}
-      style={{ flex: wide ? "1 1 0" : "0 1 auto", position: "relative" }}
+      style={{
+        flex: wide ? "1 1 0" : "0 1 auto",
+        position: "relative",
+        cursor: editable ? "text" : undefined,
+      }}
+      // The editor is only as tall as its text; a click in the space below
+      // (or around) it puts the cursor at the end of the notes.
+      onMouseDown={(e) => {
+        if (!editable || (e.target as Element).closest(".cm-editor")) return;
+        const dom = e.currentTarget.querySelector<HTMLElement>(".cm-editor");
+        const view = dom && EditorView.findFromDOM(dom);
+        if (!view) return;
+        e.preventDefault();
+        view.focus();
+        view.dispatch({
+          selection: { anchor: view.state.doc.length },
+          scrollIntoView: true,
+        });
+      }}
     >
       {otherFailed && (
         <div className="text-red-400 text-sm mb-1">
