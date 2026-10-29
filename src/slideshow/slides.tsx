@@ -874,7 +874,7 @@ export const outline: (Slide | Heading)[] = [
     title: "Dragology",
     transition: "fade-white",
     notes: `
-      To show you how this works in practice, and introduce you to the complementary concept of composable dragging, we’ll do some live coding with our library Dragology.
+      To show you how this works in practice, and introduce you to the complementary concept of composable dragging, we’ll make that ring demo using our library Dragology.
     `,
     content: <ImageSlide src="slide-12.jpg" />,
   },
@@ -886,7 +886,20 @@ export const outline: (Slide | Heading)[] = [
     // Its editor takes focus and keys on mount
     preload: false,
     notes: `
-      // alt-o to enable / disable highlighting
+      This "draggable" is a function that, given a model state, returns a static view.
+      Here’s the line that draws the ring…
+      And this SVG group is one of the beads being drawn, in a loop.
+      It's not draggable yet. [demonstrate]
+      We want to make each of these beads draggable.
+
+      ---
+
+      So we'll go to the beads and add a special attribute, called “dragologyOnDrag”.
+      We'll set it to a handler function with two parts.
+      First, we'll compute the set of states reachable by dragging the bead.
+        And we'll do that using a readymade function down here.
+      Second, we'll use Dragology's domain-specific language to specify HOW drag-and-drop should make those states accessible.
+      We'll start with the simplest option, a combinator called "closest".
     `,
     content: <LiveCodeSlide />,
   },
