@@ -22,6 +22,7 @@ import {
 import { tags as t } from "@lezer/highlight";
 import CodeMirror, { ExternalChange } from "@uiw/react-codemirror";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { formatSeconds } from "./timing";
 
 // Markdown as plain text with its formatting applied: the # and * stay, dimmed
 const highlightStyle = HighlightStyle.define([
@@ -63,6 +64,7 @@ const theme = EditorView.theme(
     },
     "span.cm-notes-stage-label": { marginLeft: "8px" },
     ".cm-notes-stage-label-active": { color: "#7dd3fc" },
+    ".cm-notes-stage-time": { fontWeight: "400", letterSpacing: "normal" },
     ".cm-notes-stage-label-extra": { color: "#f87171" },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
       backgroundColor: "#374151",
@@ -133,8 +135,11 @@ const slashComments = Prec.highest(
   EditorState.languageData.of(() => [{ commentTokens: { line: "//" } }]),
 );
 
-/** Where the slide is in its steps, which the notes have a stage for each of. */
-export type NotesStages = { current: number; count: number };
+/**
+ * Where the slide is in its steps, which the notes have a stage for each of,
+ * and the seconds each step took when last timed.
+ */
+export type NotesStages = { current: number; count: number; times?: number[] };
 
 // A line that's just --- starts the notes for the slide's next step
 const STAGE_BREAK = /^\s*---\s*$/;
@@ -154,7 +159,8 @@ class StageLabel extends WidgetType {
       other.stage === this.stage &&
       other.block === this.block &&
       other.stages.current === this.stages.current &&
-      other.stages.count === this.stages.count
+      other.stages.count === this.stages.count &&
+      other.stages.times?.[other.stage] === this.stages.times?.[this.stage]
     );
   }
   toDOM() {
@@ -173,6 +179,14 @@ class StageLabel extends WidgetType {
       stage < stages.count
         ? `Stage ${stage + 1}`
         : `Stage ${stage + 1} (slide has ${stages.count})`;
+    const time = stages.times?.[stage];
+    if (time !== undefined) {
+      const timeEl = document.createElement("span");
+      timeEl.className = "cm-notes-stage-time";
+      timeEl.textContent = ` · ${formatSeconds(time)}`;
+      timeEl.title = "Time on this step when last timed";
+      el.append(timeEl);
+    }
     return el;
   }
 }
@@ -335,16 +349,20 @@ export function NotesEditor({
 
   const stagesCurrent = stages?.current;
   const stagesCount = stages?.count;
-  // A stage scrolls into view as it becomes current
+  const stagesTimes = stages?.times;
   useEffect(() => {
     if (!view) return;
-    if (stagesCurrent === undefined || stagesCount === undefined) {
-      view.dispatch({ effects: setStages.of(null) });
-      return;
-    }
     view.dispatch({
-      effects: setStages.of({ current: stagesCurrent, count: stagesCount }),
+      effects: setStages.of(
+        stagesCurrent === undefined || stagesCount === undefined
+          ? null
+          : { current: stagesCurrent, count: stagesCount, times: stagesTimes },
+      ),
     });
+  }, [view, stagesCurrent, stagesCount, stagesTimes]);
+  // A stage scrolls into view as it becomes current
+  useEffect(() => {
+    if (!view || stagesCurrent === undefined) return;
     const { from, to } = stageRange(view.state.doc, stagesCurrent);
     revealRange(view, from, to);
   }, [view, stagesCurrent, stagesCount]);

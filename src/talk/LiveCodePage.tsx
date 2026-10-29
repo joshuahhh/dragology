@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import { DraggableRenderer, DragStatus } from "../DraggableRenderer";
 import { DragSpecTreeView } from "../DragSpecTreeView";
 import { ErrorBoundary } from "../ErrorBoundary";
+import type { Operator } from "../op";
 import { renderDraggableInert } from "../renderDraggable";
-import "../studio/shantell-sans";
+import { PAPER_OP_STYLE } from "../studio/StudioHackContext";
 import { CodeEditor, CodeEditorApi } from "./CodeEditor";
 import { Compiled, compileLiveCode } from "./compile";
 import {
@@ -13,6 +21,8 @@ import {
   HelpButton,
   PANEL_CODE,
 } from "./ControlsPanel";
+import { EXCERPT_FADE_MS } from "./excerpt";
+import { CODE_FONT, LETTER_FONT } from "./fonts";
 import {
   diagramHighlightCss,
   HALO_FILL_FILTER_ID,
@@ -23,6 +33,7 @@ import {
 } from "./highlightStyles";
 import { type Snippet, snippets as pageSnippets } from "./snippets";
 import { syntaxThemes } from "./syntaxThemes";
+import { TREE_LAYOUT, TreeViewLayout } from "./TreeViewLayout";
 
 /*
 Shortcuts are all Option/Alt plus a key; ⌥/ (or the ? in the corner)
@@ -42,22 +53,24 @@ const HELP_INTRO_MS = 4000;
  * bottom-right corner to show the ?. */
 const HELP_CORNER_PX = 140;
 
-/**
- * Fonts for text in the diagram, applied by CSS so the code doesn't
- * mention them. All are local (system fonts on macOS, or bundled), so
- * nothing needs the network at the venue.
- */
-export const letterFonts: { name: string; family: string }[] = [
-  { name: "arial rounded", family: '"Arial Rounded MT Bold", system-ui' },
-  { name: "maru gothic", family: '"Hiragino Maru Gothic ProN", system-ui' },
-  { name: "shantell", family: '"Shantell Sans", system-ui' },
-  { name: "avenir", family: '"Avenir Next", Avenir, system-ui' },
-  { name: "futura", family: "Futura, system-ui" },
-  { name: "rockwell", family: "Rockwell, serif" },
-  { name: "gill sans", family: '"Gill Sans", system-ui' },
-  { name: "system", family: "system-ui, sans-serif" },
-  { name: "georgia", family: "Georgia, serif" },
-];
+/** The excerpt's width in `TreeViewLayout` units: wide enough for the
+ * handler's lines not to wrap, which takes it under the tree's left edge.
+ * (It runs from the top-left corner down to the diagram.) */
+const EXCERPT_W = 600;
+const EXCERPT_FONT_SIZE = 22;
+/** How long the code and the diagram take to glide into the excerpt
+ * layout. */
+const GLIDE_MS = 700;
+
+/** The tree's thumbnail size, by how deeply its ops nest: as the
+ * studio's ring of beads has it for closest (2), with floating (3), and
+ * with whenFar (4). */
+function treeThumbArea(op: Operator<object>): number {
+  const depth = (op: Operator<object>): number =>
+    1 + Math.max(0, ...op.children.map((c) => depth(c.op)));
+  const d = depth(op);
+  return d <= 2 ? 25000 : d === 3 ? 18000 : 9000;
+}
 
 type Good = Compiled & { source: string };
 
@@ -119,6 +132,8 @@ export function LiveCode({
   snippetIdx = 0,
   onSnippetIdx,
   highlight,
+  excerpt = false,
+  hasKeyboard,
 }: {
   snippets: Snippet[];
   snippetIdx?: number;
@@ -126,6 +141,11 @@ export function LiveCode({
   /** Turns highlighting on or off whenever it changes (⌥O still toggles
    * it in between). */
   highlight?: boolean;
+  /** Show just the drag spec, beside the spec tree, in the studio's
+   * layout (`TreeViewLayout`). */
+  excerpt?: boolean;
+  /** Whether it's in use, for the editor to take focus (see `CodeEditor`) */
+  hasKeyboard?: boolean;
 }) {
   const [bright, setBright] = useState(true);
   const baseSnippet = snippets[snippetIdx];
@@ -150,24 +170,17 @@ export function LiveCode({
     if (highlight !== undefined) setHighlightOn(highlight);
   }, [highlight]);
   const [foldStyling, setFoldStyling] = useState(true);
+  const [paperOps, setPaperOps] = useState(true);
   const [styleIdx, setStyleIdx] = useState(0);
   const [syntaxIdx, setSyntaxIdx] = useState(0);
   const [colorIdx, setColorIdx] = useState(0);
-  const [fontIdx, setFontIdx] = useState(0);
   const [showState, setShowState] = useState(!!snippet.showState);
-  const [showTree, setShowTree] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [fontSize, setFontSize] = useState(32);
   const [toast, setToast] = useState<{ text: string; key: number } | null>(
     null,
   );
   const [dragStatus, setDragStatus] = useState<DragStatus<object> | null>(null);
-
-  // The bundled font loads on first use, and text in it is invisible
-  // until then; load it up front so switching to it is instant.
-  useEffect(() => {
-    void document.fonts.load('800 32px "Shantell Sans"');
-  }, []);
 
   const docKey = `${snippetIdx}-${bright}`;
   const editorApiRef = useRef<CodeEditorApi | null>(null);
@@ -227,13 +240,12 @@ export function LiveCode({
     snippetIdx,
     highlightOn,
     foldStyling,
+    paperOps,
     styleIdx,
     syntaxIdx,
     colorIdx,
-    fontIdx,
     bright,
     showState,
-    showTree,
     showDebug,
     fontSize,
     good,
@@ -266,10 +278,9 @@ export function LiveCode({
             highlightStyle: highlightStyles[cur.styleIdx].name,
             highlightColor: highlightColors[cur.colorIdx].name,
             syntaxColors: syntaxThemes[cur.syntaxIdx].name,
-            letterFont: letterFonts[cur.fontIdx].name,
             foldStyling: cur.foldStyling,
+            paperOperators: cur.paperOps,
             showState: cur.showState,
-            showTree: cur.showTree,
             showDebug: cur.showDebug,
             fontSize: cur.fontSize,
           };
@@ -279,6 +290,11 @@ export function LiveCode({
               () => showToast("settings copied to clipboard"),
               () => showToast("couldn't copy settings"),
             );
+        },
+        KeyG: () => {
+          cur.paperOps = !cur.paperOps;
+          setPaperOps(cur.paperOps);
+          showToast(`operators: ${cur.paperOps ? "as in the paper" : "plain"}`);
         },
         KeyZ: () => {
           cur.foldStyling = !cur.foldStyling;
@@ -308,12 +324,6 @@ export function LiveCode({
           setColorIdx(next);
           showToast(`highlight color: ${highlightColors[next].name}`);
         },
-        KeyL: () => {
-          const next = cycle(cur.fontIdx, letterFonts.length);
-          cur.fontIdx = next;
-          setFontIdx(next);
-          showToast(`letter font: ${letterFonts[next].name}`);
-        },
         KeyB: () => {
           cur.bright = !cur.bright;
           setBright(cur.bright);
@@ -327,13 +337,6 @@ export function LiveCode({
         KeyS: () => {
           cur.showState = !cur.showState;
           setShowState(cur.showState);
-        },
-        KeyT: () => {
-          cur.showTree = !cur.showTree;
-          setShowTree(cur.showTree);
-          showToast(
-            `spec tree: ${cur.showTree ? "on (while dragging)" : "off"}`,
-          );
         },
         KeyD: () => {
           cur.showDebug = !cur.showDebug;
@@ -435,17 +438,7 @@ export function LiveCode({
   }, [good, activeLoc]);
 
   // Diagram sizing.
-  const paneRef = useRef<HTMLDivElement>(null);
-  const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
-  useEffect(() => {
-    const el = paneRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(() =>
-      setPaneSize({ width: el.clientWidth, height: el.clientHeight }),
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  const [paneRef, paneSize] = useElementSize<HTMLDivElement>();
   const scale = Math.max(
     0.1,
     Math.min(
@@ -454,7 +447,133 @@ export function LiveCode({
     ),
   );
 
+  // In the excerpt, the studio layout is zoomed to fit (as `DemoSlide`
+  // fits it), with the code over its top left, in our own pixels.
+  const [rootSize, setRootSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const el = rootRef.current!;
+    const observer = new ResizeObserver(() =>
+      setRootSize({ width: el.clientWidth, height: el.clientHeight }),
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const zoom = Math.max(
+    0.01,
+    Math.min(
+      (rootSize.width - 64) / TREE_LAYOUT.width,
+      (rootSize.height - 64) / TREE_LAYOUT.height,
+      3,
+    ),
+  );
+  const layoutLeft = (rootSize.width - TREE_LAYOUT.width * zoom) / 2;
+  const layoutTop = (rootSize.height - TREE_LAYOUT.height * zoom) / 2;
+  const excerptTop = layoutTop + TREE_LAYOUT.pad * zoom;
+  const excerptHeight =
+    TREE_LAYOUT.height -
+    TREE_LAYOUT.pad -
+    snippet.height * TREE_LAYOUT.diagramZoom;
+
+  // Into the excerpt, the code it hides fades out, and then the layout
+  // switches, with the code and the diagram gliding from where they were.
+  // (Out of it, the layout switches at once.)
+  const [inExcerpt, setInExcerpt] = useState(excerpt);
+  const inExcerptRef = useRef(inExcerpt);
+  inExcerptRef.current = inExcerpt;
+  const glideFromRef = useRef<{
+    code: { x: number; y: number } | null;
+    diagram: DOMRect | null;
+  } | null>(null);
+  const codeHostRef = useRef<HTMLDivElement>(null);
+  const diagramBoxRef = useRef<HTMLDivElement>(null);
+  const excerptFontSize = EXCERPT_FONT_SIZE * zoom;
+  const excerptBox = useMemo(
+    () => ({ width: EXCERPT_W * zoom, fontSize: excerptFontSize }),
+    [zoom, excerptFontSize],
+  );
+  useEffect(() => {
+    if (excerpt === inExcerptRef.current) return;
+    const api = editorApiRef.current;
+    if (!excerpt || !api) {
+      setInExcerpt(excerpt);
+      return;
+    }
+    let done = false;
+    void Promise.all([
+      api.prepareExcerpt(),
+      new Promise((resolve) => setTimeout(resolve, EXCERPT_FADE_MS)),
+    ]).then(() => {
+      if (done) return;
+      done = true;
+      glideFromRef.current = {
+        code: api.excerptOrigin(),
+        diagram: diagramBoxRef.current?.getBoundingClientRect() ?? null,
+      };
+      setInExcerpt(true);
+    });
+    return () => {
+      if (!done) api.cancelExcerpt();
+      done = true;
+    };
+  }, [excerpt]);
+  const fontSizeRef = useRef(fontSize);
+  fontSizeRef.current = fontSize;
+  useLayoutEffect(() => {
+    const from = glideFromRef.current;
+    glideFromRef.current = null;
+    if (!from || !inExcerpt) return;
+    const box = diagramBoxRef.current;
+    if (box && from.diagram) {
+      const to = box.getBoundingClientRect();
+      // Screen pixels per pixel of the box's own (zoomed) coordinates
+      const k = to.width / box.offsetWidth;
+      glide(
+        box,
+        (from.diagram.left - to.left) / k,
+        (from.diagram.top - to.top) / k,
+        from.diagram.width / to.width,
+        "0 0",
+      );
+    }
+    const host = codeHostRef.current;
+    const to = editorApiRef.current?.excerptOrigin();
+    if (host && from.code && to) {
+      const rect = host.getBoundingClientRect();
+      const k = rect.width / host.offsetWidth;
+      glide(
+        host,
+        (from.code.x - to.x) / k,
+        (from.code.y - to.y) / k,
+        fontSizeRef.current / excerptFontSize,
+        `${(to.x - rect.left) / k}px ${(to.y - rect.top) / k}px`,
+      );
+    }
+    // Only when the layout switches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inExcerpt]);
+
   const dragging = dragStatus?.type === "dragging" ? dragStatus : null;
+
+  // The tree stays clear of the spec's lines of code (the rest it may
+  // cover), measured in layout units as a drag starts (when it appears).
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const [specLineEnds, setSpecLineEnds] = useState<
+    { right: number; bottom: number }[]
+  >([]);
+  const isDragging = dragging !== null;
+  useLayoutEffect(() => {
+    const layout = layoutRef.current;
+    if (!isDragging || !layout) return;
+    const rect = layout.getBoundingClientRect();
+    // Screen pixels per layout unit
+    const k = rect.width / TREE_LAYOUT.width;
+    setSpecLineEnds(
+      (editorApiRef.current?.specLineEnds() ?? []).map((end) => ({
+        right: (end.right - rect.left) / k,
+        bottom: (end.bottom - rect.top) / k,
+      })),
+    );
+  }, [isDragging]);
   const shownState = dragging ? dragging.result.dropState : state;
 
   const helpVisible = !dragging && (panelOpen || nearCorner || !introOver);
@@ -468,22 +587,44 @@ export function LiveCode({
       KeyO: highlightOn,
       KeyB: baseSnippet.bright ? bright : null,
       KeyZ: foldStyling,
+      KeyG: paperOps,
       KeyS: showState,
-      KeyT: showTree,
       KeyD: showDebug,
       KeyH: highlightStyles[styleIdx].name,
       KeyC: syntaxThemes[syntaxIdx].name,
-      KeyL: letterFonts[fontIdx].name,
       Minus: fontSize,
     },
   };
 
+  const renderer = good && state && (
+    <ErrorBoundary
+      resetOnChange={good}
+      fallback={(err) => (
+        <div style={{ color: "#cf222e", fontSize: 12 }}>{err.message}</div>
+      )}
+    >
+      <DraggableRenderer
+        draggable={good.draggable}
+        state={state}
+        onDropState={setState}
+        onDragStatus={setDragStatus}
+        width={snippet.width}
+        height={snippet.height}
+        showDebugOverlay={showDebug}
+      />
+    </ErrorBoundary>
+  );
+
+  // The editor keeps its place in the tree in both layouts, so it stays
+  // mounted (with its cursor, focus, and undo history) through a switch.
   return (
     <div
       ref={rootRef}
       data-talk-root
+      data-paper-ops={paperOps || undefined}
       onPointerDown={() => panelOpen && setPanelOpen(false)}
       style={{
+        position: "relative",
         display: "flex",
         width: "100%",
         height: "100%",
@@ -494,30 +635,54 @@ export function LiveCode({
     >
       <style>
         {`[data-talk-root] { --talk-hl: ${highlightColors[colorIdx].color}; }
-[data-talk-diagram] text[data-loc] { font-family: ${letterFonts[fontIdx].family}; }`}
+[data-talk-diagram] text[data-loc] { font-family: ${LETTER_FONT}; }
+[data-paper-ops] .cm-op, [data-paper-ops] .cm-op * { color: ${PAPER_OP_STYLE.color} !important; font-family: ${PAPER_OP_STYLE.fontFamily}; font-weight: ${PAPER_OP_STYLE.fontWeight}; font-style: ${PAPER_OP_STYLE.fontStyle}; }
+[data-paper-ops] .cm-op { font-size: ${PAPER_OP_STYLE.fontSize}; line-height: ${PAPER_OP_STYLE.lineHeight}; background: ${PAPER_OP_STYLE.background}; border-radius: 2px; }
+${diagramHighlightCss("[data-talk-diagram]", highlightedLocs, style.diagram)}`}
       </style>
       <HaloFilter />
       <div
         style={{
-          flex: CODE_FLEX,
-          minWidth: 0,
           display: "flex",
           flexDirection: "column",
-          fontSize,
+          ...(inExcerpt
+            ? {
+                position: "absolute",
+                left: layoutLeft + TREE_LAYOUT.pad * zoom,
+                top: excerptTop,
+                width: EXCERPT_W * zoom,
+                height: excerptHeight * zoom,
+                fontSize: EXCERPT_FONT_SIZE * zoom,
+              }
+            : { flex: CODE_FLEX, minWidth: 0, fontSize }),
         }}
       >
-        {/* The code wraps to this box, but the editor runs on under the
-            diagram, so a line too long to wrap (initialState) overflows
-            into it rather than being cut off. */}
+        {/* The code wraps to this box, but the editor runs on beyond it
+            (under the diagram), so a line too long to wrap (initialState)
+            overflows rather than being cut off. */}
         <div
           ref={codeBoxRef}
           style={{ flex: 1, minHeight: 0, position: "relative" }}
         >
           <div
+            ref={codeHostRef}
             style={{
               position: "absolute",
-              inset: 0,
-              right: `calc(-100% * ${DIAGRAM_FLEX} / ${CODE_FLEX})`,
+              left: 0,
+              top: 0,
+              ...(inExcerpt
+                ? {
+                    width:
+                      (TREE_LAYOUT.width -
+                        TREE_LAYOUT.pad -
+                        TREE_LAYOUT.treePad) *
+                      zoom,
+                    height: (TREE_LAYOUT.height - TREE_LAYOUT.pad) * zoom,
+                  }
+                : {
+                    bottom: 0,
+                    right: `calc(-100% * ${DIAGRAM_FLEX} / ${CODE_FLEX})`,
+                  }),
             }}
           >
             <CodeEditor
@@ -532,122 +697,145 @@ export function LiveCode({
               style={style.code}
               syntaxTheme={syntaxIdx}
               foldStyling={foldStyling}
-              fontSize={fontSize}
+              fontSize={inExcerpt ? EXCERPT_FONT_SIZE * zoom : fontSize}
               formatWidthRef={codeBoxRef}
+              excerpt={inExcerpt}
+              excerptHandler={snippet.excerptHandler}
+              excerptBox={excerptBox}
               apiRef={editorApiRef}
+              hasKeyboard={hasKeyboard}
             />
           </div>
         </div>
         <div
           style={{
             minHeight: "1.5em",
-            padding: "0 24px 12px 48px",
             fontSize: 14,
-            fontFamily: "ui-monospace, Menlo, monospace",
+            fontFamily: CODE_FONT,
             color: "#cf222e",
             opacity: error ? 1 : 0,
             transition: "opacity 300ms",
+            ...(inExcerpt
+              ? {
+                  // Below the layout
+                  position: "absolute",
+                  left: 0,
+                  top: layoutTop + TREE_LAYOUT.height * zoom - excerptTop + 4,
+                  whiteSpace: "nowrap",
+                }
+              : { padding: "0 24px 12px 48px" }),
           }}
         >
           {error}
         </div>
       </div>
 
-      <div
-        style={{
-          flex: DIAGRAM_FLEX,
-          minWidth: 0,
-          display: "flex",
-          flexDirection: "column",
-          // Above the editor, which runs on underneath it
-          position: "relative",
-          zIndex: 1,
-        }}
-      >
+      {inExcerpt ? (
+        // Over the editor, which runs on underneath it, but letting
+        // pointer events through to it everywhere but the diagram.
         <div
-          ref={paneRef}
-          data-talk-diagram
+          ref={layoutRef}
           style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            position: "absolute",
+            left: layoutLeft,
+            top: layoutTop,
+            zoom,
+            zIndex: 1,
+            pointerEvents: "none",
           }}
         >
-          <style>
-            {diagramHighlightCss(
-              "[data-talk-diagram]",
-              highlightedLocs,
-              style.diagram,
-            )}
-          </style>
-          {good && state && (
-            <div
-              style={{
-                width: snippet.width * scale,
-                height: snippet.height * scale,
-              }}
-            >
+          <TreeViewLayout
+            label={<div />}
+            avoid={specLineEnds}
+            paperOps={paperOps}
+            diagram={
               <div
+                ref={diagramBoxRef}
+                data-talk-diagram
                 style={{
-                  transform: `scale(${scale})`,
-                  transformOrigin: "top left",
+                  width: snippet.width,
+                  height: snippet.height,
+                  pointerEvents: "auto",
                 }}
               >
-                <ErrorBoundary
-                  resetOnChange={good}
-                  fallback={(err) => (
-                    <div style={{ color: "#cf222e", fontSize: 12 }}>
-                      {err.message}
-                    </div>
-                  )}
-                >
-                  <DraggableRenderer
-                    draggable={good.draggable}
-                    state={state}
-                    onDropState={setState}
-                    onDragStatus={setDragStatus}
-                    width={snippet.width}
-                    height={snippet.height}
-                    showDebugOverlay={showDebug}
-                  />
-                </ErrorBoundary>
+                {renderer}
               </div>
-            </div>
-          )}
+            }
+            tree={
+              dragging && (
+                <DragSpecTreeView
+                  op={dragging.result.op}
+                  activePath={dragging.result.activePath}
+                  colorMap={null}
+                  svgWidth={snippet.width}
+                  svgHeight={snippet.height}
+                  thumbArea={treeThumbArea(dragging.result.op)}
+                  fontFamily={CODE_FONT}
+                  nodeProps={{ "withFloating/whenFar/bg/": { width: 150 } }}
+                />
+              )
+            }
+          />
         </div>
-
-        {showTree && dragging && (
-          <div style={{ padding: "0 24px 16px", maxHeight: "40%" }}>
-            <DragSpecTreeView
-              op={dragging.result.op}
-              activePath={dragging.result.activePath}
-              colorMap={null}
-              svgWidth={snippet.width}
-              svgHeight={snippet.height}
-              thumbArea={6000}
-            />
-          </div>
-        )}
-
-        {showState && shownState && (
-          <pre
+      ) : (
+        <div
+          style={{
+            flex: DIAGRAM_FLEX,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            // Above the editor, which runs on underneath it
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
+          <div
+            ref={paneRef}
+            data-talk-diagram
             style={{
-              margin: 0,
-              padding: "0 32px 32px",
-              fontSize: Math.round(fontSize * 0.9),
-              fontFamily:
-                '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace',
-              color: dragging ? HIGHLIGHT_COLOR : "#57606a",
-              whiteSpace: "pre-wrap",
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            {formatValue(shownState)}
-          </pre>
-        )}
-      </div>
+            {renderer && (
+              <div
+                ref={diagramBoxRef}
+                style={{
+                  width: snippet.width * scale,
+                  height: snippet.height * scale,
+                }}
+              >
+                <div
+                  style={{
+                    transform: `scale(${scale})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  {renderer}
+                </div>
+              </div>
+            )}
+          </div>
 
+          {showState && shownState && (
+            <pre
+              style={{
+                margin: 0,
+                padding: "0 32px 32px",
+                fontSize: Math.round(fontSize * 0.9),
+                fontFamily: CODE_FONT,
+                color: dragging ? HIGHLIGHT_COLOR : "#57606a",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {formatValue(shownState)}
+            </pre>
+          )}
+        </div>
+      )}
       {toast && (
         <div
           key={toast.key}
@@ -660,7 +848,7 @@ export function LiveCode({
             background: "rgba(0,0,0,0.65)",
             color: "white",
             fontSize: 13,
-            fontFamily: "ui-monospace, Menlo, monospace",
+            fontFamily: CODE_FONT,
             pointerEvents: "none",
           }}
         >
@@ -745,6 +933,47 @@ function HaloFilter() {
       </filter>
     </svg>
   );
+}
+
+/**
+ * Animates an element from where a transform (translate, then scale
+ * about `origin`) puts it, back to where it is.
+ */
+function glide(
+  el: HTMLElement,
+  dx: number,
+  dy: number,
+  scale: number,
+  origin: string,
+) {
+  el.style.transition = "none";
+  el.style.transformOrigin = origin;
+  el.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+  el.getBoundingClientRect(); // so the start takes effect before the transition
+  el.style.transition = `transform ${GLIDE_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`;
+  el.style.transform = "";
+  el.addEventListener(
+    "transitionend",
+    () => {
+      el.style.transition = "";
+      el.style.transformOrigin = "";
+    },
+    { once: true },
+  );
+}
+
+/** A callback ref, and the size of the element it's on (or was last). */
+function useElementSize<E extends HTMLElement>() {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const ref = useCallback((el: E | null) => {
+    if (!el) return;
+    const observer = new ResizeObserver(() =>
+      setSize({ width: el.clientWidth, height: el.clientHeight }),
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, size] as const;
 }
 
 function codeForKey(key: string): string {

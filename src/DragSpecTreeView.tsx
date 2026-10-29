@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { Vec2 } from "./math/vec2";
 import type { Operator } from "./op";
-import { StudioHackContext } from "./studio/StudioHackContext";
+import { PAPER_OP_STYLE, StudioHackContext } from "./studio/StudioHackContext";
 import { LayeredSvgx, drawLayered } from "./svgx/layers";
 import { Transition } from "./transition";
 import { assert } from "./utils/assert";
@@ -36,6 +36,7 @@ export function DragSpecTreeView<T extends object>({
   svgWidth,
   svgHeight,
   thumbArea,
+  fontFamily = "monospace",
 }: {
   op: Operator<T>;
   activePath: string;
@@ -44,6 +45,7 @@ export function DragSpecTreeView<T extends object>({
   svgWidth: number;
   svgHeight: number;
   thumbArea: number;
+  fontFamily?: string;
 }) {
   return (
     <TreeViewContext.Provider
@@ -56,7 +58,7 @@ export function DragSpecTreeView<T extends object>({
         thumbArea,
       }}
     >
-      <div style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>
+      <div style={{ fontSize: "0.75rem", fontFamily }}>
         <SpecNode op={op} path="" />
       </div>
     </TreeViewContext.Provider>
@@ -204,8 +206,10 @@ export function Box({
   children?: React.ReactNode;
 }) {
   const { nodeProps } = useTreeViewContext();
-  const { tightFixed } = useContext(StudioHackContext);
+  const { tightFixed, paperOps } = useContext(StudioHackContext);
   const myProps = path !== undefined ? nodeProps?.[path] : undefined;
+  // The op's name, at the start of the label (e.g. "whenFar (gap=50)")
+  const opName = paperOps ? /^\w+/.exec(label)?.[0] : undefined;
 
   const bg = color
     ? colorToAlpha(color, 0.15)
@@ -239,7 +243,18 @@ export function Box({
           fontSize: tightFixed ? 15 : 10,
         }}
       >
-        {label}
+        {opName ? (
+          <>
+            <span
+              style={{ ...PAPER_OP_STYLE, padding: "0 2px", borderRadius: 2 }}
+            >
+              {opName}
+            </span>
+            {label.slice(opName.length)}
+          </>
+        ) : (
+          label
+        )}
       </div>
       {children}
     </div>

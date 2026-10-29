@@ -35,11 +35,33 @@ import {
   EditorView,
   keymap,
 } from "@codemirror/view";
-import { RefObject, useCallback, useEffect, useRef, useState } from "react";
+import {
+  RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { SourceLoc } from "./compile";
+import {
+  addExcerptAttr,
+  EXCERPT_FADE_MS,
+  excerptAttrRange,
+  excerptCursor,
+  excerptField,
+  excerptIndent,
+  excerpting,
+  excerptSpecFrom,
+  reformat,
+  setExcerpt,
+  setFade,
+} from "./excerpt";
 import { setStylingFolds, stylingFolding } from "./folds";
+import { CODE_FONT } from "./fonts";
 import { formatCode, minimalChange } from "./format";
 import { CodeHighlightStyle, HIGHLIGHT_COLOR } from "./highlightStyles";
+import { opMarks } from "./opMarks";
 import { syntaxThemes } from "./syntaxThemes";
 import { tsCompletions, tsLinter, tsSync } from "./tsExtensions";
 
@@ -149,7 +171,7 @@ const theme = EditorView.theme({
   // `formatWidthRef`), so its scrollbar would land on the diagram's far
   // edge. It still scrolls, by wheel and with the cursor.
   ".cm-scroller": {
-    fontFamily: '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace',
+    fontFamily: CODE_FONT,
     lineHeight: "1.45",
     scrollbarWidth: "none",
   },
@@ -171,6 +193,13 @@ const theme = EditorView.theme({
   },
   ".cm-stylingFoldGutter .cm-gutterElement:hover": { color: "#52525b" },
   ".cm-cursor": { borderLeftWidth: "2px" },
+  "@keyframes cm-fade-out": { to: { opacity: 0 } },
+  ".cm-fadingOut": {
+    animation: `cm-fade-out ${EXCERPT_FADE_MS}ms ease-in forwards`,
+  },
+  // An excerpt sits flush in its box, with no fold markers.
+  "&.cm-excerpt .cm-content": { padding: 0 },
+  "&.cm-excerpt .cm-gutters": { display: "none" },
   ".cm-loc-tag": {
     color: `${HIGHLIGHT_COLOR} !important`,
     "& *": { color: `${HIGHLIGHT_COLOR} !important` },
@@ -210,19 +239,49 @@ function availableColumns(
   view: EditorView,
   box: HTMLElement | null = view.scrollDOM,
 ): number {
-  const horizontalPadding = (el: Element) => {
-    const style = getComputedStyle(el);
-    return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
-  };
   const padding =
     horizontalPadding(view.contentDOM) +
     horizontalPadding(view.contentDOM.querySelector(".cm-line")!);
   const gutters =
     view.dom.querySelector<HTMLElement>(".cm-gutters")?.offsetWidth ?? 0;
+  const fontSize = parseFloat(getComputedStyle(view.contentDOM).fontSize);
+  return columnsIn(
+    view,
+    (box ?? view.scrollDOM).clientWidth - gutters - padding,
+    fontSize,
+  );
+}
+
+/**
+ * The width to format to for the excerpt, given its box (or, without
+ * one, the editor as measured). The excerpt has no gutters or content
+ * padding, and its hidden indentation counts toward the width.
+ */
+function excerptWidth(
+  view: EditorView,
+  box: { width: number; fontSize: number } | undefined,
+): number {
+  const columns = box
+    ? columnsIn(
+        view,
+        box.width -
+          horizontalPadding(view.contentDOM.querySelector(".cm-line")!),
+        box.fontSize,
+      )
+    : availableColumns(view);
+  return columns + excerptIndent(view.state);
+}
+
+function horizontalPadding(el: Element) {
+  const style = getComputedStyle(el);
+  return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+}
+
+function columnsIn(view: EditorView, width: number, fontSize: number) {
+  const style = getComputedStyle(view.contentDOM);
   const ctx = document.createElement("canvas").getContext("2d")!;
-  ctx.font = getComputedStyle(view.contentDOM).font;
+  ctx.font = `${style.fontStyle} ${style.fontWeight} ${fontSize}px ${style.fontFamily}`;
   const charWidth = ctx.measureText("0".repeat(100)).width / 100;
-  const width = (box ?? view.scrollDOM).clientWidth - gutters - padding;
   return Math.floor(width / charWidth - 1);
 }
 
@@ -238,10 +297,26 @@ async function formatToWidth(view: EditorView, printWidth: number) {
   view.dispatch({
     changes: minimalChange(text, result.formatted),
     selection: { anchor: result.cursorOffset },
+    annotations: reformat.of(true),
   });
 }
 
-export type CodeEditorApi = { format(): void };
+export type CodeEditorApi = {
+  format(): void;
+  /**
+   * Starts fading out what the excerpt will hide, and formats the code
+   * for the excerpt's box, so that turning it on is instant. Resolves
+   * once it's formatted.
+   */
+  prepareExcerpt(): Promise<void>;
+  /** Undoes `prepareExcerpt`, if the excerpt isn't coming after all. */
+  cancelExcerpt(): void;
+  /** Where the excerpt's text starts on screen (or would, before it's on). */
+  excerptOrigin(): { x: number; y: number } | null;
+  /** Where each line of the excerpt's spec (see `excerptSpecFrom`)
+   * ends on screen. */
+  specLineEnds(): { right: number; bottom: number }[];
+};
 
 // # Component
 
@@ -259,7 +334,11 @@ export function CodeEditor({
   foldStyling,
   fontSize,
   formatWidthRef,
+  excerpt = false,
+  excerptHandler,
+  excerptBox,
   apiRef,
+  hasKeyboard = true,
 }: {
   /** The contents for `docKey`; swapped in whenever `docKey` changes. */
   doc: string;
@@ -282,7 +361,19 @@ export function CodeEditor({
   /** The box the code is formatted to fit, if not the editor itself
    * (which may run on beyond it). */
   formatWidthRef?: RefObject<HTMLElement | null>;
+  /** Show only the drag spec attribute (see excerpt.ts). */
+  excerpt?: boolean;
+  /** The handler the excerpt shows, added if the code has none yet
+   * (see `addExcerptAttr`). */
+  excerptHandler?: string;
+  /** The excerpt's box: its width, and its text size. The excerpt is
+   * formatted to fit it (rather than to the editor as measured, so it can
+   * be formatted before it's shown). */
+  excerptBox?: { width: number; fontSize: number };
   apiRef?: RefObject<CodeEditorApi | null>;
+  /** Whether it's in use: it takes focus whenever this turns on, so it can
+   * be mounted ahead of time without taking the keyboard */
+  hasKeyboard?: boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -298,6 +389,24 @@ export function CodeEditor({
   foldStylingRef.current = foldStyling;
   const activeRef = useRef({ active, style });
   activeRef.current = { active, style };
+  const excerptHandlerRef = useRef(excerptHandler);
+  excerptHandlerRef.current = excerptHandler;
+  const excerptRef = useRef(excerpt);
+  excerptRef.current = excerpt;
+  const excerptBoxRef = useRef(excerptBox);
+  excerptBoxRef.current = excerptBox;
+
+  // Turn the excerpt on, first adding the handler it shows if there's
+  // none, and put the cursor at the end of it.
+  const enterExcerpt = useCallback((view: EditorView) => {
+    const handler = excerptHandlerRef.current;
+    const add =
+      handler !== undefined ? addExcerptAttr(view.state, handler) : null;
+    if (add) view.dispatch(add);
+    view.dispatch({ effects: setExcerpt.of(true) });
+    const cursor = excerptCursor(view.state);
+    if (cursor !== null) view.dispatch({ selection: { anchor: cursor } });
+  }, []);
 
   // The first doc stays hidden until it's formatted, so unformatted code
   // doesn't flash on screen. Later docs are formatted before they replace
@@ -316,7 +425,9 @@ export function CodeEditor({
     formatTimerRef.current = setTimeout(() => {
       const view = viewRef.current;
       if (!view) return;
-      const width = availableColumns(view, formatWidthRefRef.current?.current);
+      const width = view.state.field(excerptField).on
+        ? excerptWidth(view, excerptBoxRef.current)
+        : availableColumns(view, formatWidthRefRef.current?.current);
       if (!force && width === formattedWidthRef.current) return;
       formattedWidthRef.current = width;
       void formatToWidth(view, width).then(() => {
@@ -369,6 +480,8 @@ export function CodeEditor({
           codeFolding({ placeholderText: "…" }),
           stylingFolding,
           locField,
+          opMarks,
+          excerpting,
           theme,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
@@ -398,7 +511,6 @@ export function CodeEditor({
       state: makeState(doc),
     });
     viewRef.current = view;
-    view.focus();
     scheduleFormat(true);
     const revealTimer = setTimeout(() => setRevealed(true), 1500);
     return () => {
@@ -409,6 +521,10 @@ export function CodeEditor({
     // Created once; later docs are swapped in by the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (hasKeyboard) viewRef.current?.focus();
+  }, [hasKeyboard]);
 
   // Swap in a new doc, formatted first, keeping the scroll position.
   const loadedKeyRef = useRef(docKey);
@@ -439,6 +555,7 @@ export function CodeEditor({
           },
         });
         view.dispatch({ effects: setActive.of(activeRef.current) });
+        if (excerptRef.current) enterExcerpt(view);
         if (foldStylingRef.current) setStylingFolds(view, true);
         view.focus();
         callbacksRef.current.onDocChange(text);
@@ -455,6 +572,41 @@ export function CodeEditor({
     if (view) setStylingFolds(view, foldStyling);
   }, [foldStyling]);
 
+  // Entering the excerpt after `prepareExcerpt` swaps in the formatted
+  // code at once, before the browser paints. Otherwise, entering or
+  // leaving reformats to the new width, and the code hides until then, so
+  // it doesn't show at the old one.
+  const preparedRef = useRef<{
+    text: string;
+    formatted: string;
+    width: number;
+  } | null>(null);
+  useLayoutEffect(() => {
+    const view = viewRef.current;
+    if (!view || view.state.field(excerptField).on === excerpt) return;
+    const prepared = preparedRef.current;
+    preparedRef.current = null;
+    if (excerpt && prepared?.text === view.state.doc.toString()) {
+      view.dispatch({
+        changes: minimalChange(prepared.text, prepared.formatted),
+        annotations: reformat.of(true),
+        effects: [setFade.of(null), setExcerpt.of(true)],
+      });
+      formattedWidthRef.current = prepared.width;
+      const cursor = excerptCursor(view.state);
+      if (cursor !== null) view.dispatch({ selection: { anchor: cursor } });
+      if (foldStylingRef.current) setStylingFolds(view, true);
+      view.focus();
+      return;
+    }
+    view.dispatch({ effects: setFade.of(null) });
+    if (excerpt) enterExcerpt(view);
+    else view.dispatch({ effects: setExcerpt.of(false) });
+    view.focus();
+    setRevealed(false);
+    scheduleFormat(true);
+  }, [excerpt, enterExcerpt, scheduleFormat]);
+
   useEffect(() => {
     viewRef.current?.requestMeasure();
     scheduleFormat(false);
@@ -462,7 +614,57 @@ export function CodeEditor({
 
   useEffect(() => {
     if (!apiRef) return;
-    apiRef.current = { format: () => scheduleFormat(true) };
+    apiRef.current = {
+      format: () => scheduleFormat(true),
+      prepareExcerpt: async () => {
+        const view = viewRef.current;
+        if (!view) return;
+        const handler = excerptHandlerRef.current;
+        const add =
+          handler !== undefined ? addExcerptAttr(view.state, handler) : null;
+        if (add) view.dispatch(add);
+        const range = excerptAttrRange(view.state);
+        if (!range) return;
+        view.dispatch({ effects: setFade.of(range) });
+        const text = view.state.doc.toString();
+        const width = excerptWidth(view, excerptBoxRef.current);
+        try {
+          const { formatted } = await formatCode(text, 0, width);
+          preparedRef.current = { text, formatted, width };
+        } catch {
+          preparedRef.current = null;
+        }
+      },
+      cancelExcerpt: () => {
+        preparedRef.current = null;
+        viewRef.current?.dispatch({ effects: setFade.of(null) });
+      },
+      excerptOrigin: () => {
+        const view = viewRef.current;
+        if (!view) return null;
+        const range =
+          view.state.field(excerptField).range ?? excerptAttrRange(view.state);
+        const coords = range && view.coordsAtPos(range.from, 1);
+        return coords && { x: coords.left, y: coords.top };
+      },
+      specLineEnds: () => {
+        const view = viewRef.current;
+        const range = view?.state.field(excerptField).range;
+        const from = view && excerptSpecFrom(view.state);
+        if (!view || !range || from == null) return [];
+        const { doc } = view.state;
+        const ends: { right: number; bottom: number }[] = [];
+        const last = doc.lineAt(range.to).number;
+        for (let n = doc.lineAt(from).number; n <= last; n++) {
+          const coords = view.coordsAtPos(
+            Math.min(doc.line(n).to, range.to),
+            -1,
+          );
+          if (coords) ends.push({ right: coords.right, bottom: coords.bottom });
+        }
+        return ends;
+      },
+    };
   }, [apiRef, scheduleFormat]);
 
   useEffect(() => {

@@ -26,5 +26,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // A Node script, checked with tsconfig.node.json
+  "exclude": ["src/slideshow/snapshot-slides.ts"]
 }

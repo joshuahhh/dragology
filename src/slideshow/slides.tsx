@@ -9,17 +9,13 @@ import {
   useState,
 } from "react";
 import { DemoDraggable } from "../demo/ui";
-import { DraggableRenderer, type DragStatus } from "../DraggableRenderer";
-import {
-  DragSpecTreeView,
-  type DragSpecTreeViewNodeProps,
-} from "../DragSpecTreeView";
-import { StudioHackContext } from "../studio/StudioHackContext";
+import ringOfBeadsSource from "../demos/ring-of-beads-vanilla-js/ringOfBeads.ts?raw";
+import { DraggableRenderer } from "../DraggableRenderer";
+import { LETTER_FONT } from "../talk/fonts";
 import {
   CODE_FLEX,
   DIAGRAM_FILL,
   DIAGRAM_FLEX,
-  letterFonts,
   LiveCode,
 } from "../talk/LiveCodePage";
 import { slideSnippet } from "../talk/snippets";
@@ -38,7 +34,9 @@ import {
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
+import { BehaviorDiagramSlide } from "./behavior-diagram";
 import { beadsSubject } from "./model-driven/beads";
+import { script as modelDrivenScript } from "./model-driven/ModelDrivenScene";
 import { ModelDrivenSlide } from "./model-driven/ModelDrivenSlide";
 import { ClosingMontageSlide } from "./montage/MontageCanvas";
 import { Rails } from "./rails";
@@ -51,6 +49,7 @@ import {
   slideFileUrl,
   STAGE_H,
   STAGE_W,
+  useSlideArrivedForward,
   useSlideCurrent,
   useSlideShown,
   useSlideStep,
@@ -60,11 +59,20 @@ import { sourceSans } from "./source-sans";
 /** The live editor (#/talk/livecode) on the stage, with just one code block. */
 function LiveCodeSlide() {
   const step = useSlideStep();
+  const current = useSlideCurrent();
+  const shown = useSlideShown();
+  // Not until its layer shows, too: focus can't get into a hidden one
+  const hasKeyboard = current && shown;
   return (
     // Absolute, so the stage sizes it: in the slide's own flow, a longer
     // program would grow the slide and push the diagram down.
     <div style={{ position: "absolute", inset: 0 }}>
-      <LiveCode snippets={[slideSnippet]} highlight={step === 0} />
+      <LiveCode
+        snippets={[slideSnippet]}
+        highlight={step === 0}
+        excerpt={step === 2}
+        hasKeyboard={hasKeyboard}
+      />
     </div>
   );
 }
@@ -73,6 +81,10 @@ function LiveCodeSlide() {
  * The library's title, beside the ring of beads, live. The ring sits right
  * where the live-code slide that follows draws it, and the same size, so
  * fading from one to the other leaves it in place.
+ *
+ * Coming from the live drag, the ring starts where that slide left it, so
+ * the crossfade between them leaves it in place too; then it glides over,
+ * and the title comes in.
  */
 function DragologyTitleSlide() {
   const { width, height } = beadsSubject;
@@ -84,6 +96,19 @@ function DragologyTitleSlide() {
     (paneW * DIAGRAM_FILL) / width,
     (STAGE_H * DIAGRAM_FILL) / height,
   );
+  const ringAt = (x: number, y: number, scale: number) =>
+    `translate(${x - (width / 2) * scale}px, ${y - (height / 2) * scale}px) scale(${scale})`;
+  const ringHome = ringAt(paneX + paneW / 2, STAGE_H / 2, scale);
+  const { bigAside } = modelDrivenScript;
+  const ringFromLiveDrag = ringAt(bigAside.x, bigAside.y, bigAside.scale);
+
+  const phase = useArrivalGlide();
+  const settled = phase !== "start";
+  const glide = (props: string[], delay: number) =>
+    phase === "gliding"
+      ? props.map((p) => `${p} ${TITLE_GLIDE} ${delay}ms`).join(", ")
+      : "none";
+
   return (
     <div style={{ position: "absolute", inset: 0, background: "white" }}>
       <div
@@ -94,6 +119,9 @@ function DragologyTitleSlide() {
           display: "flex",
           flexDirection: "column",
           alignItems: "flex-end",
+          opacity: settled ? 1 : 0,
+          transform: settled ? "none" : "translateX(-40px)",
+          transition: glide(["opacity", "transform"], TITLE_IN_DELAY_MS),
         }}
       >
         <div style={{ fontFamily: robotoMono, fontSize: 158, lineHeight: 1 }}>
@@ -111,16 +139,17 @@ function DragologyTitleSlide() {
         </div>
       </div>
       <style>
-        {`[data-title-ring] text[data-loc] { font-family: ${letterFonts[0].family}; }`}
+        {`[data-title-ring] text[data-loc] { font-family: ${LETTER_FONT}; }`}
       </style>
       <div
         data-title-ring
         style={{
           position: "absolute",
-          left: paneX + (paneW - width * scale) / 2,
-          top: (STAGE_H - height * scale) / 2,
-          transform: `scale(${scale})`,
+          left: 0,
+          top: 0,
+          transform: settled ? ringHome : ringFromLiveDrag,
           transformOrigin: "top left",
+          transition: glide(["transform"], RING_GLIDE_DELAY_MS),
         }}
       >
         <DraggableRenderer
@@ -130,6 +159,143 @@ function DragologyTitleSlide() {
           height={height}
         />
       </div>
+    </div>
+  );
+}
+
+const TITLE_GLIDE = "700ms cubic-bezier(0.4, 0, 0.2, 1)";
+/** Long enough for the crossfade in, and the beads settling */
+const RING_GLIDE_DELAY_MS = 350;
+const TITLE_IN_DELAY_MS = 650;
+
+/**
+ * Where a slide that glides into place on arrival is in that: at the start,
+ * as it's preloaded and while it fades in; gliding, once we've come to it
+ * going forward; or at the end, having come to it any other way
+ */
+function useArrivalGlide(): "start" | "gliding" | "end" {
+  const current = useSlideCurrent();
+  const shown = useSlideShown();
+  const arrivedForward = useSlideArrivedForward();
+  const [phase, setPhase] = useState<"start" | "gliding" | "end">("start");
+  // Before paint, so that coming to it some other way never shows the start
+  useLayoutEffect(() => {
+    if (current && !arrivedForward) setPhase("end");
+    else if (!shown) setPhase("start");
+    if (!current || !arrivedForward) return;
+    // A frame at the start first, for the glide to go from
+    const raf = requestAnimationFrame(() => setPhase("gliding"));
+    return () => cancelAnimationFrame(raf);
+  }, [current, shown, arrivedForward]);
+  return phase;
+}
+
+// The Model-Driven and Composable Dragging art (model-driven.png is
+// 1125×1620, composable.png the same shape smaller), as the live drag and
+// operators slides show it on the right on their second steps
+const ART_H = 820;
+const ART_W = (ART_H * 1125) / 1620;
+const ART_CENTER_X = 1459;
+const STEP_EASE = "600ms cubic-bezier(0.4, 0, 0.2, 1)";
+
+function SideArt({ src, shown }: { src: string; shown: boolean }) {
+  return (
+    <img
+      src={slideFileUrl(src)}
+      alt=""
+      draggable={false}
+      style={{
+        position: "absolute",
+        top: (STAGE_H - ART_H) / 2,
+        left: ART_CENTER_X - ART_W / 2,
+        height: ART_H,
+        opacity: shown ? 1 : 0,
+        // Its white background vanishes on the explainer's off-white
+        mixBlendMode: "multiply",
+        transition: `opacity ${STEP_EASE}`,
+      }}
+    />
+  );
+}
+
+/**
+ * Where we are in the talk: Declarative Dragging's two ideas, drawn with the
+ * intro's art, the one we're on and the one to come, faded
+ */
+function RoadmapSlide({ on }: { on: "model-driven" | "composable" }) {
+  const art = (src: string, centerX: number) => (
+    <img
+      src={slideFileUrl(src)}
+      alt=""
+      draggable={false}
+      style={{
+        position: "absolute",
+        top: 280,
+        left: centerX - ART_W / 2,
+        height: ART_H,
+        opacity: src.startsWith(on) ? 1 : 0.2,
+        mixBlendMode: "multiply",
+      }}
+    />
+  );
+  return (
+    <div className="absolute inset-0 bg-white">
+      <div
+        style={{
+          position: "absolute",
+          left: 110,
+          top: 64,
+          fontFamily: sourceSans,
+          fontSize: 104,
+        }}
+      >
+        Declarative Dragging
+      </div>
+      {art("model-driven.png", 580)}
+      {art("composable.png", 1350)}
+    </div>
+  );
+}
+
+/**
+ * The model-driven explainer's live drag; on the second step it moves left,
+ * and the Model-Driven Dragging art comes in on the right.
+ */
+function LiveDragSlide() {
+  const aside = useSlideStep() >= 1;
+  return (
+    <div className="absolute inset-0">
+      <ModelDrivenSlide from={23} to={Infinity} aside={aside} />
+      <SideArt src="model-driven.png" shown={aside} />
+    </div>
+  );
+}
+
+/**
+ * The paper's table of operators, centered; on the second step it moves
+ * left, and the Composable Dragging art comes in on the right.
+ */
+function OperatorsSlide() {
+  const step = useSlideStep();
+  // operators.png is 1494×1656
+  const tableH = STAGE_H - 96;
+  const tableW = (tableH * 1494) / 1656;
+  const tableLeft = step === 0 ? (STAGE_W - tableW) / 2 : 110;
+  return (
+    <div className="absolute inset-0 bg-white">
+      <img
+        src={slideFileUrl("operators.png")}
+        alt=""
+        draggable={false}
+        style={{
+          position: "absolute",
+          top: (STAGE_H - tableH) / 2,
+          left: tableLeft,
+          height: tableH,
+          transition: `left ${STEP_EASE}`,
+        }}
+      />
+      <SideArt src="composable.png" shown={step >= 1} />
     </div>
   );
 }
@@ -577,161 +743,38 @@ function BeadsFloating() {
   );
 }
 
-// Labeled beads with spec tree inspector (slides 15-17)
-// Layout follows studio/RingOfBeadsSection
+/**
+ * The ring of beads written without Dragology or React, from where a drag
+ * starts to its event listeners, comments dropped: what you'd write
+ * traditionally
+ */
+const vanillaDragExcerpt = (() => {
+  const lines = ringOfBeadsSource.split("\n");
+  const start = lines.findIndex((l) => l.includes("function startDrag"));
+  const end = lines.findIndex((l) => l.includes('"pointercancel"'));
+  if (start < 0 || end < start) {
+    throw new Error("Drag code not found in ringOfBeads.ts");
+  }
+  const body = lines
+    .slice(start, end + 1)
+    .filter((l) => !l.trim().startsWith("//"))
+    .map((l) => l.slice(2));
+  return ["...", "", ...body, "", "..."].join("\n");
+})();
 
-const BEADS_W = 300;
-const BEADS_H = 300;
-const SLIDE_W = 960;
-const SLIDE_H = 540;
-
-type BeadsState = typeof beadsInitialState;
-
-function Highlight({ children }: { children: React.ReactNode }) {
+function VanillaDragCode() {
   return (
-    <span style={{ backgroundColor: "#d5e5a3", padding: "0 4px" }}>
-      {children}
-    </span>
-  );
-}
-
-function BeadsWithTreeView({
-  stage,
-  label,
-  thumbArea,
-  treeWidth = 500,
-  nodeProps,
-  simulateDrag = false,
-}: {
-  stage: Parameters<typeof makeDraggable>[0];
-  label: React.ReactNode;
-  thumbArea: number;
-  treeWidth?: number;
-  nodeProps?: Record<string, DragSpecTreeViewNodeProps>;
-  simulateDrag?: boolean;
-}) {
-  const draggable = useMemo(() => makeDraggable(stage), [stage]);
-  const [dragStatus, setDragStatus] = useState<DragStatus<BeadsState> | null>(
-    null,
-  );
-  const draggingStatus = dragStatus?.type === "dragging" ? dragStatus : null;
-
-  return (
-    <StudioHackContext.Provider value={{ tightFixed: true }}>
-      <div
-        style={{
-          display: "flex",
-          width: SLIDE_W,
-          height: SLIDE_H,
-        }}
-      >
-        {/* Left column: code label on top, beads on bottom */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            padding: "20px 0 0 20px",
-            flexShrink: 0,
-          }}
-        >
-          <pre
-            style={{
-              fontFamily: "monospace",
-              fontSize: 22,
-              fontWeight: "bold",
-              margin: 0,
-              lineHeight: 1.4,
-            }}
-          >
-            {label}
-          </pre>
-          <div style={{ zoom: 1.2 }}>
-            <DraggableRenderer
-              key={simulateDrag ? "simulating" : "not-simulating"}
-              draggable={draggable}
-              initialState={beadsInitialState}
-              width={BEADS_W}
-              height={BEADS_H}
-              onDragStatus={setDragStatus}
-              simulateDrag={simulateDrag ? { id: "A" } : undefined}
-            />
-          </div>
-        </div>
-        {/* Right column: spec tree inspector */}
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            overflow: "hidden",
-            padding: "10px 10px 10px 0",
-          }}
-        >
-          {draggingStatus && (
-            <div style={{ width: treeWidth, overflow: "hidden" }}>
-              <DragSpecTreeView
-                op={draggingStatus.result.op}
-                activePath={draggingStatus.result.activePath}
-                colorMap={null}
-                svgWidth={BEADS_W}
-                svgHeight={BEADS_H}
-                thumbArea={thumbArea}
-                nodeProps={nodeProps}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    </StudioHackContext.Provider>
-  );
-}
-
-function BeadsClosestLabeled() {
-  return (
-    <BeadsWithTreeView
-      stage="d.closest()"
-      thumbArea={25000}
-      label={
-        <>
-          d.<Highlight>closest</Highlight>(newStates)
-        </>
-      }
-    />
-  );
-}
-
-function BeadsWithFloatingLabeled() {
-  return (
-    <BeadsWithTreeView
-      stage="d.closest().withFloating()"
-      thumbArea={18000}
-      label={
-        <>
-          {"d.closest(newStates)\n"} <Highlight>.withFloating()</Highlight>
-        </>
-      }
-    />
-  );
-}
-
-function BeadsWhenFarLabeled() {
-  return (
-    <BeadsWithTreeView
-      stage="d.closest().whenFar().withFloating()"
-      thumbArea={9000}
-      nodeProps={{
-        "with-floating/when-far/bg/": { width: 150 },
+    <pre
+      style={{
+        margin: 0,
+        padding: "28px 40px",
+        fontFamily: robotoMono,
+        fontSize: 20,
+        lineHeight: 1.3,
       }}
-      label={
-        <>
-          {"d.closest(newStates)\n"}{" "}
-          <Highlight>.whenFar(removedState)</Highlight>
-          {"\n .withFloating()"}
-        </>
-      }
-    />
+    >
+      {vanillaDragExcerpt}
+    </pre>
   );
 }
 
@@ -837,14 +880,16 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     notes: `
-      Interfaces can show you worlds of information, worlds of imagination, structures, patterns, simulation.
+      // prob 38 sec total
+
+      Interfaces can show you worlds of information, imagination, structures, patterns, simulation.
 
       And unlike photographs, interfaces let us reach into these worlds, tug things around, and see how they respond.
 
       ---
-      Often, we do this with drag and drop, which give us virtual hands to act in virtual worlds
+      Often, we do this with drag and drop, which gives us virtual hands to act in virtual worlds
 
-      But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. It takes complex, cross-cutting choreography to build interactions with the fluidity and tangibility of the physical world.
+      But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. If you want interactions with the fluidity and tangibility of an imagined world, you'll need complex and cross-cutting choreography.
 
       We think interface inventors need better infrastructure.
     `,
@@ -881,16 +926,23 @@ export const outline: (Slide | Heading)[] = [
 
   { heading: "Model-driven dragging" },
   {
-    title: "Ring of Beads",
     transition: "fade-white",
+    // Then the drag code you'd write without a library, over the ring
+    steps: 2,
     notes: `
       We’ll start with a simple drag-and-drop interface for reordering beads in a ring.
+
+      ---
+
       Traditionally you would make this manually, by adding listeners to pointer events, and managing ephemeral state during the drag.
     `,
     content: (
-      <DemoSlide width={300} height={300} demoId="ring-of-beads">
-        <BeadsFloating />
-      </DemoSlide>
+      <>
+        <DemoSlide width={300} height={300} demoId="ring-of-beads">
+          <BeadsFloating />
+        </DemoSlide>
+        <SlideInsets insets={[null, <VanillaDragCode />]} />
+      </>
     ),
   },
   {
@@ -898,10 +950,9 @@ export const outline: (Slide | Heading)[] = [
     notes: `
       **Model-driven dragging** works at a higher level.
     `,
-    content: <ImageSlide src="slide-04.jpg" />,
+    content: <RoadmapSlide on="model-driven" />,
   },
   {
-    title: "Model State → View",
     transition: "fade-white",
     notes: `
       First, the interface developer implements a static version of the interface as a function from a model state to a view tree, like in React.
@@ -909,63 +960,69 @@ export const outline: (Slide | Heading)[] = [
     content: <ModelDrivenSlide from={0} />,
   },
   {
-    title: "Speculative Rendering",
     notes: `
-      Next, they specify, for each draggable element, a set of new model states the user should be able to access by dragging that element.
+      Next, they specify, for each draggable element, a set of new model states the user should be able to **access** by dragging that element.
 
-      [TODO: these are states that take the dragged element out of the list, and reinsert it in each other position]
-
-      [TODO: add more labels on screen]
+      In this case, that means states that move the dragged element to a new position in the array.
     `,
     content: <ModelDrivenSlide from={7.5} to={9} />,
   },
   {
-    title: "Target Positions",
     notes: `
       When a drag starts, an engine speculatively renders each of these states to a view...
     `,
     content: <ModelDrivenSlide from={14.7} to={17.2} />,
   },
   {
-    title: "Drag Synthesis",
+    // The dragged element singled out in each view; then the views line up
+    // and send its positions down onto one ring
+    steps: 2,
     notes: `
       ... and examines where the dragged element ends up in each of these hypothetical future worlds.
+
+      Putting all this information together...
+
+      ---
+      // keep going
     `,
-    content: <ModelDrivenSlide from={17.5} to={23} />,
+    content: <ModelDrivenSlide from={17.5} stops={[20.6]} to={23} />,
   },
   {
-    title: "Live Drag",
     notes: `
-      These views and positions provide the engine with enough information to synthesize a high-quality animated drag-and-drop interaction.
+      // These views and positions provide 
+      ... the engine has enough information to run a high-quality animated drag-and-drop interaction.
 
-      That’s the core idea of model-driven dragging: an interface developer provides future model states to an engine, which speculatively renders them to create an interaction.
+      ---
+
+      That’s the core idea of model-driven dragging: synthesizing a drag-and-drop interaction from semantics, by speculatively rendering future model states.
 
       // Consider: introduce repositional drags
     `,
-    content: <ModelDrivenSlide from={23} to={Infinity} />,
+    steps: 2,
+    content: <LiveDragSlide />,
   },
 
   { heading: "Live-coding, composable dragging" },
   {
-    title: "Dragology",
-    transition: "fade-white",
+    // The ring glides over from the live drag
+    transition: "fade",
     notes: `
-      To show you how this works in practice, and introduce you to the complementary concept of composable dragging, we’ll make that ring demo using our library Dragology.
+      To show you how this works in practice, and introduce the complementary concept of composable dragging, we’ll make this ring demo using our library Dragology.
     `,
     content: <DragologyTitleSlide />,
   },
   {
-    title: "Live Code",
     transition: "fade",
-    // Highlighting is on for the first stage, off for the second
-    steps: 2,
-    // Its editor takes focus and keys on mount
-    preload: false,
+    // Highlighting is on for the first stage, off after. The third
+    // shows just the drag spec, with the spec tree, in the studio's
+    // layout.
+    steps: 3,
     notes: `
+      [highlight is on]
       This "draggable" is a function that, given a model state, returns a static view.
-      Here’s the line that draws the ring…
-      And this SVG group is one of the beads being drawn, in a loop.
-      It's not draggable yet. [demonstrate]
+      Here’s the line that draws the background ring…
+      And this SVG group renders each of the beads, in a loop.
+      This interface isn't draggable yet. [demonstrate]
       We want to make each of these beads draggable.
 
       ---
@@ -974,48 +1031,48 @@ export const outline: (Slide | Heading)[] = [
       We'll set it to a handler function with two parts.
       First, we'll compute the set of states reachable by dragging the bead.
         And we'll do that using a readymade function down here.
-      Second, we'll use Dragology's domain-specific language to specify HOW drag-and-drop should make those states accessible.
+      Second, we'll use Dragology's domain-specific language to specify HOW drag-and-drop should access these states.
       We'll start with the simplest option, a combinator called "closest".
+
+      dragologyOnDrag={() => {
+        const states = reinsertions(state, idx);
+        return d.closest(states);
+       }}
+
+       // [TODO] rest of presenter notes
     `,
     content: <LiveCodeSlide />,
   },
   {
-    title: "d.closest — Ring of Beads",
-    transition: "fade",
-    content: (
-      <DemoSlide width={960} height={540} demoId="ring-of-beads">
-        <BeadsClosestLabeled />
-      </DemoSlide>
-    ),
-  },
-  {
-    title: "withFloating — Ring of Beads",
-    transition: "fade",
-    content: (
-      <DemoSlide width={960} height={540}>
-        <BeadsWithFloatingLabeled />
-      </DemoSlide>
-    ),
-  },
-  {
-    title: "whenFar — Ring of Beads",
-    transition: "fade",
-    content: (
-      <DemoSlide width={960} height={540}>
-        <BeadsWhenFarLabeled />
-      </DemoSlide>
-    ),
-  },
-  {
-    title: "Composable Dragging",
     transition: "fade-white",
-    content: <ImageSlide src="slide-18.jpg" />,
+    steps: 2,
+    notes: `
+      So what are these "d-dot" things we're returning from dragologyOnDrag? They're what we call **drag behaviors**: functions that run every frame during drags, that take a live pointer position and say what should be shown on the screen as a preview, and what state should be transitioned to on drop. [TODO]
+
+      ---
+
+      As we apply operators like "withFloating", we're producing new behaviors from old ones.
+    `,
+    content: <BehaviorDiagramSlide />,
+  },
+  {
+    steps: 2,
+    notes: `
+      You can actually make your own Dragology operators, but we've developed a core set that you can plug together in different ways to create a surprising variety of interactions.
+
+      ---
+
+      Because this approach is centered around composing behaviors, we call it composable dragging.
+      We’ve found that it lets us incrementally build up refined interactions while keeping the underlying simplicity of model-driven dragging in place.
+
+      Andrew's going to share some more examples of what these ingredients can do together.
+    `,
+    content: <OperatorsSlide />,
   },
 
   { heading: "Demos" },
   // Scheduler (130-155s)
   {
-    title: "Scheduler",
     transition: "fade-white",
     steps: 4,
     notes: `
@@ -1056,7 +1113,6 @@ export const outline: (Slide | Heading)[] = [
   },
   // Lists in Lists (155-170s)
   {
-    title: "Lists in Lists",
     transition: "fade-white",
     steps: 4,
     notes: `
@@ -1100,7 +1156,6 @@ export const outline: (Slide | Heading)[] = [
   },
   // Tactile Tessellations (170-180s)
   {
-    title: "Tactile Tessellations",
     transition: "fade-white",
     steps: 3,
     notes: `
@@ -1137,7 +1192,6 @@ export const outline: (Slide | Heading)[] = [
   },
   // Twisted Trees (210-230s) — single slide combining both
   {
-    title: "Twisted Trees",
     transition: "fade-white",
     steps: 2,
     notes: `
@@ -1166,7 +1220,6 @@ export const outline: (Slide | Heading)[] = [
   },
   // Animate Algebra (190-210s)
   {
-    title: "Animate Algebra",
     transition: "fade-white",
     steps: 3,
     notes: `
@@ -1207,7 +1260,6 @@ export const outline: (Slide | Heading)[] = [
   },
   // Permutation Playground
   {
-    title: "Permutation Playground",
     transition: "fade-white",
     steps: 3,
     notes: `
@@ -1237,7 +1289,6 @@ export const outline: (Slide | Heading)[] = [
   },
   // Drag-Spec Designer (230-240s)
   {
-    title: "Drag-Spec Designer",
     transition: "fade-white",
     steps: 3,
     notes: `
@@ -1266,7 +1317,6 @@ export const outline: (Slide | Heading)[] = [
   },
   // Study (from the submission video, 3:59–4:26)
   {
-    title: "Study",
     transition: "fade-white",
     steps: 5,
     notes: `
@@ -1300,7 +1350,6 @@ export const outline: (Slide | Heading)[] = [
 
   { heading: "Since the paper" },
   {
-    title: "Hazel",
     transition: "fade-white",
     steps: 4,
     notes: `
@@ -1336,7 +1385,6 @@ export const outline: (Slide | Heading)[] = [
 
   { heading: "Origins" },
   {
-    title: "Nool classic",
     transition: "fade-white",
     notes: `
       I had a prototype of a tangible math game. It had a lot to say for it, but the fundamental mechanic, based on selecting transformations from a menu, lacked the tactility I craved.
@@ -1344,7 +1392,6 @@ export const outline: (Slide | Heading)[] = [
     content: <NoolClassicSlide />,
   },
   {
-    title: "The whiteboard",
     transition: "fade",
     steps: 3,
     notes: `
@@ -1361,7 +1408,6 @@ export const outline: (Slide | Heading)[] = [
     content: <WhiteboardSlide />,
   },
   {
-    title: "A walk in Seattle",
     transition: "fade-white",
     steps: 3,
     notes: `
@@ -1379,7 +1425,6 @@ export const outline: (Slide | Heading)[] = [
     content: <WalkSlide />,
   },
   {
-    title: "Trees, all together",
     transition: "fade",
     steps: 4,
     notes: `
@@ -1410,7 +1455,6 @@ export const outline: (Slide | Heading)[] = [
     ),
   },
   {
-    title: "Nool, full circle",
     transition: "fade-white",
     // Supernool takes focus and keys once shown
     preload: false,
@@ -1432,7 +1476,6 @@ export const outline: (Slide | Heading)[] = [
 
   { heading: "Close" },
   {
-    title: "What might they build?",
     transition: "fade-white",
     steps: 3,
     notes: `
@@ -1451,7 +1494,6 @@ export const outline: (Slide | Heading)[] = [
     content: <ClosingMontageSlide />,
   },
   {
-    title: "Call to action",
     transition: "fade-white",
     notes: `
       If you give Dragology a try we'd love to here about it, or even just your ideas of what you dream about making.
@@ -1463,6 +1505,11 @@ export const outline: (Slide | Heading)[] = [
 ];
 
 export const slides = outline.filter((s): s is Slide => !("heading" in s));
+
+/** Each slide's index in `outline`, which counts headings too. */
+export const outlineIndexOfSlide = outline.flatMap((item, k) =>
+  "heading" in item ? [] : [k],
+);
 
 /** The outline, with each slide's number in the slideshow (from 1). */
 export const numberedOutline: (Heading | { slide: Slide; num: number })[] =

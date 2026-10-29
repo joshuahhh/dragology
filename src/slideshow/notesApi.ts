@@ -1,5 +1,5 @@
-// How the slideshow page asks the dev server to save speaker notes
-// (vite-plugin-slide-notes.ts).
+// How the slideshow page asks the dev server to write to slides.tsx: speaker
+// notes, and timings from a run-through (vite-plugin-slide-notes.ts).
 
 /** Where the page POSTs a SaveNotesRequest */
 export const SAVE_NOTES_PATH = "/__slide-notes";
@@ -12,7 +12,21 @@ export type SaveNotesRequest = {
   notes: string;
 };
 
-export type SaveNotesResponse = {
+/** Where the page POSTs a SaveTimingsRequest */
+export const SAVE_TIMINGS_PATH = "/__slide-timings";
+
+export type SaveTimingsRequest = {
+  slides: {
+    /** Index of the slide in `outline` */
+    index: number;
+    /** The slide's notes, to catch the outline changing meanwhile */
+    notes: string | undefined;
+    /** Seconds on each of the slide's steps */
+    timing: number[];
+  }[];
+};
+
+export type SaveResponse = {
   error?: string;
   /** Whether slides.tsx changed (and so an HMR update is on its way) */
   changed?: boolean;
