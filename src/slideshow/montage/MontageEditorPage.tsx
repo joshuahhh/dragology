@@ -13,9 +13,10 @@ import { moreThan, param } from "../../DragSpec";
 import { equal } from "../../math/optimization";
 import { scale, translate } from "../../svgx/helpers";
 import { STAGE_H, STAGE_W } from "../slide";
-import { montageLayout, tilesBounds } from "./layout";
+import { ACTIVE_MONTAGE_LAYOUT, montageLayouts, tilesBounds } from "./layout";
 import {
   type MontageLayout,
+  type MontageLayoutName,
   type MontageTile,
   type Rect,
   SAVE_MONTAGE_PATH,
@@ -50,9 +51,16 @@ const SNAP_PX = 10;
 const HANDLE_PX = 14;
 const MIN_SIZE = 40;
 
-/** Every video in public/slides/closing-montage, found at build time */
+/**
+ * Every video in public/slides/closing-montage (clips from the submission
+ * video) and public/slides/canvas-clips (recorded for the canvas by
+ * d2-talk/recorder/vrec.js), found at build time
+ */
 const montageFiles = Object.keys(
-  import.meta.glob("/public/slides/closing-montage/*.mp4"),
+  import.meta.glob([
+    "/public/slides/closing-montage/*.mp4",
+    "/public/slides/canvas-clips/*.mp4",
+  ]),
 )
   .map((p) => p.replace("/public/slides/", ""))
   .sort();
@@ -191,16 +199,32 @@ function makeEditorDraggable(opts: Options): Draggable<EditorState> {
                   .during(snapMove(t.id, tol))
               }
             >
-              <rect width={t.w} height={t.h} rx={layout.radius} fill="white" />
+              <rect
+                width={t.w}
+                height={t.h}
+                rx={layout.radius}
+                fill={layout.tileStyle === "bare" ? "transparent" : "white"}
+              />
               <foreignObject width={t.w} height={t.h}>
-                <EditorTile tile={t} radius={layout.radius} play={playVideos} />
+                <EditorTile
+                  tile={t}
+                  radius={layout.radius}
+                  play={playVideos}
+                  alpha={layout.alpha}
+                />
               </foreignObject>
               <rect
                 width={t.w}
                 height={t.h}
                 rx={layout.radius}
                 fill="none"
-                stroke={isSel ? "#2563eb" : "rgba(0,0,0,0.25)"}
+                stroke={
+                  isSel
+                    ? "#2563eb"
+                    : layout.tileStyle === "bare"
+                      ? "rgba(0,0,0,0.12)"
+                      : "rgba(0,0,0,0.25)"
+                }
                 strokeWidth={(isSel ? 3 : 1) * stroke}
               />
               <g
@@ -331,10 +355,12 @@ function EditorTile({
   tile,
   radius,
   play,
+  alpha,
 }: {
   tile: MontageTile;
   radius: number;
   play: boolean;
+  alpha?: boolean;
 }) {
   return (
     <div
@@ -348,7 +374,12 @@ function EditorTile({
       }}
     >
       {/* Remount on toggling play, so autoplay takes effect */}
-      <TileContent key={String(play)} tile={tile} paused={!play} />
+      <TileContent
+        key={String(play)}
+        tile={tile}
+        paused={!play}
+        alpha={alpha}
+      />
     </div>
   );
 }
@@ -383,9 +414,12 @@ function useClipAspects(files: string[]) {
   return aspects;
 }
 
-async function saveLayout(layout: MontageLayout): Promise<SaveMontageResponse> {
+async function saveLayout(
+  name: MontageLayoutName,
+  layout: MontageLayout,
+): Promise<SaveMontageResponse> {
   try {
-    const res = await fetch(SAVE_MONTAGE_PATH, {
+    const res = await fetch(`${SAVE_MONTAGE_PATH}?name=${name}`, {
       method: "POST",
       body: JSON.stringify(layout),
     });
@@ -397,11 +431,16 @@ async function saveLayout(layout: MontageLayout): Promise<SaveMontageResponse> {
 }
 
 export function MontageEditorPage() {
+  const [layoutName, setLayoutName] = useState<MontageLayoutName>(
+    ACTIVE_MONTAGE_LAYOUT,
+  );
   const [state, setStateRaw] = useState<EditorState>({
-    layout: montageLayout,
+    layout: montageLayouts[layoutName],
     selected: null,
   });
-  const [saved, setSaved] = useState(() => JSON.stringify(montageLayout));
+  const [saved, setSaved] = useState(() =>
+    JSON.stringify(montageLayouts[layoutName]),
+  );
   const [status, setStatus] = useState<string>("");
 
   // The latest state, ahead of rendering, so that keys pressed in quick
@@ -465,7 +504,9 @@ export function MontageEditorPage() {
     ro.observe(el);
     return () => ro.disconnect();
   }, [mode]);
-  const [frame, setFrame] = useState(() => contentBounds(montageLayout));
+  const [frame, setFrame] = useState(() =>
+    contentBounds(montageLayouts[layoutName]),
+  );
   const zoom = areaW / frame.w;
 
   const draggable = useMemo(
@@ -481,14 +522,28 @@ export function MontageEditorPage() {
   const dirty = JSON.stringify(state.layout) !== saved;
   const save = useCallback(async () => {
     setStatus("saving…");
-    const res = await saveLayout(state.layout);
+    const res = await saveLayout(layoutName, state.layout);
     if (res.error) {
       setStatus(`error: ${res.error}`);
     } else {
       setSaved(JSON.stringify(state.layout));
       setStatus(res.changed ? "saved" : "no changes");
     }
-  }, [state.layout]);
+  }, [layoutName, state.layout]);
+
+  const switchLayout = (name: MontageLayoutName) => {
+    if (name === layoutName) return;
+    if (dirty && !window.confirm(`Drop unsaved changes to "${layoutName}"?`))
+      return;
+    const next = montageLayouts[name];
+    history.current = [];
+    future.current = [];
+    commit({ layout: next, selected: null });
+    setSaved(JSON.stringify(next));
+    setFrame(contentBounds(next));
+    setLayoutName(name);
+    setStatus("");
+  };
 
   const selectedTile = state.layout.tiles.find((t) => t.id === state.selected);
   const aspects = useClipAspects(montageFiles);
@@ -568,6 +623,11 @@ export function MontageEditorPage() {
       <div className="flex items-center gap-3 px-3 py-2 border-b border-gray-200 text-sm flex-wrap">
         <b>Montage editor</b>
         <Seg
+          value={layoutName}
+          options={Object.keys(montageLayouts)}
+          onChange={(n) => switchLayout(n as MontageLayoutName)}
+        />
+        <Seg
           value={mode}
           options={["edit", "preview"]}
           onChange={(m) => setMode(m as "edit" | "preview")}
@@ -626,7 +686,8 @@ export function MontageEditorPage() {
         <div className="flex flex-1 min-h-0">
           <div
             ref={areaRef}
-            className="flex-1 overflow-auto bg-zinc-800"
+            className="flex-1 overflow-auto"
+            style={{ background: state.layout.background ?? "#27272a" }}
             onPointerDown={(e) => {
               if (e.target === e.currentTarget) select(null);
             }}
@@ -775,7 +836,7 @@ function TileInspector({
           <option value="">(placeholder: clip to come)</option>
           {montageFiles.map((f) => (
             <option key={f} value={f}>
-              {f.replace("closing-montage/", "")}
+              {f}
             </option>
           ))}
         </select>
@@ -865,7 +926,7 @@ function LayoutSummary({ layout }: { layout: MontageLayout }) {
         <>
           <div className="mt-3 text-xs text-gray-500">unused clips</div>
           {unused.map((f) => (
-            <div key={f}>{f.replace("closing-montage/", "")}</div>
+            <div key={f}>{f}</div>
           ))}
         </>
       )}

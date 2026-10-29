@@ -75,13 +75,19 @@ export function TileContent({
   tile,
   paused,
   labelScale = 1,
+  alpha = false,
 }: {
   tile: MontageTile;
   paused?: boolean;
   /** Scales the placeholder's text, for a canvas drawn small */
   labelScale?: number;
+  /** Play the clip's transparent .webm twin instead of its .mp4 */
+  alpha?: boolean;
 }) {
-  if (tile.file) return <LoopingVideo file={tile.file} paused={paused} />;
+  if (tile.file) {
+    const file = alpha ? tile.file.replace(/\.mp4$/, ".webm") : tile.file;
+    return <LoopingVideo file={file} paused={paused} />;
+  }
   const fontSize = Math.max(14, Math.min(tile.w, tile.h) / 9) * labelScale;
   return (
     <div

@@ -25,13 +25,32 @@ export type MontageLayout = {
   gutter: number;
   /** Corner radius of a tile, in canvas units */
   radius: number;
+  /**
+   * How tiles are drawn: "card" (the default) puts each clip on a white
+   * rounded card; "bare" draws just the clips, on the canvas's background.
+   */
+  tileStyle?: "card" | "bare";
+  /** The canvas's color, behind the tiles (default near-black) */
+  background?: string;
+  /**
+   * Play each clip's transparent .webm twin (next to its .mp4) instead of the
+   * mp4, so bare clips sit on a background that isn't white.
+   */
+  alpha?: boolean;
   groups: MontageGroup[];
   tiles: MontageTile[];
   /** Camera views by name. One canvas unit is one stage pixel at zoom 1. */
   views: Record<string, Rect>;
 };
 
-/** Where the editor POSTs a layout to save */
+/** The montage's layouts, by name, and the file each is saved in */
+export const MONTAGE_LAYOUT_FILES = {
+  grid: "src/slideshow/montage/layout.json",
+  loose: "src/slideshow/montage/layout-loose.json",
+} as const;
+export type MontageLayoutName = keyof typeof MONTAGE_LAYOUT_FILES;
+
+/** Where the editor POSTs a layout to save, with `?name=<layout name>` */
 export const SAVE_MONTAGE_PATH = "/__montage-layout";
 
 export type SaveMontageResponse = { error?: string; changed?: boolean };

@@ -19,11 +19,16 @@ export type MontageCanvasProps = {
   highlight?: string | null;
   /** How long the camera takes to move to a new view (default 2600 ms) */
   cameraMs?: number;
+  /**
+   * Once at `view`, keep drifting slowly toward this view (a name in the
+   * layout, or a rect) over `ms`. Ignored if the layout has no such view.
+   */
+  pan?: { to: string | Rect; ms: number };
   /** Show the highlighted group's label as a caption (default true) */
   caption?: boolean;
   /** How visible dimmed tiles are (default 0.15) */
   dimOpacity?: number;
-  /** Behind the tiles, showing through the gutters (default near-black) */
+  /** Behind the tiles, showing through the gutters (default: the layout's) */
   background?: string;
   /** The size of the box the canvas fills (default the stage) */
   width?: number;
@@ -43,8 +48,10 @@ function cameraFor(view: Rect, width: number, height: number) {
 }
 type Camera = ReturnType<typeof cameraFor>;
 
-const easeInOutCubic = (t: number) =>
+type Ease = (t: number) => number;
+const easeInOutCubic: Ease = (t) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const easeInOutSine: Ease = (t) => (1 - Math.cos(Math.PI * t)) / 2;
 
 /** Partway from camera a to b. Zoom moves evenly in log scale. */
 function lerpCamera(a: Camera, b: Camera, t: number): Camera {
@@ -59,16 +66,24 @@ export function MontageCanvas({
   view,
   highlight = null,
   cameraMs = 2600,
+  pan,
   caption = true,
   dimOpacity = 0.15,
-  background = "#141416",
+  background,
   width = STAGE_W,
   height = STAGE_H,
   layout = montageLayout,
   paused = false,
 }: MontageCanvasProps) {
+  const bare = layout.tileStyle === "bare";
   const target = cameraFor(resolveView(layout, view), width, height);
+  const panView =
+    pan && (typeof pan.to !== "string" || pan.to in layout.views)
+      ? cameraFor(resolveView(layout, pan.to), width, height)
+      : null;
+  const panMs = pan?.ms ?? 0;
   const targetKey = `${target.scale} ${target.cx} ${target.cy}`;
+  const panKey = panView ? `${panView.scale} ${panView.cx} ${panView.cy}` : "";
 
   // The camera moves by setting the world's transform directly, each frame,
   // rather than re-rendering every tile.
@@ -84,19 +99,30 @@ export function MontageCanvas({
   };
   useLayoutEffect(() => {
     const from = cameraRef.current;
-    if (!from || cameraMs <= 0) {
-      place(target);
-      return;
+    // Each leg of the trip: to the view, then (if panning) on to the pan view
+    const legs: { from: Camera; to: Camera; ms: number; ease: Ease }[] = [];
+    if (!from || cameraMs <= 0) place(target);
+    else legs.push({ from, to: target, ms: cameraMs, ease: easeInOutCubic });
+    if (panView) {
+      legs.push({ from: target, to: panView, ms: panMs, ease: easeInOutSine });
     }
-    const start = performance.now();
-    let raf = requestAnimationFrame(function tick(now) {
-      const t = Math.min(1, (now - start) / cameraMs);
-      place(lerpCamera(from, target, easeInOutCubic(t)));
+    let raf = 0;
+    let leg = 0;
+    let start = performance.now();
+    const tick = (now: number) => {
+      const l = legs[leg];
+      const t = Math.max(0, Math.min(1, (now - start) / l.ms));
+      place(lerpCamera(l.from, l.to, l.ease(t)));
       if (t < 1) raf = requestAnimationFrame(tick);
-    });
+      else if (++leg < legs.length) {
+        start = now;
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    if (legs.length) raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKey, width, height, cameraMs]);
+  }, [targetKey, panKey, panMs, width, height, cameraMs]);
 
   const groupLabel = layout.groups.find((g) => g.id === highlight)?.label;
   // Keep the last label while the caption fades out
@@ -113,7 +139,7 @@ export function MontageCanvas({
         width,
         height,
         overflow: "hidden",
-        background,
+        background: background ?? layout.background ?? "#141416",
       }}
     >
       <div
@@ -137,14 +163,14 @@ export function MontageCanvas({
                 top: tile.y,
                 width: tile.w,
                 height: tile.h,
-                borderRadius: layout.radius,
+                borderRadius: bare ? 0 : layout.radius,
                 overflow: "hidden",
-                background: "white",
+                background: bare ? undefined : "white",
                 opacity: lit ? 1 : dimOpacity,
                 transition: "opacity 600ms ease",
               }}
             >
-              <TileContent tile={tile} paused={paused} />
+              <TileContent tile={tile} paused={paused} alpha={layout.alpha} />
             </div>
           );
         })}
@@ -190,9 +216,17 @@ export function MontageCanvas({
  */
 export type MontageStep = {
   view: string | Rect;
+  /** A slow drift onward from `view` (see MontageCanvasProps.pan) */
+  pan?: { to: string | Rect; ms: number };
   highlight?: string | null;
   cycle?: { groups: string[]; ms: number; thenAll?: boolean };
 };
+
+/**
+ * Through the opening steps the camera drifts from "start" toward
+ * "start-end", if the layout has that view, then pulls back to show it all.
+ */
+const OPENING_PAN = { to: "start-end", ms: 24000 };
 
 const groupIds = montageLayout.groups.map((g) => g.id);
 
@@ -201,15 +235,19 @@ const groupIds = montageLayout.groups.map((g) => g.id);
  * turn, timed; the camera pulling back to show everything.
  */
 export const MONTAGE_PLAN_TIMED: MontageStep[] = [
-  { view: "start" },
-  { view: "start", cycle: { groups: groupIds, ms: 2000, thenAll: true } },
+  { view: "start", pan: OPENING_PAN },
+  {
+    view: "start",
+    pan: OPENING_PAN,
+    cycle: { groups: groupIds, ms: 2000, thenAll: true },
+  },
   { view: "all" },
 ];
 
 /** The same, but a step per group, so each one waits for a click */
 export const MONTAGE_PLAN_SPLIT: MontageStep[] = [
-  { view: "start" },
-  ...groupIds.map((g) => ({ view: "start", highlight: g })),
+  { view: "start", pan: OPENING_PAN },
+  ...groupIds.map((g) => ({ view: "start", pan: OPENING_PAN, highlight: g })),
   { view: "all" },
 ];
 
@@ -239,7 +277,9 @@ export function MontagePlayer({
 >) {
   const s = plan[Math.max(0, Math.min(step, plan.length - 1))];
   const highlight = useCycle(s, step);
-  return <MontageCanvas view={s.view} highlight={highlight} {...rest} />;
+  return (
+    <MontageCanvas view={s.view} pan={s.pan} highlight={highlight} {...rest} />
+  );
 }
 
 /** The highlighted group at a step, running the step's cycle if it has one */

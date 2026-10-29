@@ -1,0 +1,505 @@
+{
+  "gutter": 44,
+  "radius": 0,
+  "tileStyle": "bare",
+  "background": "#ffffff",
+  "groups": [
+    {
+      "id": "educators",
+      "label": "educators"
+    },
+    {
+      "id": "game-designers",
+      "label": "game designers"
+    },
+    {
+      "id": "mathematicians",
+      "label": "mathematicians"
+    },
+    {
+      "id": "creative-tools",
+      "label": "creative tool builders"
+    }
+  ],
+  "views": {
+    "start": {
+      "x": 1355,
+      "y": 915,
+      "w": 1920,
+      "h": 1080
+    },
+    "start-end": {
+      "x": 1660,
+      "y": 1010,
+      "w": 2150,
+      "h": 1210
+    },
+    "all": {
+      "x": -556,
+      "y": -160,
+      "w": 5740,
+      "h": 3229
+    }
+  },
+  "tiles": [
+    {
+      "id": "catalan-explorer",
+      "file": "canvas-clips/catalan-explorer.mp4",
+      "x": 1227,
+      "y": 1118,
+      "w": 569,
+      "h": 658,
+      "groups": ["mathematicians", "educators"]
+    },
+    {
+      "id": "dragon",
+      "file": "closing-montage/dragon.mp4",
+      "x": 3688,
+      "y": 1291,
+      "w": 461,
+      "h": 313,
+      "groups": ["mathematicians"]
+    },
+    {
+      "id": "robot-arm",
+      "file": "canvas-clips/robot-arm.mp4",
+      "x": 1863,
+      "y": 788,
+      "w": 818,
+      "h": 387,
+      "groups": ["game-designers", "educators"]
+    },
+    {
+      "id": "sokoban",
+      "file": "closing-montage/sokoban.mp4",
+      "x": 0,
+      "y": 907,
+      "w": 279,
+      "h": 310,
+      "groups": ["game-designers"]
+    },
+    {
+      "id": "lambda-beta",
+      "file": "canvas-clips/lambda-beta.mp4",
+      "x": 1237,
+      "y": 1821,
+      "w": 559,
+      "h": 335,
+      "groups": ["educators", "mathematicians"]
+    },
+    {
+      "id": "plane-partition",
+      "file": "canvas-clips/plane-partition.mp4",
+      "x": 2755,
+      "y": 769,
+      "w": 528,
+      "h": 437,
+      "groups": ["mathematicians", "educators"]
+    },
+    {
+      "id": "hanoi",
+      "file": "closing-montage/hanoi.mp4",
+      "x": 1941,
+      "y": 311,
+      "w": 662,
+      "h": 174,
+      "groups": ["game-designers", "educators"]
+    },
+    {
+      "id": "layout-editor",
+      "file": "canvas-clips/layout-editor.mp4",
+      "x": 1848,
+      "y": 1728,
+      "w": 848,
+      "h": 441,
+      "groups": ["creative-tools"]
+    },
+    {
+      "id": "tromino",
+      "file": "closing-montage/tromino.mp4",
+      "x": 15,
+      "y": 1634,
+      "w": 292,
+      "h": 296,
+      "groups": ["game-designers", "mathematicians"]
+    },
+    {
+      "id": "graph-bulge",
+      "file": "canvas-clips/graph-bulge.mp4",
+      "x": 3265,
+      "y": 1694,
+      "w": 461,
+      "h": 344,
+      "groups": ["mathematicians", "educators"]
+    },
+    {
+      "id": "face",
+      "file": "closing-montage/face.mp4",
+      "x": 3328,
+      "y": 223,
+      "w": 285,
+      "h": 278,
+      "groups": ["creative-tools", "educators"]
+    },
+    {
+      "id": "gears",
+      "file": "canvas-clips/gears.mp4",
+      "x": 1271,
+      "y": 696,
+      "w": 525,
+      "h": 384,
+      "groups": ["creative-tools", "game-designers", "educators"]
+    },
+    {
+      "id": "tactile-tessellations",
+      "file": "closing-montage/tactile-tessellations.mp4",
+      "x": 670,
+      "y": 908,
+      "w": 513,
+      "h": 309,
+      "groups": ["mathematicians", "educators"]
+    },
+    {
+      "id": "braid-word",
+      "file": "canvas-clips/braid-word.mp4",
+      "x": 1897,
+      "y": 533,
+      "w": 750,
+      "h": 211,
+      "groups": ["mathematicians"]
+    },
+    {
+      "id": "git-graph-surgery",
+      "file": "canvas-clips/git-graph-surgery.mp4",
+      "x": 749,
+      "y": 1674,
+      "w": 433,
+      "h": 366,
+      "groups": ["creative-tools"]
+    },
+    {
+      "id": "order-preserving",
+      "file": "closing-montage/order-preserving.mp4",
+      "x": 3,
+      "y": 1263,
+      "w": 304,
+      "h": 331,
+      "groups": ["mathematicians"]
+    },
+    {
+      "id": "pivot-table",
+      "file": "canvas-clips/pivot-table.mp4",
+      "x": 2755,
+      "y": 1251,
+      "w": 883,
+      "h": 391,
+      "groups": ["creative-tools", "educators"]
+    },
+    {
+      "id": "knot",
+      "file": "canvas-clips/knot.mp4",
+      "x": 2079,
+      "y": 2213,
+      "w": 386,
+      "h": 373,
+      "groups": ["mathematicians"]
+    },
+    {
+      "id": "scene-3d",
+      "file": "closing-montage/scene-3d.mp4",
+      "x": 2755,
+      "y": 456,
+      "w": 527,
+      "h": 273,
+      "groups": ["game-designers", "creative-tools"]
+    },
+    {
+      "id": "aztec-diamond",
+      "file": "canvas-clips/aztec-diamond.mp4",
+      "x": 2755,
+      "y": 1694,
+      "w": 465,
+      "h": 465,
+      "groups": ["mathematicians"]
+    },
+    {
+      "id": "nool-tree",
+      "file": "closing-montage/nool-tree.mp4",
+      "x": 833,
+      "y": 2078,
+      "w": 349,
+      "h": 330,
+      "groups": ["educators", "mathematicians"]
+    },
+    {
+      "id": "permutation-lab-talk",
+      "file": "canvas-clips/permutation-lab-talk.mp4",
+      "x": 1838,
+      "y": 1215,
+      "w": 868,
+      "h": 465,
+      "groups": ["mathematicians", "educators"]
+    },
+    {
+      "id": "outline",
+      "file": "closing-montage/outline.mp4",
+      "x": 3023,
+      "y": 2247,
+      "w": 170,
+      "h": 381,
+      "groups": ["creative-tools", "educators"]
+    },
+    {
+      "id": "frobenius-tangle",
+      "file": "canvas-clips/frobenius-tangle.mp4",
+      "x": 2502,
+      "y": 2247,
+      "w": 475,
+      "h": 303,
+      "groups": ["mathematicians"]
+    },
+    {
+      "id": "interval-graph",
+      "file": "closing-montage/interval-graph.mp4",
+      "x": 1271,
+      "y": 424,
+      "w": 563,
+      "h": 230,
+      "groups": ["mathematicians", "creative-tools"]
+    },
+    {
+      "id": "gantt",
+      "file": "canvas-clips/gantt.mp4",
+      "x": 3328,
+      "y": 863,
+      "w": 635,
+      "h": 250,
+      "groups": ["creative-tools", "educators"]
+    },
+    {
+      "id": "rotations-rebalancing",
+      "file": "canvas-clips/rotations-rebalancing.mp4",
+      "x": 1353,
+      "y": 2198,
+      "w": 443,
+      "h": 325,
+      "groups": ["educators"]
+    },
+    {
+      "id": "bezier",
+      "file": "closing-montage/bezier.mp4",
+      "x": 3900,
+      "y": 2001,
+      "w": 327,
+      "h": 308,
+      "groups": ["creative-tools"]
+    },
+    {
+      "id": "regex-nfa-sync",
+      "file": "canvas-clips/regex-nfa-sync.mp4",
+      "x": 674,
+      "y": 1263,
+      "w": 509,
+      "h": 368,
+      "groups": ["educators", "mathematicians"]
+    },
+    {
+      "id": "two-kinds-of-tree",
+      "file": "closing-montage/two-kinds-of-tree.mp4",
+      "x": 3786,
+      "y": 452,
+      "w": 256,
+      "h": 365,
+      "groups": ["creative-tools"]
+    },
+    {
+      "id": "frobenius-algebra",
+      "file": "canvas-clips/frobenius-algebra.mp4",
+      "x": 322,
+      "y": 839,
+      "w": 305,
+      "h": 378,
+      "groups": ["mathematicians"]
+    },
+    {
+      "id": "chain-of-links",
+      "file": "closing-montage/chain-of-links.mp4",
+      "x": 702,
+      "y": 591,
+      "w": 480,
+      "h": 270,
+      "groups": ["game-designers"]
+    },
+    {
+      "id": "stock-and-flow",
+      "file": "canvas-clips/stock-and-flow.mp4",
+      "x": 3265,
+      "y": 2078,
+      "w": 561,
+      "h": 231,
+      "groups": ["educators", "creative-tools"]
+    },
+    {
+      "id": "zx-string-diagram",
+      "file": "canvas-clips/zx-string-diagram.mp4",
+      "x": 351,
+      "y": 1756,
+      "w": 282,
+      "h": 408,
+      "groups": ["mathematicians"]
+    },
+    {
+      "id": "fifteen",
+      "file": "closing-montage/fifteen.mp4",
+      "x": 1514,
+      "y": 2566,
+      "w": 281,
+      "h": 281,
+      "groups": ["game-designers"]
+    },
+    {
+      "id": "animate-algebra-stage-builder",
+      "file": "canvas-clips/animate-algebra-stage-builder.mp4",
+      "x": 347,
+      "y": 1263,
+      "w": 286,
+      "h": 454,
+      "groups": ["educators", "mathematicians"]
+    },
+    {
+      "id": "lists-of-lists",
+      "file": "closing-montage/lists-of-lists.mp4",
+      "x": 3767,
+      "y": 1694,
+      "w": 461,
+      "h": 266,
+      "groups": ["creative-tools"]
+    },
+    {
+      "id": "rush-hour",
+      "file": "canvas-clips/rush-hour.mp4",
+      "x": 4015,
+      "y": 863,
+      "w": 381,
+      "h": 303,
+      "groups": ["game-designers"]
+    },
+    {
+      "id": "tableaux",
+      "file": "canvas-clips/tableaux.mp4",
+      "x": 3328,
+      "y": 544,
+      "w": 421,
+      "h": 274,
+      "groups": ["mathematicians", "educators"]
+    },
+    {
+      "id": "multi-circle-points",
+      "file": "closing-montage/multi-circle-points.mp4",
+      "x": 3265,
+      "y": 2350,
+      "w": 369,
+      "h": 273,
+      "groups": ["educators"]
+    },
+    {
+      "id": "graspable-math",
+      "file": "canvas-clips/graspable-math.mp4",
+      "x": 780,
+      "y": 326,
+      "w": 403,
+      "h": 215,
+      "groups": ["educators", "mathematicians"]
+    },
+    {
+      "id": "timeline",
+      "file": "closing-montage/timeline.mp4",
+      "x": 4192,
+      "y": 1323,
+      "w": 437,
+      "h": 247,
+      "groups": ["creative-tools"]
+    },
+    {
+      "id": "proof-by-dragging",
+      "file": "canvas-clips/proof-by-dragging.mp4",
+      "x": 2516,
+      "y": 2593,
+      "w": 448,
+      "h": 193,
+      "groups": ["educators", "mathematicians"]
+    },
+    {
+      "id": "nodes-and-noodles",
+      "file": "closing-montage/nodes-and-noodles.mp4",
+      "x": 1346,
+      "y": 182,
+      "w": 488,
+      "h": 192,
+      "groups": ["creative-tools"]
+    },
+    {
+      "id": "ring-of-beads",
+      "file": "canvas-clips/ring-of-beads.mp4",
+      "x": 4265,
+      "y": 1688,
+      "w": 318,
+      "h": 272,
+      "groups": ["creative-tools", "educators"]
+    },
+    {
+      "id": "sprouting-tree",
+      "file": "closing-montage/sprouting-tree.mp4",
+      "x": 2755,
+      "y": 134,
+      "w": 360,
+      "h": 280,
+      "groups": ["creative-tools", "mathematicians"]
+    },
+    {
+      "id": "lock-past",
+      "file": "canvas-clips/lock-past.mp4",
+      "x": 2132,
+      "y": 2627,
+      "w": 280,
+      "h": 282,
+      "groups": ["game-designers", "creative-tools"]
+    },
+    {
+      "id": "magnet",
+      "file": "closing-montage/magnet.mp4",
+      "x": 300,
+      "y": 570,
+      "w": 347,
+      "h": 228,
+      "groups": ["game-designers", "creative-tools"]
+    },
+    {
+      "id": "grid-poly",
+      "file": "closing-montage/grid-poly.mp4",
+      "x": 2137,
+      "y": 0,
+      "w": 270,
+      "h": 266,
+      "groups": ["educators", "mathematicians"]
+    },
+    {
+      "id": "braid",
+      "file": "closing-montage/braid.mp4",
+      "x": 1853,
+      "y": 2221,
+      "w": 182,
+      "h": 355,
+      "groups": ["mathematicians"]
+    },
+    {
+      "id": "snap-to-islands",
+      "file": "canvas-clips/snap-to-islands.mp4",
+      "x": 460,
+      "y": 2214,
+      "w": 335,
+      "h": 194,
+      "groups": ["game-designers"]
+    }
+  ]
+}
