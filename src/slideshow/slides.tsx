@@ -1068,7 +1068,7 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 3,
     notes: `
-      The way these tracks interpolate between previews as you drag can be extended into two dimensions. This diagram of an order-preserving map between trees lets the black dots be dragged freely between the gray bubbles. As the user drags a dot, bubbles get larger, anticipating the dot's arrival.
+      Our next operator, "between", interpolates between previews as you drag. In this diagram of an order-preserving map between trees, the black dots can be dragged freely between the gray bubbles. As you drag a dot, bubbles grow, anticipating its arrival.
 
       ---
 
