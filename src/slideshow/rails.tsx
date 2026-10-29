@@ -2,8 +2,12 @@
 // that each press of → plays the next bit of interaction at a pace we chose
 // in advance. In "live" mode (the default) the demo is left to the presenter.
 //
-// R switches between the modes, for every slide at once. (Not F, which is the
-// slideshow's fullscreen.)
+// R switches between the modes, for every slide at once. Backspace starts the
+// current slide's demo over, in either mode.
+//
+// A slide can also script steps, with tracks made up as the step starts (from
+// where things are on the stage), which play in either mode: for moves a
+// presenter can't make, like dragging past the edge of the screen.
 //
 // Recording: in dev, with the slide shown, press Shift+R to start recording
 // the current step, fidget with the demo, and press Shift+R again to stop. The track is
@@ -81,7 +85,16 @@ if (typeof window !== "undefined") {
  * A slide's content, played along recorded tracks in rails mode. Put it
  * around the whole slide content (it measures positions against the stage).
  */
-export function Rails({ id, children }: { id: string; children: ReactNode }) {
+export function Rails({
+  id,
+  script,
+  children,
+}: {
+  id: string;
+  /** Tracks to play at these steps, in live mode too, made from the frame (the stage) */
+  script?: Record<number, (frame: HTMLElement) => Sample[] | null>;
+  children: ReactNode;
+}) {
   const step = useSlideStep();
   const active = useSlideCurrent();
   const railsMode = useRailsMode();
@@ -95,13 +108,16 @@ export function Rails({ id, children }: { id: string; children: ReactNode }) {
   const [generation, setGeneration] = useState(0);
 
   // Rails: play the step's track when we get to it. Step 0 starts over.
+  // Scripted steps play in either mode.
   useEffect(() => {
-    if (!active || railsMode !== "rails") return;
-    if (step === 0) setGeneration((g) => g + 1);
-    const track = tracks[step];
-    if (!track || track.length === 0) return;
+    if (!active) return;
+    const scripted = script?.[step];
+    if (railsMode !== "rails" && !scripted) return;
+    if (railsMode === "rails" && step === 0) setGeneration((g) => g + 1);
     // Give a restarted demo a frame to mount
     let raf = requestAnimationFrame(() => {
+      const track = scripted ? scripted(frameRef.current!) : tracks[step];
+      if (!track || track.length === 0) return;
       const player = new TrackPlayer(
         track,
         frameRef.current!,
@@ -112,7 +128,26 @@ export function Rails({ id, children }: { id: string; children: ReactNode }) {
       });
     });
     return () => cancelAnimationFrame(raf);
+    // Not on `script`, which is made anew on each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, railsMode, step, tracks]);
+
+  // Backspace starts the demo over
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Backspace" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("input, textarea, [contenteditable]")
+      ) {
+        return;
+      }
+      setGeneration((g) => g + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active]);
 
   // Recording, in dev: Shift+R starts and stops
   useEffect(() => {

@@ -15,6 +15,7 @@ import {
 } from "../studio/sticky-notes";
 import { EmbedSlide } from "./EmbedSlide";
 import hazelProgram from "./hazel-demo-program.txt?raw";
+import { type Sample } from "./rails";
 import {
   DemoSlide,
   slideFileUrl,
@@ -237,6 +238,54 @@ export function StudySlide() {
       />
     </DemoSlide>
   );
+}
+
+/**
+ * The study slide's exit, for its rails `script`: with the notes chained
+ * (switched on here if they aren't), the last note is dragged far off the
+ * right of the stage and the rest follow it off. A real pointer can't leave
+ * the screen, so this one is scripted.
+ */
+export function studyExit(frame: HTMLElement): Sample[] | null {
+  const stage = frame.parentElement!;
+  const note = stage.querySelector("g#note-7");
+  if (!note) return null;
+  const chaining = stage.querySelector<HTMLInputElement>(
+    'input[type="checkbox"]',
+  );
+  if (chaining && !chaining.checked) chaining.click();
+
+  // Grab the note in the middle of the part of it that's on the stage
+  const f = frame.getBoundingClientRect();
+  const r = note.getBoundingClientRect();
+  const mid = (lo: number, hi: number) => (lo + hi) / 2;
+  const x =
+    (mid(Math.max(r.left, f.left), Math.min(r.right, f.right)) - f.left) /
+    f.width;
+  const y =
+    (mid(Math.max(r.top, f.top), Math.min(r.bottom, f.bottom)) - f.top) /
+    f.height;
+
+  // Hover, press (after chaining has re-rendered), then pull away with an
+  // ease-in, to well past the edge: the diagram pulls 5× harder out there
+  const PRESS = 400;
+  const PULL = 1600;
+  const END_X = 1.6;
+  const pull: Sample[] = Array.from({ length: 48 }, (_, i) => {
+    const u = (i + 1) / 48;
+    return {
+      t: PRESS + 100 + u * PULL,
+      x: x + (END_X - x) * u * u,
+      y,
+      down: true,
+    };
+  });
+  return [
+    { t: 0, x, y, down: false },
+    { t: PRESS, x, y, down: true },
+    ...pull,
+    { t: PRESS + PULL + 200, x: END_X, y, down: false },
+  ];
 }
 
 /** Hazel, its chrome hidden but for the nut menu and the start of the top bar. */

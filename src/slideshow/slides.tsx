@@ -25,6 +25,7 @@ import {
   Hl,
   NoolClassicSlide,
   StepToggles,
+  studyExit,
   StudySlide,
   SupernoolSlide,
   WalkSlide,
@@ -1100,8 +1101,7 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 3,
     notes: `
-      These drags are created with three operators.
-      First, the "between" operator makes tracks to the destination states.
+      Here, "between" is composed with two more operators. Each "between" makes a track to one destination state.
 
       ---
 
@@ -1198,7 +1198,7 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Study",
     transition: "fade-white",
-    steps: 4,
+    steps: 5,
     notes: `
       We ran a study where thirteen participants got hands-on experience using Dragology.
 
@@ -1216,9 +1216,13 @@ export const outline: (Slide | Heading)[] = [
 
       // drag in the blue notes
       But despite this challenge, participants across diverse domains saw Dragology as a way to bring their abstractions to life.
+
+      ---
+
+      // scripted: the notes chain up and are dragged off to the right
     `,
     content: (
-      <Rails id="study">
+      <Rails id="study" script={{ 4: studyExit }}>
         <StudySlide />
       </Rails>
     ),
