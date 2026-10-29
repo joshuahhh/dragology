@@ -29,6 +29,7 @@ import {
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
+import { ModelDrivenSlide } from "./model-driven/ModelDrivenSlide";
 import { ClosingMontageSlide } from "./montage/MontageCanvas";
 import { Rails } from "./rails";
 import { robotoMono } from "./roboto-mono";
@@ -830,7 +831,7 @@ export const outline: (Slide | Heading)[] = [
     notes: `
       First, the interface developer implements a static version of the interface as a function from a model state to a view tree, like in React.
     `,
-    content: <ImageSlide src="slide-07.jpg" />,
+    content: <ModelDrivenSlide from={0} />,
   },
   {
     title: "Speculative Rendering",
@@ -841,21 +842,21 @@ export const outline: (Slide | Heading)[] = [
 
       [TODO: add more labels on screen]
     `,
-    video: { file: "model-driven-full.mp4", start: 7.5, end: 9 },
+    content: <ModelDrivenSlide from={7.5} to={9} />,
   },
   {
     title: "Target Positions",
     notes: `
       When a drag starts, an engine speculatively renders each of these states to a view...
     `,
-    video: { file: "model-driven-full.mp4", start: 14.7, end: 17.2 },
+    content: <ModelDrivenSlide from={14.7} to={17.2} />,
   },
   {
     title: "Drag Synthesis",
     notes: `
       ... and examines where the dragged element ends up in each of these hypothetical future worlds.
     `,
-    video: { file: "model-driven-full.mp4", start: 17.5, end: 23 },
+    content: <ModelDrivenSlide from={17.5} to={23} />,
   },
   {
     title: "Live Drag",
@@ -866,7 +867,7 @@ export const outline: (Slide | Heading)[] = [
 
       // Consider: introduce repositional drags
     `,
-    video: { file: "model-driven-full.mp4", start: 23, end: 27.7 },
+    content: <ModelDrivenSlide from={23} to={27.7} />,
   },
 
   { heading: "Live-coding, composable dragging" },
