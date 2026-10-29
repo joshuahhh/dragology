@@ -160,7 +160,7 @@ export function TimingClock({ run }: { run: TimingRun }) {
   const total = _.sum(Object.values(runSeconds(run, now)).map(_.sum));
   return (
     <div
-      className="flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900/80 px-3 py-1 text-xs text-zinc-300 tabular-nums shadow-md shadow-black/40"
+      className="flex items-center gap-2 text-xs text-zinc-300 tabular-nums"
       title="Timing this run-through (⌃⇧T to stop and save)"
     >
       <span className="h-2 w-2 rounded-full bg-red-500" />

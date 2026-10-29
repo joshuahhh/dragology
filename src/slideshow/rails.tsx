@@ -26,7 +26,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { useSlideCurrent, useSlideStep } from "./slide";
+import { InStatusBar, useSlideCurrent, useSlideStep } from "./slide";
 
 /** A moment of a track. x and y are fractions of the stage. */
 export type Sample = { t: number; x: number; y: number; down: boolean };
@@ -267,20 +267,12 @@ export function Rails({
         >
           <Cursor />
         </div>
-        {(recording || railsMode === "rails") && (
-          <div
-            style={{
-              position: "absolute",
-              right: 16,
-              top: 12,
-              fontSize: 18,
-              color: recording ? "#dc2626" : "#9ca3af",
-            }}
-          >
-            {recording ? `● recording step ${step + 1}` : "rails"}
-          </div>
-        )}
       </div>
+      {recording && (
+        <InStatusBar>
+          <span className="text-red-500">● recording step {step + 1}</span>
+        </InStatusBar>
+      )}
     </>
   );
 }

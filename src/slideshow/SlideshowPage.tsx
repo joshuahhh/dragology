@@ -20,6 +20,7 @@ import {
   type SaveResponse,
 } from "./notesApi";
 import { NotesEditor } from "./NotesEditor";
+import { useRailsMode } from "./rails";
 import {
   type Heading,
   NEXT_KEYS,
@@ -33,6 +34,7 @@ import {
   slideSteps,
   STAGE_H,
   STAGE_W,
+  StatusBarSlotContext,
 } from "./slide";
 import { numberedOutline, outlineIndexOfSlide, slides } from "./slides";
 import { SlideThumb, TodoCorner, useSlideSnapshots } from "./SlideThumb";
@@ -95,13 +97,17 @@ const WIDE_MIN_ASPECT = 1.2;
 const OUTLINE_MIN_W = 320;
 /** In the wide layout, the room the stage leaves for the notes, at least */
 const NOTES_MIN_H = 200;
+/** The presenter's status bar, along the bottom */
+const STATUS_BAR_H = 28;
 
 /**
  * The stage's zoom, and whether the window gets the wide layout. If it does,
  * the outline goes to the stage's left, and the notes below it, the stage
  * shrinking to leave them room. If not, the stage fills the window's width,
- * with the notes and the outline in whatever room it leaves below. With
- * `stageOnly`, there are no notes or outline, and the stage fills the window.
+ * with the notes and the outline in whatever room it leaves below. The status
+ * bar goes along the bottom: of the window in the narrow layout, and of the
+ * notes' column, out of their room, in the wide one. With `stageOnly`, there
+ * are no notes, outline or status bar, and the stage fills the window.
  */
 function useStageLayout(stageOnly: boolean) {
   const compute = () => {
@@ -110,7 +116,7 @@ function useStageLayout(stageOnly: boolean) {
     const wide = !stageOnly && w / h >= WIDE_MIN_ASPECT;
     const zoom = wide
       ? Math.min((w - OUTLINE_MIN_W) / STAGE_W, (h - NOTES_MIN_H) / STAGE_H)
-      : Math.min(w / STAGE_W, h / STAGE_H);
+      : Math.min(w / STAGE_W, (h - (stageOnly ? 0 : STATUS_BAR_H)) / STAGE_H);
     return { zoom, wide };
   };
   const [layout, setLayout] = useState(compute);
@@ -632,6 +638,9 @@ export function SlideshowPage() {
     new Map(),
   );
   const containerRef = useRef<HTMLDivElement>(null);
+  // Where the current slide puts its own items in the status bar (InStatusBar)
+  const [statusBarSlot, setStatusBarSlot] = useState<HTMLElement | null>(null);
+  const railsMode = useRailsMode();
   const stageRef = useRef<HTMLDivElement>(null);
   const {
     feed: audienceFeed,
@@ -967,174 +976,184 @@ export function SlideshowPage() {
   }
   const stageSlides = _.sortBy([...stageSlideOpacity.keys()]);
 
+  // The presenter's status bar: off the stage, so the audience doesn't see it
+  const statusBar = !stageOnly && (
+    <div
+      className="self-stretch mt-auto flex items-center gap-4 border-t border-gray-800 px-3 text-xs text-gray-400"
+      style={{ height: STATUS_BAR_H, flexShrink: 0 }}
+    >
+      <span className="tabular-nums text-gray-300">
+        {currentSlide + 1}/{slides.length}
+        {slideSteps(slides[currentSlide]) > 1 &&
+          ` (${currentStep + 1}/${slideSteps(slides[currentSlide])})`}
+      </span>
+      {videoPlaying && <span title="Video playing">▶</span>}
+      {railsMode === "rails" && (
+        <span title="Demos play their recorded tracks (R for live)">rails</span>
+      )}
+      <div ref={setStatusBarSlot} className="flex items-center gap-4" />
+      <div className="ml-auto flex items-center gap-3">
+        {timing.run && <TimingClock run={timing.run} />}
+        <ControlPanelButton
+          open={panelOpen}
+          onToggle={() => setPanelOpen((open) => !open)}
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div
-      ref={containerRef}
-      className={`fixed inset-0 flex ${wide ? "flex-row" : "flex-col"} items-center ${
-        stageOnly ? "justify-center" : ""
-      } select-none`}
+      className="fixed inset-0 flex flex-col select-none"
       style={{ overflow: "hidden", background: "#111" }}
     >
-      {/* The stage and the notes: a column of their own in the wide layout,
+      <div
+        ref={containerRef}
+        className={`flex-1 min-h-0 flex ${wide ? "flex-row" : "flex-col"} items-center ${
+          stageOnly ? "justify-center" : ""
+        }`}
+      >
+        {/* The stage and the notes: a column of their own in the wide layout,
           and in the narrow one, part of the page's column. (Either way, the
           stage keeps its place in the tree, so it isn't remounted when the
           layout changes.) */}
-      <div
-        className="flex-col items-center self-stretch"
-        style={{
-          display: wide ? "flex" : "contents",
-          width: STAGE_W * stageZoom,
-          flexShrink: 0,
-        }}
-      >
-        {/* The stage. Layout and paint containment make it the containing block
-          for position: fixed descendants (e.g. DemoSettingsBar), so they stay
-          inside the stage rather than pinning to the window. */}
         <div
-          ref={stageRef}
-          className="bg-white flex flex-col"
+          className="flex-col items-center self-stretch"
           style={{
-            position: "relative",
-            width: STAGE_W,
-            height: STAGE_H,
+            display: wide ? "flex" : "contents",
+            width: STAGE_W * stageZoom,
             flexShrink: 0,
-            zoom: stageZoom,
-            contain: "layout paint",
           }}
         >
-          {/* Preloaded video elements (hidden when not on a video slide) */}
-          {videoFiles.map((file) => {
-            const opacity = videoOpacity.get(file) ?? 0;
-            return (
-              <video
-                key={file}
-                ref={(el) => {
-                  if (el) videoEls.current.set(file, el);
-                }}
-                src={slideFileUrl(file)}
-                preload="auto"
-                muted
-                playsInline
-                onSeeked={() =>
-                  setSeekedFiles((prev) =>
-                    prev.has(file) ? prev : new Set(prev).add(file),
-                  )
-                }
-                onPlay={updatePlaying}
-                onPause={updatePlaying}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                  background: "white",
-                  visibility: opacity > 0 ? "visible" : "hidden",
-                  opacity,
-                  transition: transitioning
-                    ? `opacity ${transitionMs}ms linear`
-                    : "none",
-                  pointerEvents: opacity > 0 ? "auto" : "none",
-                  zIndex: 5,
-                }}
-              />
-            );
-          })}
-
-          {/* Main slide area — slides stacked via CSS grid so all get identical layout */}
+          {/* The stage. Layout and paint containment make it the containing block
+          for position: fixed descendants (e.g. DemoSettingsBar), so they stay
+          inside the stage rather than pinning to the window. */}
           <div
-            className="flex-1 min-h-0"
-            style={{ display: "grid", isolation: "isolate" }}
+            ref={stageRef}
+            className="bg-white flex flex-col"
+            style={{
+              position: "relative",
+              width: STAGE_W,
+              height: STAGE_H,
+              flexShrink: 0,
+              zoom: stageZoom,
+              contain: "layout paint",
+            }}
           >
-            {stageSlides.map((slideIdx) => {
-              const s = slides[slideIdx];
-              const isActive = slideIdx === displaySlide;
-              const opacity = stageSlideOpacity.get(slideIdx)!;
-              const visible = opacity > 0 || isActive;
+            {/* Preloaded video elements (hidden when not on a video slide) */}
+            {videoFiles.map((file) => {
+              const opacity = videoOpacity.get(file) ?? 0;
               return (
-                <div
-                  key={slideIdx}
+                <video
+                  key={file}
+                  ref={(el) => {
+                    if (el) videoEls.current.set(file, el);
+                  }}
+                  src={slideFileUrl(file)}
+                  preload="auto"
+                  muted
+                  playsInline
+                  onSeeked={() =>
+                    setSeekedFiles((prev) =>
+                      prev.has(file) ? prev : new Set(prev).add(file),
+                    )
+                  }
+                  onPlay={updatePlaying}
+                  onPause={updatePlaying}
                   style={{
-                    gridArea: "1 / 1",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    position: "relative",
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    background: "white",
+                    visibility: opacity > 0 ? "visible" : "hidden",
                     opacity,
                     transition: transitioning
                       ? `opacity ${transitionMs}ms linear`
                       : "none",
-                    mixBlendMode: "plus-lighter",
-                    pointerEvents: isActive ? "auto" : "none",
-                    visibility: visible ? "visible" : "hidden",
+                    pointerEvents: opacity > 0 ? "auto" : "none",
+                    zIndex: 5,
                   }}
-                >
-                  {"content" in s && (
-                    <SlidePresenceContext.Provider
-                      key={reloads.get(slideIdx) ?? 0}
-                      value={{
-                        shown: visible,
-                        current: slideIdx === currentSlide,
-                        arrivedForward: arrival.forward,
-                      }}
-                    >
-                      <SlideStepContext.Provider value={stepOf(slideIdx)}>
-                        {s.content}
-                      </SlideStepContext.Provider>
-                    </SlidePresenceContext.Provider>
-                  )}
-                </div>
+                />
               );
             })}
-          </div>
 
-          {/* Slide counter (minimal, bottom-left) */}
-          <div
-            className="fixed bottom-2 left-3 text-xs text-gray-300 select-none pointer-events-none"
-            style={{ zIndex: 30 }}
-          >
-            {currentSlide + 1}/{slides.length}
-            {slideSteps(slides[currentSlide]) > 1 &&
-              ` (${currentStep + 1}/${slideSteps(slides[currentSlide])})`}
-            <svg
-              width="8"
-              height="9"
-              viewBox="0 0 8 9"
-              fill="currentColor"
-              style={{
-                display: "inline",
-                verticalAlign: "middle",
-                marginLeft: 4,
-                opacity: videoPlaying ? 1 : 0,
-              }}
+            {/* Main slide area — slides stacked via CSS grid so all get identical layout */}
+            <div
+              className="flex-1 min-h-0"
+              style={{ display: "grid", isolation: "isolate" }}
             >
-              <path d="M0 0.5L8 4.5L0 8.5Z" />
-            </svg>
+              {stageSlides.map((slideIdx) => {
+                const s = slides[slideIdx];
+                const isActive = slideIdx === displaySlide;
+                const opacity = stageSlideOpacity.get(slideIdx)!;
+                const visible = opacity > 0 || isActive;
+                return (
+                  <div
+                    key={slideIdx}
+                    style={{
+                      gridArea: "1 / 1",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      position: "relative",
+                      opacity,
+                      transition: transitioning
+                        ? `opacity ${transitionMs}ms linear`
+                        : "none",
+                      mixBlendMode: "plus-lighter",
+                      pointerEvents: isActive ? "auto" : "none",
+                      visibility: visible ? "visible" : "hidden",
+                    }}
+                  >
+                    {"content" in s && (
+                      <SlidePresenceContext.Provider
+                        key={reloads.get(slideIdx) ?? 0}
+                        value={{
+                          shown: visible,
+                          current: slideIdx === currentSlide,
+                          arrivedForward: arrival.forward,
+                        }}
+                      >
+                        <SlideStepContext.Provider value={stepOf(slideIdx)}>
+                          <StatusBarSlotContext.Provider value={statusBarSlot}>
+                            {s.content}
+                          </StatusBarSlotContext.Provider>
+                        </SlideStepContext.Provider>
+                      </SlidePresenceContext.Provider>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
 
+          {!stageOnly && (
+            <SlideNotes
+              slideIdx={currentSlide}
+              step={currentStep}
+              wide={wide}
+              onUnsavedChange={setNotesUnsaved}
+            />
+          )}
+          {wide && statusBar}
+        </div>
         {!stageOnly && (
-          <SlideNotes
-            slideIdx={currentSlide}
+          <SlideOutline
+            current={currentSlide}
             step={currentStep}
             wide={wide}
-            onUnsavedChange={setNotesUnsaved}
+            run={timing.run}
+            onSelect={goToSlide}
           />
         )}
       </div>
-      {!stageOnly && (
-        <SlideOutline
-          current={currentSlide}
-          step={currentStep}
-          wide={wide}
-          run={timing.run}
-          onSelect={goToSlide}
-        />
-      )}
+      {!wide && statusBar}
       <div
-        className="fixed bottom-3 right-3 flex flex-col items-end gap-2"
-        style={{ zIndex: 100 }}
+        className="fixed right-3 flex flex-col items-end gap-2"
+        style={{ zIndex: 100, bottom: (stageOnly ? 0 : STATUS_BAR_H) + 12 }}
       >
         <ErrorToasts errors={shownErrors} onDismiss={dismissError} />
         {panelOpen && (
@@ -1145,11 +1164,6 @@ export function SlideshowPage() {
             onClose={() => setPanelOpen(false)}
           />
         )}
-        {timing.run && !stageOnly && <TimingClock run={timing.run} />}
-        <ControlPanelButton
-          open={panelOpen}
-          onToggle={() => setPanelOpen((open) => !open)}
-        />
       </div>
     </div>
   );
