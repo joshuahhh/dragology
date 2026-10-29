@@ -55,14 +55,6 @@ export const SHORTCUTS: Shortcut[] = [
     kind: "toggle",
   },
   {
-    codes: ["KeyT"],
-    keys: "⌥T",
-    label: "Spec tree",
-    note: "while dragging",
-    section: "Show",
-    kind: "toggle",
-  },
-  {
     codes: ["KeyD"],
     keys: "⌥D",
     label: "Debug overlay",

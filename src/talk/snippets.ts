@@ -8,6 +8,9 @@ export type Snippet = {
   width: number;
   height: number;
   showState?: boolean;
+  /** A drag handler, for an excerpt of the code to show if the code has
+   * none yet. */
+  excerptHandler?: string;
   /** An alternate look, toggled with a shortcut. */
   bright?: { prelude: string; code: string };
 };
@@ -145,6 +148,12 @@ export const snippets: Snippet[] = allSnippets.map(trimSnippet);
 
 /** The slideshow's live-coding slide: the static ring, with the state
  * helpers already below it, ready for a `dragologyOnDrag` to be typed in. */
-export const slideSnippet: Snippet = trimSnippet(
-  beadsSnippet("ring of beads", null, true),
-);
+export const slideSnippet: Snippet = {
+  ...trimSnippet(beadsSnippet("ring of beads", null, true)),
+  excerptHandler: normalizeIndent`
+    () => {
+      const states = reinsertions(state, idx);
+      return d.closest(states);
+    }
+  `,
+};

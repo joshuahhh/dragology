@@ -14,7 +14,6 @@ import {
   DragSpecTreeView,
   type DragSpecTreeViewNodeProps,
 } from "../DragSpecTreeView";
-import { StudioHackContext } from "../studio/StudioHackContext";
 import {
   CODE_FLEX,
   DIAGRAM_FILL,
@@ -23,6 +22,7 @@ import {
   LiveCode,
 } from "../talk/LiveCodePage";
 import { slideSnippet } from "../talk/snippets";
+import { TreeViewLayout } from "../talk/TreeViewLayout";
 import {
   CallToActionSlide,
   CodeCallout,
@@ -63,7 +63,11 @@ function LiveCodeSlide() {
     // Absolute, so the stage sizes it: in the slide's own flow, a longer
     // program would grow the slide and push the diagram down.
     <div style={{ position: "absolute", inset: 0 }}>
-      <LiveCode snippets={[slideSnippet]} highlight={step === 0} />
+      <LiveCode
+        snippets={[slideSnippet]}
+        highlight={step === 0}
+        excerpt={step === 2}
+      />
     </div>
   );
 }
@@ -581,8 +585,6 @@ function BeadsFloating() {
 
 const BEADS_W = 300;
 const BEADS_H = 300;
-const SLIDE_W = 960;
-const SLIDE_H = 540;
 
 type BeadsState = typeof beadsInitialState;
 
@@ -616,74 +618,46 @@ function BeadsWithTreeView({
   const draggingStatus = dragStatus?.type === "dragging" ? dragStatus : null;
 
   return (
-    <StudioHackContext.Provider value={{ tightFixed: true }}>
-      <div
-        style={{
-          display: "flex",
-          width: SLIDE_W,
-          height: SLIDE_H,
-        }}
-      >
-        {/* Left column: code label on top, beads on bottom */}
-        <div
+    <TreeViewLayout
+      treeWidth={treeWidth}
+      label={
+        <pre
           style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            padding: "20px 0 0 20px",
-            flexShrink: 0,
+            fontFamily: "monospace",
+            fontSize: 22,
+            fontWeight: "bold",
+            margin: 0,
+            lineHeight: 1.4,
           }}
         >
-          <pre
-            style={{
-              fontFamily: "monospace",
-              fontSize: 22,
-              fontWeight: "bold",
-              margin: 0,
-              lineHeight: 1.4,
-            }}
-          >
-            {label}
-          </pre>
-          <div style={{ zoom: 1.2 }}>
-            <DraggableRenderer
-              key={simulateDrag ? "simulating" : "not-simulating"}
-              draggable={draggable}
-              initialState={beadsInitialState}
-              width={BEADS_W}
-              height={BEADS_H}
-              onDragStatus={setDragStatus}
-              simulateDrag={simulateDrag ? { id: "A" } : undefined}
-            />
-          </div>
-        </div>
-        {/* Right column: spec tree inspector */}
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            overflow: "hidden",
-            padding: "10px 10px 10px 0",
-          }}
-        >
-          {draggingStatus && (
-            <div style={{ width: treeWidth, overflow: "hidden" }}>
-              <DragSpecTreeView
-                op={draggingStatus.result.op}
-                activePath={draggingStatus.result.activePath}
-                colorMap={null}
-                svgWidth={BEADS_W}
-                svgHeight={BEADS_H}
-                thumbArea={thumbArea}
-                nodeProps={nodeProps}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    </StudioHackContext.Provider>
+          {label}
+        </pre>
+      }
+      diagram={
+        <DraggableRenderer
+          key={simulateDrag ? "simulating" : "not-simulating"}
+          draggable={draggable}
+          initialState={beadsInitialState}
+          width={BEADS_W}
+          height={BEADS_H}
+          onDragStatus={setDragStatus}
+          simulateDrag={simulateDrag ? { id: "A" } : undefined}
+        />
+      }
+      tree={
+        draggingStatus && (
+          <DragSpecTreeView
+            op={draggingStatus.result.op}
+            activePath={draggingStatus.result.activePath}
+            colorMap={null}
+            svgWidth={BEADS_W}
+            svgHeight={BEADS_H}
+            thumbArea={thumbArea}
+            nodeProps={nodeProps}
+          />
+        )
+      }
+    />
   );
 }
 
@@ -721,7 +695,7 @@ function BeadsWhenFarLabeled() {
       stage="d.closest().whenFar().withFloating()"
       thumbArea={9000}
       nodeProps={{
-        "with-floating/when-far/bg/": { width: 150 },
+        "withFloating/whenFar/bg/": { width: 150 },
       }}
       label={
         <>
@@ -952,15 +926,17 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Live Code",
     transition: "fade",
-    // Highlighting is on for the first stage, off for the second
-    steps: 2,
+    // Highlighting is on for the first stage, off after. The third
+    // shows just the drag spec, with the spec tree, as on the studio's
+    // tree-view slides.
+    steps: 3,
     // Its editor takes focus and keys on mount
     preload: false,
     notes: `
       This "draggable" is a function that, given a model state, returns a static view.
-      Here’s the line that draws the ring…
-      And this SVG group is one of the beads being drawn, in a loop.
-      It's not draggable yet. [demonstrate]
+      Here’s the line that draws the background ring…
+      And this SVG group is renders each of the beads, in a loop.
+      This interface isn't draggable yet. [demonstrate]
       We want to make each of these beads draggable.
 
       ---
@@ -969,8 +945,13 @@ export const outline: (Slide | Heading)[] = [
       We'll set it to a handler function with two parts.
       First, we'll compute the set of states reachable by dragging the bead.
         And we'll do that using a readymade function down here.
-      Second, we'll use Dragology's domain-specific language to specify HOW drag-and-drop should make those states accessible.
+      Second, we'll use Dragology's domain-specific language to specify HOW drag-and-drop should access these states.
       We'll start with the simplest option, a combinator called "closest".
+
+      dragologyOnDrag={() => {
+        const states = reinsertions(state, idx);
+        return d.closest(states);
+       }}
     `,
     content: <LiveCodeSlide />,
   },
