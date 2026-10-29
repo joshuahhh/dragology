@@ -7,6 +7,7 @@
 // for second.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Draggable } from "../../draggable";
 import { DraggableRenderer, type DragStatus } from "../../DraggableRenderer";
 import { Vec2 } from "../../math/vec2";
@@ -49,12 +50,12 @@ const BORDER = "#b6b6b6";
 export const script = {
   /** How far right the model state and view start out, centered */
   panFrom: 658,
-  modelBox: { x: 152, y: 258, w: 300, h: 208 },
-  viewBox: { x: 152, y: 520, w: 300, h: 302 },
-  /** Where the view puts its canvas's center, and at what scale */
-  viewContent: { x: 296, y: 690, scale: 1 },
+  modelBox: { x: 152, y: 286, w: 300, h: 150 },
+  /** The view of the model state: a thumbnail's box and content, scaled up
+   * to this width */
+  viewBox: { x: 152, y: 520, w: 300 },
   /** The code boxes of the other states, left to right */
-  candBox: { x: 639, y: 343, w: 224, h: 123, step: 298 },
+  candBox: { x: 639, y: 313, w: 224, h: 123, step: 298 },
   /** Their views, under them */
   thumbBox: { y: 520, w: 210, h: 218, scale: 0.79, contentDy: 3 },
   /** The views after they line up across the top, start state and all */
@@ -169,8 +170,18 @@ export function ModelDrivenScene<T extends object>({
   };
 
   // The start view: big and on the left, then into the row
-  const startBox0: Rect = { ...s.viewBox, x: s.viewBox.x + panX };
-  const startFrame0: Frame = { ...s.viewContent, x: s.viewContent.x + panX };
+  const viewScale = s.viewBox.w / s.thumbBox.w;
+  const startBox0: Rect = {
+    x: s.viewBox.x + panX,
+    y: s.viewBox.y,
+    w: s.viewBox.w,
+    h: s.thumbBox.h * viewScale,
+  };
+  const startFrame0: Frame = {
+    x: startBox0.x + startBox0.w / 2,
+    y: startBox0.y + startBox0.h / 2 + s.thumbBox.contentDy * viewScale,
+    scale: s.thumbBox.scale * viewScale,
+  };
   const startSlot = rowSlot(startIdx);
   const startBox = lerpRect(startBox0, startSlot.box, move);
   const startFrame = lerpFrame(startFrame0, startSlot.frame, move);
@@ -280,13 +291,14 @@ export function ModelDrivenScene<T extends object>({
 
         {/* The model state, and its view */}
         <g opacity={codeOpacity}>
+          <Label rect={modelRect}>Model state</Label>
           <CodeBox
             rect={modelRect}
-            title="Model state"
             lines={modelLines}
             style={modelCode}
             markOpacity={candidatesOpacity}
           />
+          <Label rect={startBox}>View</Label>
         </g>
         <ViewBox
           box={startBox}
@@ -294,16 +306,6 @@ export function ModelDrivenScene<T extends object>({
           canvasCenter={canvasCenter}
           layered={analysis.start.layered}
         />
-        <text
-          x={startBox.x + 16}
-          y={startBox.y + 40}
-          fontFamily={sourceSans}
-          fontWeight={700}
-          fontSize={36}
-          opacity={codeOpacity}
-        >
-          View
-        </text>
         <g opacity={codeOpacity}>
           <DownArrow
             x={s.modelBox.x + panX + s.modelBox.w / 2}
@@ -315,6 +317,14 @@ export function ModelDrivenScene<T extends object>({
         {/* The other states, as code */}
         {others.length > 0 && (
           <g opacity={candidatesOpacity * codeOpacity}>
+            <Label
+              rect={{
+                ...candRects[0],
+                y: Math.min(...candRects.map((r) => r.y)),
+              }}
+            >
+              Accessible model states
+            </Label>
             {candRects.map((rect, j) => (
               <CodeBox
                 key={j}
@@ -519,16 +529,31 @@ function BoxRect({ rect }: { rect: Rect }) {
   );
 }
 
+/** A box's name, just above its top-left corner */
+function Label({ rect, children }: { rect: Rect; children: string }) {
+  return (
+    <text
+      x={rect.x + 4}
+      y={rect.y - 14}
+      fontFamily={sourceSans}
+      fontWeight={700}
+      fontSize={36}
+    >
+      {children}
+    </text>
+  );
+}
+
 type CodeStyle = {
   fontSize: number;
   lineHeight: number;
-  pad: { title?: number; code: number; firstBaseline: number; bottom: number };
+  pad: { code: number; firstBaseline: number; bottom: number };
 };
 
 const modelCode: CodeStyle = {
   fontSize: 24,
   lineHeight: 32,
-  pad: { title: 24, code: 40, firstBaseline: 98, bottom: 46 },
+  pad: { code: 40, firstBaseline: 52, bottom: 34 },
 };
 
 const candCode: CodeStyle = {
@@ -542,31 +567,34 @@ function charWidth(style: CodeStyle) {
   return 0.6 * style.fontSize;
 }
 
-/** A code box's rect, grown right and down as needed to fit its lines */
+/**
+ * A code box's rect, grown right and up as needed to fit its lines (up, so
+ * the arrow below it keeps its length)
+ */
 function fitCodeBox(rect: Rect, lines: CodeLine[], style: CodeStyle): Rect {
   const cols = Math.max(
     ...lines.map((line) => line.reduce((n, seg) => n + seg.text.length, 0)),
   );
   const { pad, lineHeight } = style;
+  const h = Math.max(
+    rect.h,
+    pad.firstBaseline + (lines.length - 1) * lineHeight + pad.bottom,
+  );
   return {
-    ...rect,
+    x: rect.x,
+    y: rect.y + rect.h - h,
     w: Math.max(rect.w, 2 * pad.code + cols * charWidth(style)),
-    h: Math.max(
-      rect.h,
-      pad.firstBaseline + (lines.length - 1) * lineHeight + pad.bottom,
-    ),
+    h,
   };
 }
 
 function CodeBox({
   rect,
-  title,
   lines,
   style,
   markOpacity = 1,
 }: {
   rect: Rect;
-  title?: string;
   lines: CodeLine[];
   style: CodeStyle;
   markOpacity?: number;
@@ -576,17 +604,6 @@ function CodeBox({
   return (
     <g>
       <BoxRect rect={rect} />
-      {title && (
-        <text
-          x={rect.x + (pad.title ?? 0)}
-          y={rect.y + 44}
-          fontFamily={sourceSans}
-          fontWeight={700}
-          fontSize={36}
-        >
-          {title}
-        </text>
-      )}
       {lines.map((line, li) => {
         const x = rect.x + pad.code;
         const y = rect.y + pad.firstBaseline + li * lineHeight;
@@ -655,9 +672,16 @@ function GreyArrow({ from, to }: { from: Vec2; to: Vec2 }) {
       .norm();
   const headLen = 18;
   const headHalfW = 11;
-  // The body stops where the head starts
+  // The body runs a little way into the head, so no seam shows between them
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (at(mid).sub(to).len() > headLen - 4) lo = mid;
+    else hi = mid;
+  }
+  const uEnd = lo;
   const n = 40;
-  const uEnd = 1 - headLen / to.sub(from).len() / 1.1;
   const left: Vec2[] = [];
   const right: Vec2[] = [];
   for (let k = 0; k <= n; k++) {
@@ -709,36 +733,21 @@ function TargetMark({ center, half }: { center: Vec2; half: Vec2 }) {
   );
 }
 
-// The grabbing cursor: macOS's closed hand, on a 24-unit grid, drawn like
-// rails.tsx's cursors (outlined dark, then filled white on top, so
-// overlapping parts merge into one silhouette)
+// The grabbing cursor: macOS's own closed hand, traced from the system's
+// cursor art (HIServices.framework's cursors/closedhand/cursor.pdf), in its
+// 32-point space
 
 const INK = "#1d1d24";
-const HAND_HOTSPOT = [12.4, 14] as const;
-
-const closedHand = (
-  <g>
-    <path d="M6.8 10.6 L20.4 10.6 Q21.8 10.6 21.6 12.6 L20.8 17.2 Q20 21.4 15.4 21.8 L12.2 21.8 Q8.6 21.5 7.6 18.4 Z" />
-    {[8.6, 11.8, 15, 18.2].map((cx, i) => (
-      <rect
-        key={cx}
-        x={cx - 1.6}
-        y={i === 3 ? 8.6 : 8}
-        width={3.2}
-        height={5.6}
-        rx={1.6}
-      />
-    ))}
-    <rect
-      x={2.6}
-      y={10.9}
-      width={6.6}
-      height={3.4}
-      rx={1.7}
-      transform="rotate(15 8.6 12.6)"
-    />
-  </g>
-);
+const HAND_HOTSPOT = [16, 16] as const;
+/** The art is drawn this much bigger than macOS draws it at scale 1 */
+const HAND_ART_SCALE = 1.35;
+const HAND_OUTLINE =
+  "M 12.57 13.04 C 13.05 12.86 14 12.97 14.25 13.51 C 14.46 13.97 14.64 14.75 14.66 14.59 C 14.68 14.21 14.63 13.42 14.79 13 C 14.91 12.7 15.14 12.41 15.48 12.31 C 15.77 12.22 16.1 12.19 16.39 12.25 C 16.71 12.32 17.04 12.54 17.16 12.75 C 17.52 13.38 17.53 14.65 17.55 14.59 C 17.61 14.31 17.61 13.36 17.83 13 C 17.97 12.77 18.32 12.55 18.52 12.52 C 18.81 12.47 19.17 12.45 19.48 12.51 C 19.73 12.56 20.07 12.86 20.16 13 C 20.38 13.34 20.5 14.32 20.54 14.66 C 20.55 14.8 20.61 14.27 20.83 13.92 C 21.23 13.28 22.67 13.16 22.73 14.56 C 22.75 15.21 22.75 15.18 22.75 15.62 C 22.75 16.14 22.73 16.45 22.71 16.83 C 22.68 17.23 22.59 18.13 22.46 18.57 C 22.38 18.87 22.09 19.55 21.81 19.95 C 21.81 19.95 20.74 21.2 20.62 21.77 C 20.5 22.33 20.54 22.33 20.52 22.73 C 20.5 23.13 20.64 23.65 20.64 23.65 C 20.64 23.65 19.84 23.76 19.41 23.69 C 19.02 23.62 18.53 22.85 18.41 22.61 C 18.23 22.28 17.87 22.34 17.72 22.59 C 17.5 22.97 17.02 23.66 16.68 23.7 C 16 23.78 14.62 23.73 13.54 23.72 C 13.54 23.72 13.72 22.71 13.31 22.36 C 13 22.1 12.48 21.58 12.16 21.3 L 11.33 20.38 C 11.05 20.02 10.33 19.45 10.09 18.39 C 9.88 17.46 9.89 17 10.12 16.62 C 10.36 16.24 10.8 16.04 10.98 16 C 11.19 15.96 11.67 15.96 11.86 16.06 C 12.08 16.18 12.17 16.22 12.34 16.45 C 12.57 16.76 12.65 16.91 12.55 16.57 C 12.48 16.31 12.23 15.98 12.12 15.61 C 12.01 15.24 11.72 14.66 11.74 14.08 C 11.75 13.86 11.84 13.31 12.57 13.04";
+const HAND_CREASES: [number, number, number, number][] = [
+  [15.55, 17.3, 15.57, 20.73],
+  [17.55, 20.75, 17.54, 17.27],
+  [19.57, 20.73, 19.57, 17.28],
+];
 
 function Cursor({
   at,
@@ -752,28 +761,19 @@ function Cursor({
   const [hx, hy] = HAND_HOTSPOT;
   return (
     <g
-      transform={`translate(${at.x} ${at.y}) scale(${scale}) translate(${-hx} ${-hy})`}
+      transform={`translate(${at.x} ${at.y}) scale(${scale * HAND_ART_SCALE}) translate(${-hx} ${-hy})`}
       opacity={opacity}
       style={{
         filter:
           "drop-shadow(0 3px 4px rgba(0,0,0,0.38)) drop-shadow(0 0 1px rgba(0,0,0,0.25))",
       }}
+      stroke={INK}
+      strokeWidth={0.75}
     >
-      <g
-        fill={INK}
-        stroke={INK}
-        strokeWidth={2.3}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      >
-        {closedHand}
-      </g>
-      <g fill="white">{closedHand}</g>
-      <g stroke={INK} strokeWidth={1.15} strokeLinecap="round">
-        {[12, 14.8, 17.6].map((x) => (
-          <line key={x} x1={x} y1={14.4} x2={x} y2={18.2} />
-        ))}
-      </g>
+      <path d={HAND_OUTLINE} fill="white" strokeLinejoin="round" />
+      {HAND_CREASES.map(([x1, y1, x2, y2]) => (
+        <line key={x1} x1={x1} y1={y1} x2={x2} y2={y2} strokeLinecap="round" />
+      ))}
     </g>
   );
 }
@@ -799,6 +799,9 @@ function pointerAt(track: ExplainerSubject<object>["track"], t: number): Vec2 {
  * The draggable, live, in the big view, dragged along the subject's track by
  * synthetic pointer events (as rails.tsx plays recorded tracks). Going back in
  * time starts it over.
+ *
+ * The real pointer can't nudge the scripted drag, but pressing it takes over:
+ * the scripted drag lets go, and the press starts a drag of the viewer's own.
  */
 function LiveDrag<T extends object>({
   subject,
@@ -821,7 +824,14 @@ function LiveDrag<T extends object>({
   const [generation, setGeneration] = useState(0);
   const [status, setStatus] = useState<DragStatus<T> | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
-  const played = useRef({ generation: -1, t: -Infinity, down: false });
+  const played = useRef({
+    generation: -1,
+    t: -Infinity,
+    down: false,
+    /** Where the last event put the pointer, in client coordinates */
+    client: Vec2(0, 0),
+  });
+  const [takenOver, setTakenOver] = useState(false);
   // The renderer takes a frame after mounting to be ready for a press
   const [ready, setReady] = useState(-1);
   useEffect(() => {
@@ -839,7 +849,12 @@ function LiveDrag<T extends object>({
   // reports each move back through onDragStatus, re-rendering this.)
   useLayoutEffect(() => {
     if (played.current.generation !== generation) {
-      played.current = { generation, t: -Infinity, down: false };
+      played.current = {
+        generation,
+        t: -Infinity,
+        down: false,
+        client: Vec2(0, 0),
+      };
     }
     const p = played.current;
     const host = hostRef.current;
@@ -847,9 +862,11 @@ function LiveDrag<T extends object>({
     if (t < p.t) {
       // Back in time: start over, from a fresh mount
       setStatus(null);
+      setTakenOver(false);
       setGeneration((g) => g + 1);
       return;
     }
+    if (takenOver) return;
     if (t < track[0][0]) {
       p.t = t;
       return;
@@ -883,32 +900,59 @@ function LiveDrag<T extends object>({
       if (!under || !host.contains(under)) return;
       under.dispatchEvent(new PointerEvent("pointerdown", init(client, 1, 0)));
       p.down = true;
+      p.client = client;
       p.t = t;
       // Moves wait for the next time, once the renderer listens for them
       return;
     }
     p.t = t;
+    p.client = toClient(pointer);
     document.dispatchEvent(
-      new PointerEvent("pointermove", init(toClient(pointer), 1, -1)),
+      new PointerEvent("pointermove", init(p.client, 1, -1)),
     );
     // The rest follows from these
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, generation, ready, drive]);
+  }, [t, generation, ready, drive, takenOver]);
 
-  // Let go on leaving, so the drag doesn't hang on to the real pointer
-  useLayoutEffect(() => {
-    if (drive) return;
-    const p = played.current;
-    if (!p.down) return;
+  const letGo = () => {
     document.dispatchEvent(
       new PointerEvent("pointerup", {
         bubbles: true,
+        clientX: played.current.client.x,
+        clientY: played.current.client.y,
         pointerId: 1,
         buttons: 0,
       }),
     );
-    p.down = false;
+    played.current.down = false;
+  };
+
+  // Let go on leaving, so the drag doesn't hang on to the real pointer
+  useLayoutEffect(() => {
+    if (!drive && played.current.down) letGo();
   }, [drive]);
+
+  // While the scripted drag holds on, the renderer hears only it: real moves
+  // and releases are kept from it. A real press lets go of the scripted drag,
+  // re-rendering at once so the press lands on the dropped state's elements.
+  useEffect(() => {
+    const onReal = (e: PointerEvent) => {
+      if (!e.isTrusted || !played.current.down) return;
+      if (e.type === "pointerdown") {
+        flushSync(() => {
+          letGo();
+          setTakenOver(true);
+        });
+      } else {
+        e.stopImmediatePropagation();
+      }
+    };
+    const types = ["pointerdown", "pointermove", "pointerup"] as const;
+    for (const type of types) window.addEventListener(type, onReal, true);
+    return () => {
+      for (const type of types) window.removeEventListener(type, onReal, true);
+    };
+  }, []);
 
   const transform = `translate(${origin.x} ${origin.y}) scale(${frame.scale})`;
   // Mid-drag, the cursor goes where the renderer last saw the pointer, so it
@@ -949,7 +993,7 @@ function LiveDrag<T extends object>({
             <OverlayVis op={status.result.op} />
           </g>
         )}
-        {t >= track[0][0] - 0.25 && (
+        {t >= track[0][0] - 0.25 && !takenOver && (
           <Cursor
             at={origin.add(shownPointer.mul(frame.scale))}
             scale={cursorScale}
