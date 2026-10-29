@@ -32,8 +32,10 @@ is SHORTCUTS in ControlsPanel.tsx.
 
 const COMPILE_DELAY_MS = 250;
 /** How the width splits between the code and the diagram. */
-const CODE_FLEX = 3;
-const DIAGRAM_FLEX = 2;
+export const CODE_FLEX = 3;
+export const DIAGRAM_FLEX = 2;
+/** How much of its pane the diagram fills, in whichever dimension is tighter */
+export const DIAGRAM_FILL = 0.85;
 /** How long the ? stays up after the page loads. */
 const HELP_INTRO_MS = 4000;
 /** How close (px, from each edge) the pointer must come to the
@@ -45,7 +47,7 @@ const HELP_CORNER_PX = 140;
  * mention them. All are local (system fonts on macOS, or bundled), so
  * nothing needs the network at the venue.
  */
-const letterFonts: { name: string; family: string }[] = [
+export const letterFonts: { name: string; family: string }[] = [
   { name: "arial rounded", family: '"Arial Rounded MT Bold", system-ui' },
   { name: "maru gothic", family: '"Hiragino Maru Gothic ProN", system-ui' },
   { name: "shantell", family: '"Shantell Sans", system-ui' },
@@ -447,8 +449,8 @@ export function LiveCode({
   const scale = Math.max(
     0.1,
     Math.min(
-      (paneSize.width * 0.85) / snippet.width,
-      (paneSize.height * 0.85) / snippet.height,
+      (paneSize.width * DIAGRAM_FILL) / snippet.width,
+      (paneSize.height * DIAGRAM_FILL) / snippet.height,
     ),
   );
 

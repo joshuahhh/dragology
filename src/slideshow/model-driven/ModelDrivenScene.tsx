@@ -17,7 +17,15 @@ import { robotoMono } from "../roboto-mono";
 import { STAGE_H, STAGE_W } from "../slide";
 import { sourceSans } from "../source-sans";
 import { analyzeDrag } from "./analyze";
-import { blink, cubicBezier, eased, lerp, linear, progress } from "./anim";
+import {
+  blink,
+  cubicBezier,
+  eased,
+  easeInOut,
+  lerp,
+  linear,
+  progress,
+} from "./anim";
 
 /** A line of code, in segments; marked segments are underlined. */
 export type CodeLine = { text: string; mark?: boolean }[];
@@ -37,7 +45,15 @@ export type ExplainerSubject<T extends object> = {
    * coordinates. It presses at the first sample.
    */
   track: readonly (readonly [number, number, number])[];
+  /**
+   * If set, the drag never ends: past the track's end, the pointer heads back
+   * to where it was at this time and goes round again from there
+   */
+  loopFrom?: number;
 };
+
+/** How long the pointer takes to get back to the loop's start */
+const LOOP_RETURN = 0.3;
 
 // ── The script ──
 
@@ -781,7 +797,24 @@ function Cursor({
 // ── The live drag ──
 
 /** The pointer's position on the canvas at time t, along a track */
-function pointerAt(track: ExplainerSubject<object>["track"], t: number): Vec2 {
+function pointerAt(
+  track: ExplainerSubject<object>["track"],
+  loopFrom: number | undefined,
+  t: number,
+): Vec2 {
+  const end = track[track.length - 1][0];
+  if (loopFrom !== undefined && t > end) {
+    const lap = end - loopFrom + LOOP_RETURN;
+    const into = (t - end) % lap;
+    if (into < LOOP_RETURN) {
+      const u = easeInOut(into / LOOP_RETURN);
+      return pointerAt(track, undefined, end).lerp(
+        pointerAt(track, undefined, loopFrom),
+        u,
+      );
+    }
+    return pointerAt(track, undefined, loopFrom + into - LOOP_RETURN);
+  }
   if (t <= track[0][0]) return Vec2(track[0][1], track[0][2]);
   for (let k = 1; k < track.length; k++) {
     const [t1, x1, y1] = track[k];
@@ -820,7 +853,7 @@ function LiveDrag<T extends object>({
   overlayOpacity: number;
   cursorScale: number;
 }) {
-  const { draggable, state, width, height, track } = subject;
+  const { draggable, state, width, height, track, loopFrom } = subject;
   const [generation, setGeneration] = useState(0);
   const [status, setStatus] = useState<DragStatus<T> | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -843,7 +876,7 @@ function LiveDrag<T extends object>({
     frame.x - (width / 2) * frame.scale,
     frame.y - (height / 2) * frame.scale,
   );
-  const pointer = pointerAt(track, t);
+  const pointer = pointerAt(track, loopFrom, t);
 
   // Each new time, dispatch what's due. (Only on new times: the renderer
   // reports each move back through onDragStatus, re-rendering this.)

@@ -6,8 +6,8 @@ import type { CodeLine, ExplainerSubject } from "./ModelDrivenScene";
 type BeadsState = { beads: string[] };
 
 // The ring of beads as live-coded in the talk, in the look the live-code
-// slide shows by default, with the spec it ends up with
-const snippet = snippets.find((s) => s.title === "ring of beads: whenFar")!;
+// slide shows by default, with floating but before whenFar
+const snippet = snippets.find((s) => s.title === "ring of beads: floating")!;
 const live = compileLiveCode(
   snippet.bright?.code ?? snippet.code,
   snippet.bright?.prelude ?? snippet.prelude,
@@ -30,7 +30,7 @@ function formatState(state: BeadsState): CodeLine[] {
 
 /**
  * The live-coded ring of beads, with bead A dragged along the path it took in
- * model-driven-full.mp4 (measured off the video).
+ * model-driven-full.mp4 (measured off the video), round and round.
  */
 export const beadsSubject: ExplainerSubject<BeadsState> = {
   draggable: live.draggable as Draggable<BeadsState>,
@@ -90,4 +90,6 @@ export const beadsSubject: ExplainerSubject<BeadsState> = {
     [27.84, 126.9, 67.4],
     [27.92, 126.9, 64.9],
   ],
+  // From a pause at the top, before setting off
+  loopFrom: 23.6,
 };

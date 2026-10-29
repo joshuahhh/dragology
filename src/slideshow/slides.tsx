@@ -15,7 +15,13 @@ import {
   type DragSpecTreeViewNodeProps,
 } from "../DragSpecTreeView";
 import { StudioHackContext } from "../studio/StudioHackContext";
-import { LiveCode } from "../talk/LiveCodePage";
+import {
+  CODE_FLEX,
+  DIAGRAM_FILL,
+  DIAGRAM_FLEX,
+  letterFonts,
+  LiveCode,
+} from "../talk/LiveCodePage";
 import { slideSnippet } from "../talk/snippets";
 import {
   CallToActionSlide,
@@ -31,6 +37,7 @@ import {
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
+import { beadsSubject } from "./model-driven/beads";
 import { ModelDrivenSlide } from "./model-driven/ModelDrivenSlide";
 import { ClosingMontageSlide } from "./montage/MontageCanvas";
 import { Rails } from "./rails";
@@ -41,6 +48,7 @@ import {
   ImageSlide,
   type Slide,
   slideFileUrl,
+  STAGE_H,
   STAGE_W,
   useSlideCurrent,
   useSlideShown,
@@ -56,6 +64,71 @@ function LiveCodeSlide() {
     // program would grow the slide and push the diagram down.
     <div style={{ position: "absolute", inset: 0 }}>
       <LiveCode snippets={[slideSnippet]} highlight={step === 0} />
+    </div>
+  );
+}
+
+/**
+ * The library's title, beside the ring of beads, live. The ring sits right
+ * where the live-code slide that follows draws it, and the same size, so
+ * fading from one to the other leaves it in place.
+ */
+function DragologyTitleSlide() {
+  const { width, height } = beadsSubject;
+  // The live editor's diagram pane: its share of the stage's width, all of
+  // its height
+  const paneX = (STAGE_W * CODE_FLEX) / (CODE_FLEX + DIAGRAM_FLEX);
+  const paneW = STAGE_W - paneX;
+  const scale = Math.min(
+    (paneW * DIAGRAM_FILL) / width,
+    (STAGE_H * DIAGRAM_FILL) / height,
+  );
+  return (
+    <div style={{ position: "absolute", inset: 0, background: "white" }}>
+      <div
+        style={{
+          position: "absolute",
+          left: 130,
+          top: 400,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+        }}
+      >
+        <div style={{ fontFamily: robotoMono, fontSize: 158, lineHeight: 1 }}>
+          Dragology
+        </div>
+        <div
+          style={{
+            fontFamily: sourceSans,
+            fontWeight: 300,
+            fontSize: 46,
+            marginTop: 20,
+          }}
+        >
+          a library for Declarative Dragging
+        </div>
+      </div>
+      <style>
+        {`[data-title-ring] text[data-loc] { font-family: ${letterFonts[0].family}; }`}
+      </style>
+      <div
+        data-title-ring
+        style={{
+          position: "absolute",
+          left: paneX + (paneW - width * scale) / 2,
+          top: (STAGE_H - height * scale) / 2,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      >
+        <DraggableRenderer
+          draggable={beadsSubject.draggable}
+          initialState={beadsSubject.state}
+          width={width}
+          height={height}
+        />
+      </div>
     </div>
   );
 }
@@ -491,20 +564,15 @@ function DeclarativeDraggingIntro() {
   );
 }
 
-function BeadsWhenFar() {
-  const draggable = useMemo(
-    () => makeDraggable("d.closest().whenFar().withFloating()"),
-    [],
-  );
+/** The ring of beads as it's live-coded later, and explained in between */
+function BeadsFloating() {
   return (
-    <>
-      <DemoDraggable
-        draggable={draggable}
-        initialState={beadsInitialState}
-        width={300}
-        height={300}
-      />
-    </>
+    <DemoDraggable
+      draggable={beadsSubject.draggable}
+      initialState={beadsSubject.state}
+      width={beadsSubject.width}
+      height={beadsSubject.height}
+    />
   );
 }
 
@@ -816,7 +884,7 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: (
       <DemoSlide width={300} height={300} demoId="ring-of-beads">
-        <BeadsWhenFar />
+        <BeadsFloating />
       </DemoSlide>
     ),
   },
@@ -869,7 +937,7 @@ export const outline: (Slide | Heading)[] = [
 
       // Consider: introduce repositional drags
     `,
-    content: <ModelDrivenSlide from={23} to={27.7} />,
+    content: <ModelDrivenSlide from={23} to={Infinity} />,
   },
 
   { heading: "Live-coding, composable dragging" },
@@ -879,7 +947,7 @@ export const outline: (Slide | Heading)[] = [
     notes: `
       To show you how this works in practice, and introduce you to the complementary concept of composable dragging, we’ll make that ring demo using our library Dragology.
     `,
-    content: <ImageSlide src="slide-12.jpg" />,
+    content: <DragologyTitleSlide />,
   },
   {
     title: "Live Code",
