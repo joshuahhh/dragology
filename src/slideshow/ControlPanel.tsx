@@ -12,8 +12,14 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
   {
     title: "Navigate",
     hotkeys: [
-      { combos: [["→"], ["Space"], ["⌃", "⇧", "→"]], does: "Next" },
-      { combos: [["←"], ["⌃", "⇧", "←"]], does: "Previous" },
+      {
+        combos: [["→"], ["↓"], ["Space"], ["⌃", "⇧", "→"], ["⌃", "⇧", "↓"]],
+        does: "Next",
+      },
+      {
+        combos: [["←"], ["↑"], ["⌃", "⇧", "←"], ["⌃", "⇧", "↑"]],
+        does: "Previous",
+      },
       { combos: [["⌃", "⇧", "O"]], does: "Outline" },
     ],
   },

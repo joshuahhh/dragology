@@ -21,7 +21,9 @@ import {
 import { NotesEditor } from "./NotesEditor";
 import {
   type Heading,
+  NEXT_KEYS,
   notesFirstLine,
+  PREV_KEYS,
   type Slide,
   slideFileUrl,
   SlidePresenceContext,
@@ -793,8 +795,8 @@ export function SlideshowPage() {
     // by `code`, since Shift changes `key`.
     const forced = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "ArrowRight") goNext();
-      else if (e.key === "ArrowLeft") goPrev();
+      if (NEXT_KEYS.includes(e.key)) goNext();
+      else if (PREV_KEYS.includes(e.key)) goPrev();
       else if (!e.shiftKey) return;
       else if (e.code === "KeyP") setPanelOpen((open) => !open);
       else if (e.code === "KeyA") shareWithAudience();
@@ -813,10 +815,10 @@ export function SlideshowPage() {
     const bare = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTyping(e)) return;
-      if (e.key === "ArrowRight" || e.key === " ") {
+      if (NEXT_KEYS.includes(e.key) || e.key === " ") {
         e.preventDefault();
         goNext();
-      } else if (e.key === "ArrowLeft") {
+      } else if (PREV_KEYS.includes(e.key)) {
         e.preventDefault();
         goPrev();
       }

@@ -7,6 +7,10 @@ import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
 export const STAGE_W = 1920;
 export const STAGE_H = 1080;
 
+/** The arrow keys that step forward and back through the slides. */
+export const NEXT_KEYS = ["ArrowRight", "ArrowDown"];
+export const PREV_KEYS = ["ArrowLeft", "ArrowUp"];
+
 export type Transition = "fade-white" | "fade";
 
 /**

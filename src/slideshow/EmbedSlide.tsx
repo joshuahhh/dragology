@@ -5,10 +5,19 @@ import {
   useRef,
   useState,
 } from "react";
-import { STAGE_H, STAGE_W, useSlideCurrent } from "./slide";
+import {
+  NEXT_KEYS,
+  PREV_KEYS,
+  STAGE_H,
+  STAGE_W,
+  useSlideCurrent,
+} from "./slide";
 
-/** The arrow keys, which the slideshow uses and some embedded apps don't. */
+/** The arrow keys, which the slideshow uses and some embedded apps don't.
+ * Up and down are left to the app (they move through Hazel's code, say),
+ * except with Ctrl. */
 const ARROW_KEYS = ["ArrowRight", "ArrowLeft"];
+const CTRL_ARROW_KEYS = [...NEXT_KEYS, ...PREV_KEYS];
 
 /** Embedded windows whose keys already go through their slide */
 const bridged = new WeakSet<Window>();
@@ -125,8 +134,8 @@ export function EmbedSlide({
         window.focus();
       } else if (
         forwarded.includes(e.key) ||
-        // Ctrl(+Shift)+Left/Right, which always navigate
-        (e.ctrlKey && ARROW_KEYS.includes(e.key))
+        // Ctrl(+Shift)+arrows, which always navigate
+        (e.ctrlKey && CTRL_ARROW_KEYS.includes(e.key))
       ) {
         e.preventDefault();
         e.stopImmediatePropagation();
