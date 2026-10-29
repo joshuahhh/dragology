@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import prettier from "prettier";
 import type { Plugin } from "vite";
 import {
   type MontageLayout,
@@ -32,7 +33,7 @@ export function montageLayout(): Plugin {
               typeof layout.views !== "object"
             )
               throw new Error("Not a montage layout");
-            const text = formatLayout(layout);
+            const text = await formatJson(layout, file);
             const old = await fs.readFile(file, "utf8").catch(() => "");
             if (text !== old) await fs.writeFile(file, text);
             reply = { changed: text !== old };
@@ -47,21 +48,8 @@ export function montageLayout(): Plugin {
   };
 }
 
-/** JSON with one line per tile, view and group, for readable diffs */
-export function formatLayout(layout: MontageLayout): string {
-  const { gutter, radius, groups, tiles, views } = layout;
-  const lines = (items: string[]) => items.map((s) => `    ${s}`).join(",\n");
-  return (
-    "{\n" +
-    `  "gutter": ${JSON.stringify(gutter)},\n` +
-    `  "radius": ${JSON.stringify(radius)},\n` +
-    `  "groups": [\n${lines(groups.map((g) => JSON.stringify(g)))}\n  ],\n` +
-    `  "views": {\n${lines(
-      Object.entries(views).map(
-        ([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}`,
-      ),
-    )}\n  },\n` +
-    `  "tiles": [\n${lines(tiles.map((t) => JSON.stringify(t)))}\n  ]\n` +
-    "}\n"
-  );
+/** JSON as `pnpm prettier` would leave it, so saves don't churn the file */
+export async function formatJson(value: unknown, file: string) {
+  const options = await prettier.resolveConfig(file);
+  return prettier.format(JSON.stringify(value), { ...options, filepath: file });
 }

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { Plugin } from "vite";
+import { formatJson } from "./vite-plugin-montage-layout";
 
 const DIR = "src/slideshow/rails";
 const SAVE_PATH = "/__rails/save";
@@ -24,10 +25,8 @@ export function railsTracks(): Plugin {
             if (!/^[\w-]+$/.test(id)) throw new Error(`Bad id: ${id}`);
             const dir = path.join(server.config.root, DIR);
             await fs.mkdir(dir, { recursive: true });
-            await fs.writeFile(
-              path.join(dir, `${id}.json`),
-              JSON.stringify(tracks) + "\n",
-            );
+            const file = path.join(dir, `${id}.json`);
+            await fs.writeFile(file, await formatJson(tracks, file));
             res.end("ok");
           } catch (e) {
             res.statusCode = 500;
