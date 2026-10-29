@@ -29,7 +29,6 @@ export type VideoClip = { file: string; start: number; end: number };
  * (vite-plugin-slide-notes.ts).
  */
 export type Slide = {
-  title?: string;
   /** Speaker notes, in Markdown. */
   notes?: string;
   /**
@@ -75,6 +74,7 @@ export function useSlideStep() {
 export const SlidePresenceContext = createContext({
   shown: true,
   current: true,
+  arrivedForward: false,
 });
 
 /**
@@ -93,6 +93,14 @@ export function useSlideCurrent() {
   return useContext(SlidePresenceContext).current;
 }
 
+/**
+ * Whether we came to the slide we're on by going forward, as its transition
+ * plays (going back always cuts)
+ */
+export function useSlideArrivedForward() {
+  return useContext(SlidePresenceContext).arrivedForward;
+}
+
 /** The URL of a file in public/slides. */
 export function slideFileUrl(file: string) {
   return `${import.meta.env.BASE_URL}slides/${file}`;
@@ -103,9 +111,9 @@ function stripNotesComment(line: string): string {
   return line.replace(/(?<=^|\s)\/\/.*/, "");
 }
 
-/** Whether a slide's title or notes say there's something left to do. */
+/** Whether a slide's notes say there's something left to do. */
 export function slideHasTodo(slide: Slide): boolean {
-  return [slide.title, slide.notes].some((s) => s && /\bto-?do\b/i.test(s));
+  return !!slide.notes && /\bto-?do\b/i.test(slide.notes);
 }
 
 /** The first line of a slide's notes, as plain text, for at-a-glance views. */

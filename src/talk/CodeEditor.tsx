@@ -338,6 +338,7 @@ export function CodeEditor({
   excerptHandler,
   excerptBox,
   apiRef,
+  hasKeyboard = true,
 }: {
   /** The contents for `docKey`; swapped in whenever `docKey` changes. */
   doc: string;
@@ -370,6 +371,9 @@ export function CodeEditor({
    * be formatted before it's shown). */
   excerptBox?: { width: number; fontSize: number };
   apiRef?: RefObject<CodeEditorApi | null>;
+  /** Whether it's in use: it takes focus whenever this turns on, so it can
+   * be mounted ahead of time without taking the keyboard */
+  hasKeyboard?: boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -507,7 +511,6 @@ export function CodeEditor({
       state: makeState(doc),
     });
     viewRef.current = view;
-    view.focus();
     scheduleFormat(true);
     const revealTimer = setTimeout(() => setRevealed(true), 1500);
     return () => {
@@ -518,6 +521,10 @@ export function CodeEditor({
     // Created once; later docs are swapped in by the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (hasKeyboard) viewRef.current?.focus();
+  }, [hasKeyboard]);
 
   // Swap in a new doc, formatted first, keeping the scroll position.
   const loadedKeyRef = useRef(docKey);

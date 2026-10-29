@@ -97,7 +97,7 @@ export function useTimingRun(
         return [
           {
             index: outlineIndexOfSlide[+i],
-            title: slide.title,
+            notes: slide.notes,
             timing: _.range(slideSteps(slide)).map((k) =>
               Math.round(secs[k] ?? 0),
             ),

@@ -19,8 +19,8 @@ export type SaveTimingsRequest = {
   slides: {
     /** Index of the slide in `outline` */
     index: number;
-    /** The slide's title, to catch the outline changing meanwhile */
-    title: string | undefined;
+    /** The slide's notes, to catch the outline changing meanwhile */
+    notes: string | undefined;
     /** Seconds on each of the slide's steps */
     timing: number[];
   }[];

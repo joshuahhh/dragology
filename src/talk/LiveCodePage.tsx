@@ -133,6 +133,7 @@ export function LiveCode({
   onSnippetIdx,
   highlight,
   excerpt = false,
+  hasKeyboard,
 }: {
   snippets: Snippet[];
   snippetIdx?: number;
@@ -143,6 +144,8 @@ export function LiveCode({
   /** Show just the drag spec, beside the spec tree, in the studio's
    * layout (`TreeViewLayout`). */
   excerpt?: boolean;
+  /** Whether it's in use, for the editor to take focus (see `CodeEditor`) */
+  hasKeyboard?: boolean;
 }) {
   const [bright, setBright] = useState(true);
   const baseSnippet = snippets[snippetIdx];
@@ -700,6 +703,7 @@ ${diagramHighlightCss("[data-talk-diagram]", highlightedLocs, style.diagram)}`}
               excerptHandler={snippet.excerptHandler}
               excerptBox={excerptBox}
               apiRef={editorApiRef}
+              hasKeyboard={hasKeyboard}
             />
           </div>
         </div>

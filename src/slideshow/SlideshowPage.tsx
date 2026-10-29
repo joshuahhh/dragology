@@ -606,6 +606,15 @@ export function SlideshowPage() {
   const [pos, setPos] = useState(() => parseSlidePos(slideNum));
   const currentSlide = pos.slide;
   const currentStep = pos.step;
+  // The slide we're on, and whether we came to it going forward: set as we
+  // go, so the slide sees it on its first render as the current one
+  const [arrival, setArrival] = useState({
+    slide: currentSlide,
+    forward: false,
+  });
+  if (arrival.slide !== currentSlide) {
+    setArrival({ slide: currentSlide, forward: currentSlide > arrival.slide });
+  }
   const posRef = useRef(pos);
   posRef.current = pos;
   // How many times each slide has been reloaded (Ctrl+Shift+R), as a key
@@ -1058,6 +1067,7 @@ export function SlideshowPage() {
                       value={{
                         shown: visible,
                         current: slideIdx === currentSlide,
+                        arrivedForward: arrival.forward,
                       }}
                     >
                       <SlideStepContext.Provider value={stepOf(slideIdx)}>

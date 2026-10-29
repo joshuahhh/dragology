@@ -51,7 +51,6 @@ function SlideInfo({ slide, num }: { slide: Slide; num: number }) {
     <div className="text-sm">
       <div className="flex items-baseline gap-2">
         <span className="text-gray-400 tabular-nums">{num}</span>
-        <span className="font-semibold">{slide.title}</span>
         <span className="ml-auto text-xs text-gray-400">
           {[
             "video" in slide &&

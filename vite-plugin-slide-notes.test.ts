@@ -5,18 +5,20 @@ const file = `
 export const outline = [
   { heading: "Intro" },
   {
-    title: "One",
+    transition: "fade",
     notes: \`
       old notes
     \`,
     content: <ImageSlide src="a.jpg" />,
   },
   {
-    title: "Two",
+    steps: 2,
     content: <ImageSlide src="b.jpg" />,
   },
 ];
 `;
+
+const OLD_NOTES = "\n      old notes\n    ";
 
 describe("setNotes", () => {
   it("replaces existing notes", () => {
@@ -34,7 +36,7 @@ describe("setNotes", () => {
   it("adds notes before the content", () => {
     const out = setNotes(file, { index: 2, old: undefined, notes: "hi" });
     expect(out).toContain(
-      '    title: "Two",\n    notes: `\n      hi\n    `,\n    content:',
+      "    steps: 2,\n    notes: `\n      hi\n    `,\n    content:",
     );
   });
 
@@ -44,7 +46,7 @@ describe("setNotes", () => {
       old: "\n      old notes\n    ",
       notes: "  \n",
     });
-    expect(out).toContain('    title: "One",\n    content:');
+    expect(out).toContain('    transition: "fade",\n    content:');
   });
 
   it("refuses when the notes changed in the file", () => {
@@ -65,28 +67,28 @@ describe("setTimings", () => {
   it("adds timings before the notes or content, and replaces them", () => {
     const once = setTimings(file, {
       slides: [
-        { index: 1, title: "One", timing: [12, 40] },
-        { index: 2, title: "Two", timing: [7] },
+        { index: 1, notes: OLD_NOTES, timing: [12, 40] },
+        { index: 2, notes: undefined, timing: [7] },
       ],
     });
     expect(once).toContain(
-      '    title: "One",\n    timing: [12, 40],\n    notes:',
+      '    transition: "fade",\n    timing: [12, 40],\n    notes:',
     );
-    expect(once).toContain('    title: "Two",\n    timing: [7],\n    content:');
+    expect(once).toContain("    steps: 2,\n    timing: [7],\n    content:");
     const twice = setTimings(once, {
-      slides: [{ index: 1, title: "One", timing: [3, 4] }],
+      slides: [{ index: 1, notes: OLD_NOTES, timing: [3, 4] }],
     });
     expect(twice).toContain("timing: [3, 4],");
     expect(twice).not.toContain("[12, 40]");
     expect(twice).toContain("timing: [7],");
   });
 
-  it("refuses all when a title doesn't match", () => {
+  it("refuses all when a slide's notes don't match", () => {
     expect(() =>
       setTimings(file, {
         slides: [
-          { index: 1, title: "One", timing: [1] },
-          { index: 2, title: "Three", timing: [1] },
+          { index: 1, notes: OLD_NOTES, timing: [1] },
+          { index: 2, notes: "other notes", timing: [1] },
         ],
       }),
     ).toThrow(/outline changed/);

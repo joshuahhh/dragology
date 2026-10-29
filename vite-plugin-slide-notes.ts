@@ -101,7 +101,7 @@ export function setNotes(
 
 /**
  * slides.tsx's text, with each of `slides`' `timing` set. Each slide is found
- * by its index and checked by its title, in case the outline changed during
+ * by its index and checked by its notes, in case the outline changed during
  * the run-through; if any doesn't match, none are set.
  */
 export function setTimings(
@@ -109,18 +109,16 @@ export function setTimings(
   { slides }: SaveTimingsRequest,
 ): string {
   const sf = parse(text);
-  const edits = slides.map(({ index, title, timing }) => {
+  const edits = slides.map(({ index, notes, timing }) => {
     const slide = slideAt(sf, index);
-    const titleProp = findProp(sf, slide, "title")?.initializer;
-    const fileTitle =
-      titleProp && ts.isStringLiteralLike(titleProp)
-        ? titleProp.text
+    const notesProp = findProp(sf, slide, "notes")?.initializer;
+    const fileNotes =
+      notesProp && ts.isStringLiteralLike(notesProp)
+        ? notesProp.text
         : undefined;
-    if (fileTitle !== title) {
+    if ((fileNotes ?? "") !== (notes ?? "")) {
       throw new Error(
-        `Slide ${index} in \`outline\` is ${
-          fileTitle ? `“${fileTitle}”` : "untitled"
-        }, not ${title ? `“${title}”` : "untitled"}; has the outline changed?`,
+        `Slide ${index} in \`outline\` doesn't have the notes it had in the run-through; has the outline changed?`,
       );
     }
     const literal = `[${timing.join(", ")}]`;

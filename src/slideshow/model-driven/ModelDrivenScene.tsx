@@ -1019,6 +1019,16 @@ function LiveDrag<T extends object>({
     frame.y - (height / 2) * frame.scale,
   );
   const pointer = pointerAt(track, loopFrom, t);
+  /** Where a point on the canvas is on the page */
+  const toClient = (c: Vec2) => {
+    // The host is on the stage, scaled however the page scales it
+    const rect = hostRef.current!.parentElement!.getBoundingClientRect();
+    const sp = origin.add(c.mul(frame.scale));
+    return Vec2(
+      rect.left + (sp.x / STAGE_W) * rect.width,
+      rect.top + (sp.y / STAGE_H) * rect.height,
+    );
+  };
 
   // Each new time, dispatch what's due. (Only on new times: the renderer
   // reports each move back through onDragStatus, re-rendering this.)
@@ -1046,16 +1056,6 @@ function LiveDrag<T extends object>({
       p.t = t;
       return;
     }
-    // The host is the stage, scaled however the page scales it
-    const stage = host.parentElement!;
-    const rect = stage.getBoundingClientRect();
-    const toClient = (c: Vec2) => {
-      const sp = origin.add(c.mul(frame.scale));
-      return Vec2(
-        rect.left + (sp.x / STAGE_W) * rect.width,
-        rect.top + (sp.y / STAGE_H) * rect.height,
-      );
-    };
     const init = (client: Vec2, buttons: number, button: number) => ({
       bubbles: true,
       cancelable: true,
@@ -1089,12 +1089,12 @@ function LiveDrag<T extends object>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, generation, ready, drive, takenOver]);
 
-  const letGo = () => {
+  const letGo = (client = played.current.client) => {
     document.dispatchEvent(
       new PointerEvent("pointerup", {
         bubbles: true,
-        clientX: played.current.client.x,
-        clientY: played.current.client.y,
+        clientX: client.x,
+        clientY: client.y,
         pointerId: 1,
         buttons: 0,
       }),
@@ -1102,9 +1102,15 @@ function LiveDrag<T extends object>({
     played.current.down = false;
   };
 
-  // Let go on leaving, so the drag doesn't hang on to the real pointer
+  // Let go on leaving, so the drag doesn't hang on to the real pointer. It
+  // lets go where it pressed, so the element settles back into its place and
+  // the state is the one it started in, as the next slide shows it.
   useLayoutEffect(() => {
-    if (!drive && played.current.down) letGo();
+    if (!drive && played.current.down) {
+      letGo(toClient(Vec2(track[0][1], track[0][2])));
+    }
+    // Only on leaving
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drive]);
 
   // While the scripted drag holds on, the renderer hears only it: real moves
