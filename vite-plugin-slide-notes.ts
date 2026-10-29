@@ -24,23 +24,30 @@ export function slideNotes(): Plugin {
     apply: "serve",
     configureServer(server) {
       const file = path.join(server.config.root, SLIDES);
+      // One rewrite at a time, each reading what the one before wrote:
+      // otherwise two at once (notes saved on blur, timings saved by the
+      // same keystroke) both read the old file, and the later write drops
+      // the earlier one's edit
+      let rewrites = Promise.resolve();
       const rewriteWith =
         <Req>(edit: (text: string, req: Req) => string) =>
         (req: IncomingMessage, res: ServerResponse) => {
           let body = "";
           req.on("data", (chunk) => (body += chunk));
-          req.on("end", async () => {
-            let reply: SaveResponse;
-            try {
-              const text = await fs.readFile(file, "utf8");
-              const next = edit(text, JSON.parse(body));
-              if (next !== text) await fs.writeFile(file, next);
-              reply = { changed: next !== text };
-            } catch (e) {
-              reply = { error: e instanceof Error ? e.message : String(e) };
-            }
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify(reply));
+          req.on("end", () => {
+            rewrites = rewrites.then(async () => {
+              let reply: SaveResponse;
+              try {
+                const text = await fs.readFile(file, "utf8");
+                const next = edit(text, JSON.parse(body));
+                if (next !== text) await fs.writeFile(file, next);
+                reply = { changed: next !== text };
+              } catch (e) {
+                reply = { error: e instanceof Error ? e.message : String(e) };
+              }
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify(reply));
+            });
           });
         };
       server.middlewares.use(SAVE_NOTES_PATH, rewriteWith(setNotes));
@@ -101,26 +108,21 @@ export function setNotes(
 
 /**
  * slides.tsx's text, with each of `slides`' `timing` set. Each slide is found
- * by its index and checked by its notes, in case the outline changed during
- * the run-through; if any doesn't match, none are set.
+ * by its index, so if slides were added to or removed from the outline during
+ * the run-through, none are set.
  */
 export function setTimings(
   text: string,
-  { slides }: SaveTimingsRequest,
+  { outlineLength, slides }: SaveTimingsRequest,
 ): string {
   const sf = parse(text);
-  const edits = slides.map(({ index, notes, timing }) => {
+  if (outlineArray(sf).elements.length !== outlineLength) {
+    throw new Error(
+      "Slides were added to or removed from the outline during the run-through, so its timings might go on the wrong slides",
+    );
+  }
+  const edits = slides.map(({ index, timing }) => {
     const slide = slideAt(sf, index);
-    const notesProp = findProp(sf, slide, "notes")?.initializer;
-    const fileNotes =
-      notesProp && ts.isStringLiteralLike(notesProp)
-        ? notesProp.text
-        : undefined;
-    if ((fileNotes ?? "") !== (notes ?? "")) {
-      throw new Error(
-        `Slide ${index} in \`outline\` doesn't have the notes it had in the run-through; has the outline changed?`,
-      );
-    }
     const literal = `[${timing.join(", ")}]`;
     const init = findProp(sf, slide, "timing")?.initializer;
     if (init) return { start: init.getStart(sf), end: init.end, literal };
@@ -153,8 +155,8 @@ function parse(text: string) {
   );
 }
 
-/** Entry `index` of `outline` (which counts headings too). */
-function slideAt(sf: ts.SourceFile, index: number) {
+/** `outline`'s array literal */
+function outlineArray(sf: ts.SourceFile) {
   let outline: ts.Expression | undefined;
   sf.forEachChild(function visit(node) {
     if (ts.isVariableDeclaration(node) && node.name.getText(sf) === "outline") {
@@ -165,7 +167,12 @@ function slideAt(sf: ts.SourceFile, index: number) {
   if (!outline || !ts.isArrayLiteralExpression(outline)) {
     throw new Error("`outline` in slides.tsx isn't an array literal");
   }
-  const slide = outline.elements[index];
+  return outline;
+}
+
+/** Entry `index` of `outline` (which counts headings too). */
+function slideAt(sf: ts.SourceFile, index: number) {
+  const slide = outlineArray(sf).elements[index];
   if (!slide || !ts.isObjectLiteralExpression(slide)) {
     throw new Error(`Slide ${index} in \`outline\` isn't an object literal`);
   }

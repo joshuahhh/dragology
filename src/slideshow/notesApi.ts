@@ -16,11 +16,12 @@ export type SaveNotesRequest = {
 export const SAVE_TIMINGS_PATH = "/__slide-timings";
 
 export type SaveTimingsRequest = {
+  /** How many entries `outline` had when the run started, to catch slides
+   * being added or removed meanwhile */
+  outlineLength: number;
   slides: {
     /** Index of the slide in `outline` */
     index: number;
-    /** The slide's notes, to catch the outline changing meanwhile */
-    notes: string | undefined;
     /** Seconds on each of the slide's steps */
     timing: number[];
   }[];
