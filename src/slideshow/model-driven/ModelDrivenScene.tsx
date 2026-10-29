@@ -79,6 +79,8 @@ export const script = {
   row: { y: 65, w: 210, h: 220, step: 298, centerX: STAGE_W / 2 },
   /** The live drag's view */
   big: { x: 975, y: 717, scale: 1.95 },
+  /** ...and where it moves to when set aside, with the rest gone */
+  bigAside: { x: 560, y: 540, scale: 2.4 },
   /** The grabbing cursor's offset from the element, and its size per unit */
   cursor: { dx: 25, dy: 20, scale: 2.5, liveScale: 1.35 },
 
@@ -142,6 +144,7 @@ export function ModelDrivenScene<T extends object>({
   subject,
   t,
   drive,
+  aside = 0,
 }: {
   subject: ExplainerSubject<T>;
   t: number;
@@ -150,6 +153,11 @@ export function ModelDrivenScene<T extends object>({
    * only works while the scene is on screen
    */
   drive: boolean;
+  /**
+   * How far (0 to 1) the live drag has moved over to the left, alone, to
+   * make room for something on the right
+   */
+  aside?: number;
 }) {
   const { draggable, state, draggedId, width, height } = subject;
   const analysis = useMemo(
@@ -279,7 +287,7 @@ export function ModelDrivenScene<T extends object>({
   const startPos = toStage(startFrame, analysis.start.pos);
 
   // The big view, where targets land and the live drag happens
-  const big: Frame = s.big;
+  const big: Frame = lerpFrame(s.big, s.bigAside, aside);
   const liveOpacity = progress(t, s.liveIn);
   const flightSpan = (i: number) => {
     const start = s.flights.start + s.flights.stagger * i;
@@ -306,7 +314,12 @@ export function ModelDrivenScene<T extends object>({
       <svg
         width={STAGE_W}
         height={STAGE_H}
-        style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          opacity: 1 - aside,
+        }}
       >
         <defs>
           <filter

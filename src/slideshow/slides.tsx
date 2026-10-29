@@ -133,6 +133,77 @@ function DragologyTitleSlide() {
   );
 }
 
+// The Model-Driven and Composable Dragging art (model-driven.png is
+// 1125×1620, composable.png the same shape smaller), as the live drag and
+// operators slides show it on the right on their second steps
+const ART_H = 820;
+const ART_W = (ART_H * 1125) / 1620;
+const ART_CENTER_X = 1459;
+const STEP_EASE = "600ms cubic-bezier(0.4, 0, 0.2, 1)";
+
+function SideArt({ src, shown }: { src: string; shown: boolean }) {
+  return (
+    <img
+      src={slideFileUrl(src)}
+      alt=""
+      draggable={false}
+      style={{
+        position: "absolute",
+        top: (STAGE_H - ART_H) / 2,
+        left: ART_CENTER_X - ART_W / 2,
+        height: ART_H,
+        opacity: shown ? 1 : 0,
+        // Its white background vanishes on the explainer's off-white
+        mixBlendMode: "multiply",
+        transition: `opacity ${STEP_EASE}`,
+      }}
+    />
+  );
+}
+
+/**
+ * The model-driven explainer's live drag; on the second step it moves left,
+ * and the Model-Driven Dragging art comes in on the right.
+ */
+function LiveDragSlide() {
+  const aside = useSlideStep() >= 1;
+  return (
+    <div className="absolute inset-0">
+      <ModelDrivenSlide from={23} to={Infinity} aside={aside} />
+      <SideArt src="model-driven.png" shown={aside} />
+    </div>
+  );
+}
+
+/**
+ * The paper's table of operators, centered; on the second step it moves
+ * left, and the Composable Dragging art comes in on the right.
+ */
+function OperatorsSlide() {
+  const step = useSlideStep();
+  // operators.png is 1494×1656
+  const tableH = STAGE_H - 96;
+  const tableW = (tableH * 1494) / 1656;
+  const tableLeft = step === 0 ? (STAGE_W - tableW) / 2 : 110;
+  return (
+    <div className="absolute inset-0 bg-white">
+      <img
+        src={slideFileUrl("operators.png")}
+        alt=""
+        draggable={false}
+        style={{
+          position: "absolute",
+          top: (STAGE_H - tableH) / 2,
+          left: tableLeft,
+          height: tableH,
+          transition: `left ${STEP_EASE}`,
+        }}
+      />
+      <SideArt src="composable.png" shown={step >= 1} />
+    </div>
+  );
+}
+
 // ── Demo wrappers ──
 
 // We lazily import the demo components to keep the main bundle lean.
@@ -773,13 +844,16 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Live Drag",
     notes: `
-      These views and positions provide the engine with enough information to synthesize a high-quality animated drag-and-drop interaction.
+      These views and positions provide the engine with enough information to run a high-quality animated drag-and-drop interaction.
 
-      That’s the core idea of model-driven dragging: an interface developer provides future model states to an engine, which speculatively renders them to create an interaction.
+      ---
+
+      That’s the core idea of model-driven dragging: synthesizing a drag-and-drop interaction from semantics, by speculatively rendering future model states.
 
       // Consider: introduce repositional drags
     `,
-    content: <ModelDrivenSlide from={23} to={Infinity} />,
+    steps: 2,
+    content: <LiveDragSlide />,
   },
 
   { heading: "Live-coding, composable dragging" },
@@ -828,18 +902,28 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 2,
     notes: `
-      Behind the scenes, the spec returned by dragologyOnDrag is actually defining what we call a **drag behavior**: a function that turns a pointer position into a preview and a drop state, describing the visual behavior during a drag and on drop.
+      So what are these "d-dot" things we're returning from dragologyOnDrag? They're what we call **drag behaviors**: functions that run every frame during drags, that take a live pointer position and say what should be shown on the screen as a preview, and what state shuold be transitioned to on drop. [TODO]
 
       ---
 
-      The operators we saw, closest, withFloating, and whenFar, turn drag behaviors into new drag behaviors.
+      As we apply operators like "withFloating", we're producing new behaviors from old ones.
     `,
     content: <BehaviorDiagramSlide />,
   },
   {
-    title: "Composable Dragging",
-    transition: "fade-white",
-    content: <ImageSlide src="slide-18.jpg" />,
+    title: "Operators",
+    steps: 2,
+    notes: `
+      You can actually make your own Dragology operators, but we've developed a core set that you can plug together in different ways to create a surprising variety of interactions.
+
+      ---
+
+      Because this approach is centered around composing behaviors, we call it composable dragging.
+      We’ve found that it lets us incrementally build up refined interactions while keeping the underlying simplicity of model-driven dragging in place.
+
+      Andrew's going to share some more examples of what these ingredients can do together.
+    `,
+    content: <OperatorsSlide />,
   },
 
   { heading: "Demos" },

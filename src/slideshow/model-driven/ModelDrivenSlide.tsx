@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSlideCurrent } from "../slide";
+import { cubicBezier } from "./anim";
 import { beadsSubject } from "./beads";
 import { ModelDrivenScene } from "./ModelDrivenScene";
 
@@ -11,9 +12,12 @@ import { ModelDrivenScene } from "./ModelDrivenScene";
 export function ModelDrivenSlide({
   from,
   to = from,
+  aside = false,
 }: {
   from: number;
   to?: number;
+  /** Whether the live drag moves over to the left, alone (animated) */
+  aside?: boolean;
 }) {
   const current = useSlideCurrent();
   const [t, setT] = useState(from);
@@ -32,5 +36,36 @@ export function ModelDrivenSlide({
     return () => cancelAnimationFrame(raf);
   }, [current, from, to]);
 
-  return <ModelDrivenScene subject={beadsSubject} t={t} drive={current} />;
+  const asideU = useTween(aside ? 1 : 0);
+
+  return (
+    <ModelDrivenScene
+      subject={beadsSubject}
+      t={t}
+      drive={current}
+      aside={asideU}
+    />
+  );
+}
+
+const ASIDE_MS = 600;
+const asideEase = cubicBezier(0.4, 0, 0.2, 1);
+
+/** A number that eases to each new `target` it's given */
+function useTween(target: number): number {
+  const [value, setValue] = useState(target);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  useEffect(() => {
+    const from = valueRef.current;
+    if (from === target) return;
+    const start = performance.now();
+    let raf = requestAnimationFrame(function tick() {
+      const u = Math.min(1, (performance.now() - start) / ASIDE_MS);
+      setValue(from + (target - from) * asideEase(u));
+      if (u < 1) raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  return value;
 }
