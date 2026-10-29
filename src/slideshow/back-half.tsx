@@ -229,14 +229,23 @@ const studyInitialState = {
 /** The user study, its findings on sticky notes dragged onto the board */
 export function StudySlide() {
   return (
-    <DemoSlide width={960} height={540}>
-      <DemoDraggable
-        draggable={stickyNotes}
-        initialState={studyInitialState}
-        width={960}
-        height={540}
-      />
-    </DemoSlide>
+    // The chaining checkbox lets go of focus once clicked, so that Space
+    // goes on with the talk instead of unticking it
+    <div
+      style={{ display: "contents" }}
+      onClick={(e) => {
+        if (e.target instanceof HTMLInputElement) e.target.blur();
+      }}
+    >
+      <DemoSlide width={960} height={540}>
+        <DemoDraggable
+          draggable={stickyNotes}
+          initialState={studyInitialState}
+          width={960}
+          height={540}
+        />
+      </DemoSlide>
+    </div>
   );
 }
 
@@ -253,7 +262,13 @@ export function studyExit(frame: HTMLElement): Sample[] | null {
   const chaining = stage.querySelector<HTMLInputElement>(
     'input[type="checkbox"]',
   );
-  if (chaining && !chaining.checked) chaining.click();
+  if (chaining && !chaining.checked) {
+    // With a pointerdown first, like a real click: after a drag, the
+    // renderer swallows a click that comes without one
+    chaining.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    chaining.click();
+    chaining.blur();
+  }
 
   // Grab the note in the middle of the part of it that's on the stage
   const f = frame.getBoundingClientRect();
@@ -269,7 +284,7 @@ export function studyExit(frame: HTMLElement): Sample[] | null {
   // Hover, press (after chaining has re-rendered), then pull away with an
   // ease-in, to well past the edge: the diagram pulls 5× harder out there
   const PRESS = 400;
-  const PULL = 1600;
+  const PULL = 2400;
   const END_X = 1.6;
   const pull: Sample[] = Array.from({ length: 48 }, (_, i) => {
     const u = (i + 1) / 48;
@@ -636,14 +651,20 @@ export function CallToActionSlide() {
         </div>
         <div
           style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 90,
+            marginTop: 56,
             fontSize: 76,
             fontWeight: 600,
-            marginTop: 56,
-            color: "#b91c1c",
-            transform: "rotate(-3deg)",
           }}
         >
-          Thanks!
+          <div style={{ color: "#b91c1c", transform: "rotate(-3deg)" }}>
+            Thanks!
+          </div>
+          <div style={{ color: "#047857", transform: "rotate(2deg)" }}>
+            Questions?
+          </div>
         </div>
       </div>
     </div>
