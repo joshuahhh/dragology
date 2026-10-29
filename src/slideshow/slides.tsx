@@ -47,11 +47,12 @@ import { sourceSans } from "./source-sans";
 
 /** The live editor (#/talk/livecode) on the stage, with just one code block. */
 function LiveCodeSlide() {
+  const step = useSlideStep();
   return (
     // Absolute, so the stage sizes it: in the slide's own flow, a longer
     // program would grow the slide and push the diagram down.
     <div style={{ position: "absolute", inset: 0 }}>
-      <LiveCode snippets={[slideSnippet]} />
+      <LiveCode snippets={[slideSnippet]} highlight={step === 0} />
     </div>
   );
 }
@@ -880,6 +881,8 @@ export const outline: (Slide | Heading)[] = [
   {
     title: "Live Code",
     transition: "fade",
+    // Highlighting is on for the first stage, off for the second
+    steps: 2,
     // Its editor takes focus and keys on mount
     preload: false,
     notes: `

@@ -41,7 +41,7 @@ import { setStylingFolds, stylingFolding } from "./folds";
 import { formatCode, minimalChange } from "./format";
 import { CodeHighlightStyle, HIGHLIGHT_COLOR } from "./highlightStyles";
 import { syntaxThemes } from "./syntaxThemes";
-import { tsCompletions, tsHover, tsLinter, tsSync } from "./tsExtensions";
+import { tsCompletions, tsLinter, tsSync } from "./tsExtensions";
 
 // # Highlight state
 
@@ -184,11 +184,6 @@ const theme = EditorView.theme({
   ".cm-loc-dim": { opacity: 0.3 },
   ".cm-tooltip-autocomplete": { fontSize: "0.8em" },
   ".cm-completionInfo": { fontSize: "0.8em", maxWidth: "40em" },
-  ".cm-tooltip-hover, .cm-tooltip-lint": {
-    fontSize: "0.8em",
-    maxWidth: "40em",
-  },
-  ".cm-tooltip-hover .cm-ts-details": { padding: "4px 8px" },
   ".cm-ts-signature": { margin: 0, whiteSpace: "pre-wrap" },
   ".cm-foldPlaceholder": {
     background: "#f4f4f5",
@@ -357,7 +352,6 @@ export function CodeEditor({
           // own Tab binding moves to the next field).
           Prec.highest(keymap.of([{ key: "Tab", run: acceptCompletion }])),
           tsSync(() => preludeRef.current),
-          tsHover,
           tsLinter,
           javascript({ jsx: true, typescript: true }),
           syntaxCompartment.of(

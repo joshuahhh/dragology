@@ -116,10 +116,14 @@ export function LiveCode({
   snippets,
   snippetIdx = 0,
   onSnippetIdx,
+  highlight,
 }: {
   snippets: Snippet[];
   snippetIdx?: number;
   onSnippetIdx?: (idx: number) => void;
+  /** Turns highlighting on or off whenever it changes (⌥O still toggles
+   * it in between). */
+  highlight?: boolean;
 }) {
   const [bright, setBright] = useState(true);
   const baseSnippet = snippets[snippetIdx];
@@ -139,7 +143,10 @@ export function LiveCode({
 
   const [cursorLoc, setCursorLoc] = useState<number | null>(null);
   // Off while typing, on (⌥O) while moving around the code.
-  const [highlightOn, setHighlightOn] = useState(false);
+  const [highlightOn, setHighlightOn] = useState(highlight ?? false);
+  useEffect(() => {
+    if (highlight !== undefined) setHighlightOn(highlight);
+  }, [highlight]);
   const [foldStyling, setFoldStyling] = useState(true);
   const [styleIdx, setStyleIdx] = useState(0);
   const [syntaxIdx, setSyntaxIdx] = useState(0);

@@ -49,11 +49,47 @@ async function formatWhole(
     tabWidth: 1,
   });
   // Prettier ends files with a newline, which shows as a blank last line.
-  const formatted = result.formatted.trimEnd();
-  return {
-    formatted,
-    cursorOffset: Math.min(result.cursorOffset, formatted.length),
-  };
+  return joinLoneChildren(
+    result.formatted.trimEnd(),
+    Math.min(result.cursorOffset, result.formatted.length),
+  );
+}
+
+/**
+ * An element whose attributes Prettier broke over lines, ending in a `>`
+ * on its own line, followed by a lone one-line `{…}` child and the
+ * closing tag.
+ */
+const LONE_CHILD = /(\n[ \t]*>)\n[ \t]*(\{[^\n]*\})\n[ \t]*(<\/[\w.]*>)/g;
+
+/**
+ * Pulls a lone `{…}` child and its closing tag up onto the line of the
+ * opening tag's `>`, so with its styling folded the element reads as one
+ * line, `<text …>{bead}</text>`, rather than three. (JSX drops whitespace
+ * that includes a newline around children, so the code means the same.)
+ */
+function joinLoneChildren(
+  code: string,
+  cursorOffset: number,
+): { formatted: string; cursorOffset: number } {
+  let formatted = "";
+  let newCursor = cursorOffset;
+  let last = 0;
+  for (const m of code.matchAll(LONE_CHILD)) {
+    const [whole, open, child, close] = m;
+    const start = m.index;
+    const end = start + whole.length;
+    const joined = open + child + close;
+    formatted += code.slice(last, start) + joined;
+    if (cursorOffset >= end) {
+      newCursor -= whole.length - joined.length;
+    } else if (cursorOffset > start) {
+      newCursor = formatted.length - joined.length + open.length;
+    }
+    last = end;
+  }
+  formatted += code.slice(last);
+  return { formatted, cursorOffset: newCursor };
 }
 
 /**

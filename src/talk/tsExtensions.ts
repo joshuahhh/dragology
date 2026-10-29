@@ -6,11 +6,11 @@ import {
 } from "@codemirror/autocomplete";
 import { Diagnostic, linter } from "@codemirror/lint";
 import { Extension, Text } from "@codemirror/state";
-import { hoverTooltip, ViewPlugin } from "@codemirror/view";
+import { ViewPlugin } from "@codemirror/view";
 import * as Comlink from "comlink";
 import type { CompletionEntry, Details, TsService } from "./tsService";
 
-// Completion, hover types, and type errors from TypeScript's language
+// Completion and type errors from TypeScript's language
 // service, which runs in a worker (started on first use, and shared by
 // every editor).
 
@@ -87,23 +87,18 @@ export async function tsCompletions(
   };
 }
 
-export const tsHover = hoverTooltip(async (_view, pos) => {
-  const hover = await getService().hover(pos);
-  if (!hover) return null;
-  return {
-    pos: hover.from,
-    end: hover.to,
-    create: () => ({ dom: renderDetails(hover) }),
-  };
-});
-
-export const tsLinter = linter(async (view): Promise<Diagnostic[]> => {
-  const diagnostics = await getService().diagnostics();
-  // The doc may have changed while the service worked.
-  const length = view.state.doc.length;
-  return diagnostics.map((d) => ({
-    ...d,
-    from: Math.min(d.from, length),
-    to: Math.min(d.to, length),
-  }));
-});
+/** Type errors, underlined, with no tooltips: hovering over the code on
+ * stage shouldn't pop anything up. */
+export const tsLinter = linter(
+  async (view): Promise<Diagnostic[]> => {
+    const diagnostics = await getService().diagnostics();
+    // The doc may have changed while the service worked.
+    const length = view.state.doc.length;
+    return diagnostics.map((d) => ({
+      ...d,
+      from: Math.min(d.from, length),
+      to: Math.min(d.to, length),
+    }));
+  },
+  { tooltipFilter: () => [] },
+);
