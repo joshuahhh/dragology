@@ -37,6 +37,7 @@ import {
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
+import { BehaviorDiagramSlide } from "./behavior-diagram";
 import { beadsSubject } from "./model-driven/beads";
 import { ModelDrivenSlide } from "./model-driven/ModelDrivenSlide";
 import { ClosingMontageSlide } from "./montage/MontageCanvas";
@@ -981,6 +982,19 @@ export const outline: (Slide | Heading)[] = [
         <BeadsWhenFarLabeled />
       </DemoSlide>
     ),
+  },
+  {
+    title: "Drag Behaviors",
+    transition: "fade-white",
+    steps: 2,
+    notes: `
+      Behind the scenes, the spec returned by dragologyOnDrag is actually defining what we call a **drag behavior**: a function that turns a pointer position into a preview and a drop state, describing the visual behavior during a drag and on drop.
+
+      ---
+
+      The operators we saw, closest, withFloating, and whenFar, turn drag behaviors into new drag behaviors.
+    `,
+    content: <BehaviorDiagramSlide />,
   },
   {
     title: "Composable Dragging",

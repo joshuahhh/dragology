@@ -894,7 +894,7 @@ const HAND_CREASES: [number, number, number, number][] = [
   [19.57, 20.73, 19.57, 17.28],
 ];
 
-function Cursor({
+export function Cursor({
   at,
   scale,
   opacity = 1,
