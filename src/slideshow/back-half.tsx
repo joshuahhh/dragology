@@ -3,11 +3,20 @@
 // outline in slides.tsx, where their notes can be edited in place.
 
 import { type ReactNode, useContext, useEffect, useRef } from "react";
-import { DemoContext, type DemoToggleSettings } from "../demo/ui";
+import {
+  DemoContext,
+  DemoDraggable,
+  type DemoToggleSettings,
+} from "../demo/ui";
 import "../studio/shantell-sans";
+import {
+  initialState as stickyInitialState,
+  draggable as stickyNotes,
+} from "../studio/sticky-notes";
 import { EmbedSlide } from "./EmbedSlide";
 import hazelProgram from "./hazel-demo-program.txt?raw";
 import {
+  DemoSlide,
   slideFileUrl,
   useSlideCurrent,
   useSlideShown,
@@ -201,6 +210,34 @@ export function ClipVideo({
 }
 
 // ── Slides ──
+
+// The study's findings as sticky notes, from the studio section the
+// submission video was shot from. There the notes start below the canvas,
+// out of shot; here they peek up from the bottom edge, ready to drag in. Each
+// snaps to its place on the board once it's dragged near it.
+const STUDY_NOTE_PEEK = 56;
+const studyInitialState = {
+  ...stickyInitialState,
+  notes: stickyInitialState.notes.map((note, i) => ({
+    ...note,
+    x: 6 + i * 128,
+    y: 540 - STUDY_NOTE_PEEK,
+  })),
+};
+
+/** The user study, its findings on sticky notes dragged onto the board */
+export function StudySlide() {
+  return (
+    <DemoSlide width={960} height={540}>
+      <DemoDraggable
+        draggable={stickyNotes}
+        initialState={studyInitialState}
+        width={960}
+        height={540}
+      />
+    </DemoSlide>
+  );
+}
 
 /** Hazel, its chrome hidden but for the nut menu and the start of the top bar. */
 export function HazelSlide() {

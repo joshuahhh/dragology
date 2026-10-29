@@ -25,6 +25,7 @@ import {
   Hl,
   NoolClassicSlide,
   StepToggles,
+  StudySlide,
   SupernoolSlide,
   WalkSlide,
   WhiteboardSlide,
@@ -1190,6 +1191,35 @@ export const outline: (Slide | Heading)[] = [
         >
           <dragSpecDesignerDemo.Component />
         </DemoSlide>
+      </Rails>
+    ),
+  },
+  // Study (from the submission video, 3:59–4:26)
+  {
+    title: "Study",
+    transition: "fade-white",
+    steps: 4,
+    notes: `
+      We ran a study where thirteen participants got hands-on experience using Dragology.
+
+      ---
+
+      // drag in the green notes
+      They found it produced concise code, made polished interactions by default, and enabled playful design exploration.
+
+      ---
+
+      // drag in the orange note
+      The study also revealed some learnability challenges related to state-space reasoning.
+
+      ---
+
+      // drag in the blue notes
+      But despite this challenge, participants across diverse domains saw Dragology as a way to bring their abstractions to life.
+    `,
+    content: (
+      <Rails id="study">
+        <StudySlide />
       </Rails>
     ),
   },
