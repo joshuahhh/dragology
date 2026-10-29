@@ -882,6 +882,9 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade",
     // Its editor takes focus and keys on mount
     preload: false,
+    notes: `
+      // alt-o to enable / disable highlighting
+    `,
     content: <LiveCodeSlide />,
   },
   {
