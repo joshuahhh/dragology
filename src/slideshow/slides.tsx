@@ -224,35 +224,6 @@ function LiveDragSlide() {
   );
 }
 
-/**
- * The paper's table of operators, centered; on the second step it moves
- * left, and the Composable Dragging art comes in on the right.
- */
-function OperatorsSlide() {
-  const step = useSlideStep();
-  // operators.png is 1494×1656
-  const tableH = STAGE_H - 96;
-  const tableW = (tableH * 1494) / 1656;
-  const tableLeft = step === 0 ? (STAGE_W - tableW) / 2 : 110;
-  return (
-    <div className="absolute inset-0 bg-white">
-      <img
-        src={slideFileUrl("operators.png")}
-        alt=""
-        draggable={false}
-        style={{
-          position: "absolute",
-          top: (STAGE_H - tableH) / 2,
-          left: tableLeft,
-          height: tableH,
-          transition: `left ${STEP_EASE}`,
-        }}
-      />
-      <SideArt src="composable.png" shown={step >= 1} />
-    </div>
-  );
-}
-
 // ── Demo wrappers ──
 
 // We lazily import the demo components to keep the main bundle lean.
@@ -929,11 +900,9 @@ export const outline: (Slide | Heading)[] = [
     content: <DeclarativeDraggingIntro />,
     timing: [11, 9, 10, 10],
     notes: `
-      // TODO: consider fading background or something
-
       So we’d like to share **Declarative Dragging**, a new approach which makes it possible to build higher quality drag-and-drop interfaces with less work.
 
-      Declarative Dragging combines two ideas.
+      Declarative Dragging combines two new ideas.
 
       ---
 
@@ -1085,6 +1054,8 @@ export const outline: (Slide | Heading)[] = [
       ---
       Finally, we can layer on a whole new feature. Maybe a bead should be removed if it’s dropped far from any target.
       We can do that with the “whenFar” modifier, using another helper function that produces the removed state. [removed(state, idx) BEFORE withFloating]
+
+      You may wonder, at this point: What are these structures we're building and returning from dragologyOnDrag? For that, I'll pass it to Andrew.
     `,
     content: <LiveCodeSlide />,
   },
@@ -1107,20 +1078,6 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: <BehaviorDiagramSlide />,
   },
-  {
-    steps: 2,
-    timing: [10, 16],
-    notes: `
-      We've developed a core set of operators that you can plug together in different ways to create a surprising variety of interactions. (And you can make your own if you like.)
-      // TODO: new graphics here
-
-      ---
-      Because this approach is centered around composing behaviors, we call it composable dragging.
-      We’ve found that it lets us incrementally build up refined interactions while keeping the underlying simplicity of model-driven dragging.
-      Andrew's going to share some more examples of what these ingredients can do together.
-    `,
-    content: <OperatorsSlide />,
-  },
 
   { heading: "Demos" },
   // Scheduler (130-155s)
@@ -1129,7 +1086,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 3,
     timing: [8, 8, 18],
     notes: `
-      Thanks Josh. This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
+      This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
 
       ---
 
