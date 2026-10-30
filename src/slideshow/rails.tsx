@@ -26,7 +26,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { useSlideCurrent, useSlideStep } from "./slide";
+import { InStatusBar, useSlideCurrent, useSlideStep } from "./slide";
 
 /** A moment of a track. x and y are fractions of the stage. */
 export type Sample = { t: number; x: number; y: number; down: boolean };
@@ -110,11 +110,14 @@ if (typeof window !== "undefined") {
 export function Rails({
   id,
   script,
+  loop = false,
   children,
 }: {
   id: string;
   /** Tracks to play at these steps, in live mode too, made from the frame (the stage) */
   script?: Record<number, (frame: HTMLElement) => Sample[] | null>;
+  /** Play scripted steps over and over, making each track afresh */
+  loop?: boolean;
   children: ReactNode;
 }) {
   const step = useSlideStep();
@@ -158,7 +161,7 @@ export function Rails({
       // Not leaving a track halfway (a drag held), on switching to live
       runner.rushAll();
       playedRef.current = null;
-      if (script?.[step]) runner.enqueue(make(step), false);
+      if (script?.[step]) runner.enqueue(make(step), false, loop);
       return;
     }
     if (playedRef.current !== null && playedRef.current === step - 1) {
@@ -169,7 +172,7 @@ export function Rails({
       setGeneration((g) => g + 1);
       for (let k = 0; k < step; k++) runner.enqueue(make(k), true);
     }
-    runner.enqueue(make(step), false);
+    runner.enqueue(make(step), false, loop && !!script?.[step]);
     playedRef.current = step;
     // Not on `script`, which is made anew on each render
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -267,30 +270,25 @@ export function Rails({
         >
           <Cursor />
         </div>
-        {(recording || railsMode === "rails") && (
-          <div
-            style={{
-              position: "absolute",
-              right: 16,
-              top: 12,
-              fontSize: 18,
-              color: recording ? "#dc2626" : "#9ca3af",
-            }}
-          >
-            {recording ? `● recording step ${step + 1}` : "rails"}
-          </div>
-        )}
       </div>
+      {recording && (
+        <InStatusBar>
+          <span className="text-red-500">● recording step {step + 1}</span>
+        </InStatusBar>
+      )}
     </>
   );
 }
 
 type Ref<T> = { readonly current: T | null };
 
+type Queued = { make: () => Sample[] | null; rush: boolean; loop: boolean };
+
 /** Plays tracks one after another, a frame apart. */
 class Runner {
-  private queue: { make: () => Sample[] | null; rush: boolean }[] = [];
+  private queue: Queued[] = [];
   private player: TrackPlayer | null = null;
+  private playing: Queued | null = null;
   private raf = 0;
   /** Frames to wait before starting the next track */
   private wait = 0;
@@ -300,9 +298,13 @@ class Runner {
     private cursor: Ref<HTMLElement>,
   ) {}
 
-  /** Plays a track after the ones queued. It's made when it starts, from the stage as it is then. */
-  enqueue(make: () => Sample[] | null, rush: boolean) {
-    this.queue.push({ make, rush });
+  /**
+   * Plays a track after the ones queued. It's made when it starts, from the
+   * stage as it is then. A looping one is made and played again each time it
+   * ends, until it's rushed or cleared.
+   */
+  enqueue(make: () => Sample[] | null, rush: boolean, loop = false) {
+    this.queue.push({ make, rush, loop });
     this.kick();
   }
 
@@ -336,7 +338,12 @@ class Runner {
     if (this.wait > 0) {
       this.wait--;
     } else if (this.player) {
-      if (!this.player.advance()) this.player = null;
+      if (!this.player.advance()) {
+        if (this.playing?.loop && !this.player.rush) {
+          this.queue.unshift(this.playing);
+        }
+        this.player = null;
+      }
     } else {
       const next = this.queue.shift();
       if (!next) return;
@@ -345,6 +352,7 @@ class Runner {
       const cursor = this.cursor.current;
       if (track && track.length > 0 && frame && cursor) {
         this.player = new TrackPlayer(track, frame, cursor, next.rush);
+        this.playing = next;
       }
     }
     this.kick();

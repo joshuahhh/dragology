@@ -31,17 +31,22 @@ import {
   studyExit,
   StudySlide,
   SupernoolSlide,
+  twistedTreesWander,
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
 import { BehaviorDiagramSlide } from "./behavior-diagram";
 import { beadsSubject } from "./model-driven/beads";
 import { script as modelDrivenScript } from "./model-driven/ModelDrivenScene";
-import { ModelDrivenSlide } from "./model-driven/ModelDrivenSlide";
+import {
+  LiveDragLoop,
+  ModelDrivenSlide,
+} from "./model-driven/ModelDrivenSlide";
 import { ClosingMontageSlide } from "./montage/MontageCanvas";
 import { Rails } from "./rails";
 import { robotoMono } from "./roboto-mono";
 import {
+  DemoLink,
   DemoSlide,
   type Heading,
   ImageSlide,
@@ -731,18 +736,6 @@ function DeclarativeDraggingIntro() {
   );
 }
 
-/** The ring of beads as it's live-coded later, and explained in between */
-function BeadsFloating() {
-  return (
-    <DemoDraggable
-      draggable={beadsSubject.draggable}
-      initialState={beadsSubject.state}
-      width={beadsSubject.width}
-      height={beadsSubject.height}
-    />
-  );
-}
-
 /**
  * The ring of beads written without Dragology or React, from where a drag
  * starts to its event listeners, comments dropped: what you'd write
@@ -937,12 +930,11 @@ export const outline: (Slide | Heading)[] = [
       Traditionally you would make this manually, by adding listeners to pointer events, and managing ephemeral state during the drag.
     `,
     content: (
-      <>
-        <DemoSlide width={300} height={300} demoId="ring-of-beads">
-          <BeadsFloating />
-        </DemoSlide>
+      <div className="absolute inset-0 bg-white">
+        <LiveDragLoop frame={{ x: STAGE_W / 2, y: STAGE_H / 2, scale: 3 }} />
+        <DemoLink demoId="ring-of-beads" />
         <SlideInsets insets={[null, <VanillaDragCode />]} />
-      </>
+      </div>
     ),
   },
   {
@@ -1018,28 +1010,43 @@ export const outline: (Slide | Heading)[] = [
     // layout.
     steps: 3,
     notes: `
-      [highlight is on]
       This "draggable" is a function that, given a model state, returns a static view.
       Here’s the line that draws the background ring…
       And this SVG group renders each of the beads, in a loop.
       This interface isn't draggable yet. [demonstrate]
       We want to make each of these beads draggable.
+      [next stage to turn off highlight]
 
       ---
-
       So we'll go to the beads and add a special attribute, called “dragologyOnDrag”.
       We'll set it to a handler function with two parts.
       First, we'll compute the set of states reachable by dragging the bead.
         And we'll do that using a readymade function down here.
       Second, we'll use Dragology's domain-specific language to specify HOW drag-and-drop should access these states.
       We'll start with the simplest option, a combinator called "closest".
+      Once we've added this, the beads are draggable!
 
       dragologyOnDrag={() => {
         const states = reinsertions(state, idx);
         return d.closest(states);
        }}
 
-       // [TODO] rest of presenter notes
+      ---
+      "Closest" simply snaps the dragged element to the closest target position to the pointer.
+
+      Our tree inspector, on the right, shows how the DSL operators create this behavior from rendered states.
+      In this case, it shows how closest selects the closest target state, which is highlighted as we drag.
+
+      This interaction is straightforward, but it’s slow to provide feedback to the user that their action is doing anything.
+
+      ---
+      So we can attach a modifier called “withFloating”. [demonstrate]
+      "withFloating" detaches the dragged element, letting it follow the cursor immediately, giving the interaction a more responsive feel.
+      Here, the inspector shows how withFloating takes the result returned by closest and detaches the dragged element from its original position.
+
+      ---
+      Finally, we can layer on a whole new feature. Maybe a bead should be removed if it’s dropped far from any target.
+      We can do that with the “whenFar” modifier, using another helper function that produces the removed state. [removed(state, idx) BEFORE withFloating]
     `,
     content: <LiveCodeSlide />,
   },
@@ -1047,7 +1054,7 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 2,
     notes: `
-      So what are these "d-dot" things we're returning from dragologyOnDrag? They're what we call **drag behaviors**: functions that run every frame during drags, that take a live pointer position and say what should be shown on the screen as a preview, and what state should be transitioned to on drop. [TODO]
+      So what are these "d-dot" things we're returning from dragologyOnDrag? They're what we call **drag behaviors**: functions that run every frame during a drag, that take a changing pointer position and say what should be shown on the screen as a preview, and what state should be transitioned to on drop.
 
       ---
 
@@ -1058,13 +1065,11 @@ export const outline: (Slide | Heading)[] = [
   {
     steps: 2,
     notes: `
-      You can actually make your own Dragology operators, but we've developed a core set that you can plug together in different ways to create a surprising variety of interactions.
+      You can actually make your own Dragology operators, but we've developed a core set that you can plug together in different ways to create a surprising variety of interactions. [TODO]
 
       ---
-
       Because this approach is centered around composing behaviors, we call it composable dragging.
-      We’ve found that it lets us incrementally build up refined interactions while keeping the underlying simplicity of model-driven dragging in place.
-
+      We’ve found that it lets us incrementally build up refined interactions while keeping the underlying simplicity of model-driven dragging.
       Andrew's going to share some more examples of what these ingredients can do together.
     `,
     content: <OperatorsSlide />,
@@ -1405,18 +1410,12 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
-    steps: 3,
     notes: `
       // Josh
       On a really nice walk in Seattle back in 2023,
-
-      ---
-
       Andrew shared his draggy ideas with me.
 
-      ---
-
-      I kept thinking about them over the years, but didn't do anything about it.
+      I was intrigued, but it took two years for me to do anything about it.
     `,
     content: <WalkSlide />,
   },
@@ -1425,8 +1424,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 4,
     notes: `
       // Josh
-      And then last year, it all came together.
-      My buddy Elliot was playing with order-preserving maps between trees, like you saw earlier.
+      That's when my buddy Elliot was playing with order-preserving maps between trees, like you saw earlier.
 
       ---
 
@@ -1441,13 +1439,16 @@ export const outline: (Slide | Heading)[] = [
       I wanted to reach in and pull them around, and feel out their dynamics. That felt pretty tough, until I remembered Andrew's ideas. I got working on a library that, with Andrew's help, grew into the work we are presenting today.
     `,
     content: (
-      <ElliotSlide
-        live={
-          <DemoSlide width={400} height={600} demoId="twisted-trees">
-            <TwistedTrees7 />
-          </DemoSlide>
-        }
-      />
+      // The live demo drags itself around
+      <Rails id="elliot" script={{ 3: twistedTreesWander() }} loop>
+        <ElliotSlide
+          live={
+            <DemoSlide width={400} height={600} demoId="twisted-trees">
+              <TwistedTrees7 />
+            </DemoSlide>
+          }
+        />
+      </Rails>
     ),
   },
   {

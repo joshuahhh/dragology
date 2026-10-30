@@ -22,6 +22,7 @@ import {
 import { tags as t } from "@lezer/highlight";
 import CodeMirror, { ExternalChange } from "@uiw/react-codemirror";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { STAGE_BREAK } from "./slide";
 import { formatSeconds } from "./timing";
 
 // Markdown as plain text with its formatting applied: the # and * stay, dimmed
@@ -141,9 +142,6 @@ const slashComments = Prec.highest(
  */
 export type NotesStages = { current: number; count: number; times?: number[] };
 
-// A line that's just --- starts the notes for the slide's next step
-const STAGE_BREAK = /^\s*---\s*$/;
-
 const setStages = StateEffect.define<NotesStages | null>();
 
 class StageLabel extends WidgetType {
@@ -244,8 +242,9 @@ function stageRange(doc: Text, stage: number) {
  * it; the height map knows where it is.)
  */
 function revealRange(view: EditorView, from: number, to: number) {
-  // Room for Stage 1's label, which sits above the text
-  const marginTop = 24;
+  // Room for Stage 1's label, which sits above the text (the others' are on
+  // their --- lines)
+  const marginTop = from === 0 ? 24 : 0;
   const marginBottom = 8;
   view.requestMeasure({
     read(view) {

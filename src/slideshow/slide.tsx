@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useContext } from "react";
+import { createPortal } from "react-dom";
 import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
 
 // The slideshow is presented on a 1920×1080 screen. Everything is laid out in
@@ -42,7 +43,8 @@ export type Slide = {
    * How many steps the slide goes through before going on to the next slide
    * (default 1). The slide stays mounted throughout, so whatever it's doing
    * carries on from step to step; its content reads the step with
-   * `useSlideStep`.
+   * `useSlideStep`. Notes with more stages than this give the slide more
+   * steps, through which its content holds on its last.
    */
   steps?: number;
   /**
@@ -60,8 +62,25 @@ export type Slide = {
  */
 export type Heading = { heading: string; level?: 1 | 2 };
 
+// A line of notes that's just --- starts the notes for the slide's next step
+export const STAGE_BREAK = /^\s*---\s*$/;
+
+/** How many stages a slide's notes are divided into by --- lines. */
+function notesStages(notes: string | undefined): number {
+  if (!notes) return 1;
+  return 1 + notes.split("\n").filter((l) => STAGE_BREAK.test(l)).length;
+}
+
 export function slideSteps(slide: Slide) {
-  return slide.steps ?? 1;
+  return Math.max(slide.steps ?? 1, notesStages(slide.notes));
+}
+
+/**
+ * The step a slide's content sees at `step`: steps past its own `steps`,
+ * which only its notes have, hold on its last.
+ */
+export function contentStep(slide: Slide, step: number) {
+  return Math.min(step, (slide.steps ?? 1) - 1);
 }
 
 export const SlideStepContext = createContext(0);
@@ -99,6 +118,24 @@ export function useSlideCurrent() {
  */
 export function useSlideArrivedForward() {
   return useContext(SlidePresenceContext).arrivedForward;
+}
+
+/**
+ * Where the presenter's status bar has room for the current slide's own
+ * items, or null where there's no status bar (as on the stage-only page).
+ */
+export const StatusBarSlotContext = createContext<HTMLElement | null>(null);
+
+/**
+ * Puts its children in the presenter's status bar, below the stage, while the
+ * slide is the current one: for things the presenter wants to see and the
+ * audience doesn't.
+ */
+export function InStatusBar({ children }: { children: ReactNode }) {
+  const slot = useContext(StatusBarSlotContext);
+  const current = useSlideCurrent();
+  if (!slot || !current) return null;
+  return createPortal(children, slot);
 }
 
 /** The URL of a file in public/slides. */
@@ -189,37 +226,30 @@ export function ImageSlide({ src }: { src: string }) {
   );
 }
 
-function DemoLink({ demoId }: { demoId: string }) {
+export function DemoLink({ demoId }: { demoId: string }) {
   return (
-    <a
-      href={`#/demos/${demoId}`}
-      style={{
-        position: "absolute",
-        bottom: 16,
-        right: 16,
-        zIndex: 10,
-        fontSize: 16,
-        color: "#9ca3af",
-        textDecoration: "none",
-        padding: "4px 6px",
-        borderRadius: 4,
-      }}
-      title="Open demo"
-    >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+    <InStatusBar>
+      <a
+        href={`#/demos/${demoId}`}
+        className="flex items-center gap-1 text-gray-400 no-underline hover:text-white"
+        title="Open demo"
       >
-        <path d="M6.5 3.5H3.5C2.95 3.5 2.5 3.95 2.5 4.5V12.5C2.5 13.05 2.95 13.5 3.5 13.5H11.5C12.05 13.5 12.5 13.05 12.5 12.5V9.5" />
-        <path d="M9.5 2.5H13.5V6.5" />
-        <path d="M6.5 9.5L13.5 2.5" />
-      </svg>
-    </a>
+        {demoId}
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6.5 3.5H3.5C2.95 3.5 2.5 3.95 2.5 4.5V12.5C2.5 13.05 2.95 13.5 3.5 13.5H11.5C12.05 13.5 12.5 13.05 12.5 12.5V9.5" />
+          <path d="M9.5 2.5H13.5V6.5" />
+          <path d="M6.5 9.5L13.5 2.5" />
+        </svg>
+      </a>
+    </InStatusBar>
   );
 }

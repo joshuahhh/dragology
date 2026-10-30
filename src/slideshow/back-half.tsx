@@ -2,7 +2,7 @@
 // the ideas came from, and the close). The slides themselves are in the
 // outline in slides.tsx, where their notes can be edited in place.
 
-import { type ReactNode, useContext, useEffect, useRef } from "react";
+import { type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import {
   DemoContext,
   DemoDraggable,
@@ -139,26 +139,6 @@ function Picture({
         ...style,
       }}
     />
-  );
-}
-
-/** A caption in a corner, like a photo's date. */
-function Caption({ children }: { children: ReactNode }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: 48,
-        bottom: 40,
-        padding: "8px 18px",
-        fontSize: 36,
-        color: "white",
-        background: "rgba(0,0,0,0.45)",
-        borderRadius: 8,
-      }}
-    >
-      {children}
-    </div>
   );
 }
 
@@ -388,6 +368,94 @@ export function studyExit(frame: HTMLElement): Sample[] | null {
   ];
 }
 
+const TREE_DOTS = ["root", "a", "a1", "a2", "b", "b1", "b2"];
+
+/**
+ * A script for the 7→7 twisted trees that drags itself around: each track is
+ * one drag of a random dot to the middle of a bubble it isn't in, made from
+ * where things are now, so it's for a `loop`ing Rails. Each track starts
+ * where the last one let go.
+ */
+export function twistedTreesWander(): (frame: HTMLElement) => Sample[] | null {
+  let from: { x: number; y: number } | null = null;
+  return (frame) => {
+    const stage = frame.parentElement!;
+    const f = frame.getBoundingClientRect();
+    // Centers and radii, in the frame's pixels
+    const circle = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.left + r.width / 2 - f.left,
+        y: r.top + r.height / 2 - f.top,
+        r: r.width / 2,
+      };
+    };
+    const dots = TREE_DOTS.flatMap((id) => {
+      const el = stage.querySelector(`circle[id="${id}"]`);
+      return el ? [circle(el)] : [];
+    });
+    const bubbles = [...stage.querySelectorAll('circle[id^="bg-circle-"]')].map(
+      circle,
+    );
+    const pick = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
+    const dot = pick(dots);
+    if (!dot) return null;
+    const target = pick(
+      bubbles.filter((b) => Math.hypot(b.x - dot.x, b.y - dot.y) > b.r),
+    );
+    if (!target) return null;
+
+    // Glide over to the dot (first time, after the demo has faded in), press,
+    // drag along a slight arc, hold, let go, and rest while the drop settles
+    const LEAD = from ? 0 : 900;
+    const GLIDE = 700;
+    const PRESS = LEAD + GLIDE + 150;
+    const DRAG = 1500;
+    const RELEASE = PRESS + DRAG + 300;
+    const REST = 1100;
+    const start = from ?? { x: dot.x + 70, y: dot.y + 90 };
+    const ease = (u: number) =>
+      u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+    const at = (t: number, x: number, y: number, down: boolean): Sample => ({
+      t,
+      x: x / f.width,
+      y: y / f.height,
+      down,
+    });
+    const glide = Array.from({ length: 20 }, (_, i) => {
+      const u = ease((i + 1) / 20);
+      return at(
+        LEAD + ((i + 1) / 20) * GLIDE,
+        start.x + (dot.x - start.x) * u,
+        start.y + (dot.y - start.y) * u,
+        false,
+      );
+    });
+    const dx = target.x - dot.x;
+    const dy = target.y - dot.y;
+    const drag = Array.from({ length: 45 }, (_, i) => {
+      const v = (i + 1) / 45;
+      const u = ease(v);
+      const bow = 0.15 * Math.sin(Math.PI * u);
+      return at(
+        PRESS + 100 + v * DRAG,
+        dot.x + dx * u - dy * bow,
+        dot.y + dy * u + dx * bow,
+        true,
+      );
+    });
+    from = { x: target.x, y: target.y };
+    return [
+      at(LEAD, start.x, start.y, false),
+      ...glide,
+      at(PRESS, dot.x, dot.y, true),
+      ...drag,
+      at(RELEASE, target.x, target.y, false),
+      at(RELEASE + REST, target.x, target.y, false),
+    ];
+  };
+}
+
 /** Hazel, its chrome hidden but for the nut menu and the start of the top bar. */
 export function HazelSlide() {
   return (
@@ -577,12 +645,18 @@ export function WhiteboardSlide() {
 
 /** The walk: the trail, then the map of the route inset over it. */
 export function WalkSlide() {
-  const mapShown = useSlideStep() >= 1;
-  const mapW = 760;
+  // The map drops in a moment after the slide comes on
+  const shown = useSlideShown();
+  const [mapShown, setMapShown] = useState(false);
+  useEffect(() => {
+    if (!shown) return setMapShown(false);
+    const timer = setTimeout(() => setMapShown(true), 1500);
+    return () => clearTimeout(timer);
+  }, [shown]);
+  const mapW = 620;
   return (
     <div className="absolute inset-0" style={{ overflow: "hidden" }}>
       <Picture name="walk-trail.jpg" fit="cover" />
-      <Caption>Seattle, 2022</Caption>
       <img
         src={file("walk-map.jpg")}
         alt=""

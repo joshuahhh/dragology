@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useTitle } from "../useTitle";
-import { type Slide, slideHasTodo } from "./slide";
+import { type Slide, slideHasTodo, slideSteps } from "./slide";
 import { numberedOutline } from "./slides";
 import { SlideThumb, TodoCorner, useSlideSnapshots } from "./SlideThumb";
 import { SlideTimeBadge } from "./timing";
@@ -55,7 +55,7 @@ function SlideInfo({ slide, num }: { slide: Slide; num: number }) {
           {[
             "video" in slide &&
               `video ${slide.video.start}–${slide.video.end}s`,
-            slide.steps && slide.steps > 1 && `${slide.steps} steps`,
+            slideSteps(slide) > 1 && `${slideSteps(slide)} steps`,
             slide.transition,
           ]
             .filter(Boolean)

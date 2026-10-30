@@ -426,7 +426,7 @@ function BehaviorPanel({
         fontWeight={600}
         fill={INK}
       >
-        behavior
+        drag behavior
       </text>
       <foreignObject x={BOX.x} y={MID_Y + 2} width={BOX.w} height={66}>
         <div

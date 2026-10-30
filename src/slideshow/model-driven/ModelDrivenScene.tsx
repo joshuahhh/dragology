@@ -118,7 +118,7 @@ const moveEase = cubicBezier(0.15, 0.05, 0.55, 1);
 const flightEase = cubicBezier(0.3, 0, 0.3, 1);
 
 /** Where a view puts the canvas center, and its scale */
-type Frame = { x: number; y: number; scale: number };
+export type Frame = { x: number; y: number; scale: number };
 type Rect = { x: number; y: number; w: number; h: number };
 
 function lerpFrame(a: Frame, b: Frame, u: number): Frame {
@@ -978,7 +978,7 @@ function pointerAt(
  * The real pointer can't nudge the scripted drag, but pressing it takes over:
  * the scripted drag lets go, and the press starts a drag of the viewer's own.
  */
-function LiveDrag<T extends object>({
+export function LiveDrag<T extends object>({
   subject,
   frame,
   t,

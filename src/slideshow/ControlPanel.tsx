@@ -51,8 +51,8 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
 ];
 
 /**
- * The presenter's control panel, opened from the button in the bottom-right
- * corner (or Ctrl+Shift+P): the hotkeys, timing (during dev), and how the
+ * The presenter's control panel, opened from the button at the right end of
+ * the status bar (or Ctrl+Shift+P): the hotkeys, timing (during dev), and how the
  * stage reaches the audience. Only the arrow keys and Space yield to a focused editor or demo;
  * the Ctrl+Shift keys work everywhere.
  */
@@ -176,7 +176,7 @@ function SectionTitle({ children }: { children: string }) {
   );
 }
 
-/** The bottom-right button that opens and closes the panel */
+/** The status bar's button that opens and closes the panel */
 export function ControlPanelButton({
   open,
   onToggle,
@@ -190,10 +190,10 @@ export function ControlPanelButton({
       onClick={onToggle}
       title={`${open ? "Hide" : "Show"} controls and hotkeys (⌃⇧P)`}
       aria-expanded={open}
-      className={`flex h-8 w-8 items-center justify-center rounded-full border shadow-md shadow-black/40 transition-colors ${
+      className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
         open
-          ? "border-white/25 bg-zinc-700 text-zinc-100"
-          : "border-white/10 bg-zinc-900/80 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+          ? "bg-zinc-700 text-zinc-100"
+          : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
       }`}
     >
       {/* A keyboard */}

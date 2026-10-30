@@ -246,7 +246,12 @@ export function Box({
         {opName ? (
           <>
             <span
-              style={{ ...PAPER_OP_STYLE, padding: "0 2px", borderRadius: 2 }}
+              style={{
+                ...PAPER_OP_STYLE,
+                fontSize: "1.35em",
+                padding: "0 2px",
+                borderRadius: 2,
+              }}
             >
               {opName}
             </span>

@@ -6,7 +6,7 @@ import {
   type SaveTimingsRequest,
 } from "./notesApi";
 import { type Slide, slideSteps } from "./slide";
-import { outlineIndexOfSlide, slides } from "./slides";
+import { outline, outlineIndexOfSlide, slides } from "./slides";
 
 /**
  * A timed run-through in progress: how long we've spent on each step of each
@@ -17,6 +17,8 @@ export type TimingRun = {
   seconds: Record<number, number[]>;
   /** The step we're on, and when (as `Date.now()`) we got to it */
   on: { slide: number; step: number; since: number };
+  /** How many entries `outline` had when the run started */
+  outlineLength: number;
 };
 
 /** A slide shorter than this in a run was passed through, not presented */
@@ -76,12 +78,20 @@ export function useTimingRun(
     setRun((run) => {
       if (!run || (run.on.slide === slide && run.on.step === step)) return run;
       const now = Date.now();
-      return { seconds: runSeconds(run, now), on: { slide, step, since: now } };
+      return {
+        ...run,
+        seconds: runSeconds(run, now),
+        on: { slide, step, since: now },
+      };
     });
   }, [slide, step]);
 
   const start = useCallback(() => {
-    setRun({ seconds: {}, on: { ...posRef.current, since: Date.now() } });
+    setRun({
+      seconds: {},
+      on: { ...posRef.current, since: Date.now() },
+      outlineLength: outline.length,
+    });
   }, []);
 
   const discard = useCallback(() => setRun(null), []);
@@ -91,13 +101,13 @@ export function useTimingRun(
     if (!run || saving) return;
     const seconds = runSeconds(run);
     const req: SaveTimingsRequest = {
+      outlineLength: run.outlineLength,
       slides: Object.entries(seconds).flatMap(([i, secs]) => {
         const slide = slides[+i];
         if (!slide || _.sum(secs) < MIN_SLIDE_SECONDS) return [];
         return [
           {
             index: outlineIndexOfSlide[+i],
-            notes: slide.notes,
             timing: _.range(slideSteps(slide)).map((k) =>
               Math.round(secs[k] ?? 0),
             ),
@@ -160,7 +170,7 @@ export function TimingClock({ run }: { run: TimingRun }) {
   const total = _.sum(Object.values(runSeconds(run, now)).map(_.sum));
   return (
     <div
-      className="flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900/80 px-3 py-1 text-xs text-zinc-300 tabular-nums shadow-md shadow-black/40"
+      className="flex items-center gap-2 text-xs text-zinc-300 tabular-nums"
       title="Timing this run-through (⌃⇧T to stop and save)"
     >
       <span className="h-2 w-2 rounded-full bg-red-500" />

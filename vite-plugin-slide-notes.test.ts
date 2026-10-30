@@ -18,8 +18,6 @@ export const outline = [
 ];
 `;
 
-const OLD_NOTES = "\n      old notes\n    ";
-
 describe("setNotes", () => {
   it("replaces existing notes", () => {
     const out = setNotes(file, {
@@ -66,9 +64,10 @@ describe("setNotes", () => {
 describe("setTimings", () => {
   it("adds timings before the notes or content, and replaces them", () => {
     const once = setTimings(file, {
+      outlineLength: 3,
       slides: [
-        { index: 1, notes: OLD_NOTES, timing: [12, 40] },
-        { index: 2, notes: undefined, timing: [7] },
+        { index: 1, timing: [12, 40] },
+        { index: 2, timing: [7] },
       ],
     });
     expect(once).toContain(
@@ -76,21 +75,20 @@ describe("setTimings", () => {
     );
     expect(once).toContain("    steps: 2,\n    timing: [7],\n    content:");
     const twice = setTimings(once, {
-      slides: [{ index: 1, notes: OLD_NOTES, timing: [3, 4] }],
+      outlineLength: 3,
+      slides: [{ index: 1, timing: [3, 4] }],
     });
     expect(twice).toContain("timing: [3, 4],");
     expect(twice).not.toContain("[12, 40]");
     expect(twice).toContain("timing: [7],");
   });
 
-  it("refuses all when a slide's notes don't match", () => {
+  it("refuses all when the outline's length changed", () => {
     expect(() =>
       setTimings(file, {
-        slides: [
-          { index: 1, notes: OLD_NOTES, timing: [1] },
-          { index: 2, notes: "other notes", timing: [1] },
-        ],
+        outlineLength: 4,
+        slides: [{ index: 1, timing: [1] }],
       }),
-    ).toThrow(/outline changed/);
+    ).toThrow(/added to or removed from the outline/);
   });
 });

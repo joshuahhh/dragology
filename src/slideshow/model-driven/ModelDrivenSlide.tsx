@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useSlideCurrent, useSlideStep } from "../slide";
 import { cubicBezier } from "./anim";
 import { beadsSubject } from "./beads";
-import { ModelDrivenScene } from "./ModelDrivenScene";
+import {
+  type Frame,
+  LiveDrag,
+  ModelDrivenScene,
+  script,
+} from "./ModelDrivenScene";
 
 /**
  * The model-driven-dragging explainer, played from time `from` to `to` once
@@ -30,24 +35,7 @@ export function ModelDrivenSlide({
   const bounds = [from, ...stops, to];
   const stageFrom = bounds[Math.min(step, bounds.length - 2)];
   const stageTo = bounds[Math.min(step + 1, bounds.length - 1)];
-  const [t, setT] = useState(stageFrom);
-
-  // Play the step's stage each time the slide comes up or the step changes.
-  // (Leaving it holds the last frame, for a transition out.)
-  useEffect(() => {
-    if (!current) return;
-    const start = performance.now();
-    setT(stageFrom);
-    let raf = requestAnimationFrame(function tick() {
-      const now = Math.min(
-        stageTo,
-        stageFrom + (performance.now() - start) / 1000,
-      );
-      setT(now);
-      if (now < stageTo) raf = requestAnimationFrame(tick);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [current, stageFrom, stageTo]);
+  const t = usePlayhead(current, stageFrom, stageTo);
 
   const asideU = useTween(aside ? 1 : 0);
 
@@ -59,6 +47,55 @@ export function ModelDrivenSlide({
       aside={asideU}
     />
   );
+}
+
+/** A pause before the press, with the cursor on the bead */
+const LOOP_LEAD = 0.5;
+
+/**
+ * Just the explainer's live drag, at `frame`, going round and round from the
+ * moment the slide comes up. Put it in a stage-sized box.
+ */
+export function LiveDragLoop({ frame }: { frame: Frame }) {
+  const current = useSlideCurrent();
+  const t = usePlayhead(
+    current,
+    beadsSubject.track[0][0] - LOOP_LEAD,
+    Infinity,
+  );
+  return (
+    <LiveDrag
+      subject={beadsSubject}
+      frame={frame}
+      t={t}
+      drive={current}
+      opacity={1}
+      overlayOpacity={0}
+      // As big against the beads as in the explainer's own live drag
+      cursorScale={(script.cursor.liveScale * frame.scale) / script.big.scale}
+    />
+  );
+}
+
+/**
+ * Seconds from `from` to `to`, played in real time each time `playing` turns
+ * on or the span changes, then held. (Stopping holds the last time, for a
+ * transition out.)
+ */
+function usePlayhead(playing: boolean, from: number, to: number): number {
+  const [t, setT] = useState(from);
+  useEffect(() => {
+    if (!playing) return;
+    const start = performance.now();
+    setT(from);
+    let raf = requestAnimationFrame(function tick() {
+      const now = Math.min(to, from + (performance.now() - start) / 1000);
+      setT(now);
+      if (now < to) raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [playing, from, to]);
+  return t;
 }
 
 const ASIDE_MS = 600;
