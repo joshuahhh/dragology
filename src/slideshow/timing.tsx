@@ -142,9 +142,9 @@ export function formatSeconds(s: number) {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
-/** The total of every slide's latest timing. */
+/** The total of every presented slide's latest timing. */
 export function savedTotal(): { seconds: number; slides: number } {
-  const timed = slides.filter((s) => s.timing);
+  const timed = slides.filter((s) => s.timing && !s.skip);
   return {
     seconds: _.sum(timed.map((s) => _.sum(s.timing))),
     slides: timed.length,

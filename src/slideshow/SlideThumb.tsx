@@ -45,6 +45,20 @@ export function SlideThumb({ slide, num }: { slide: Slide; num: number }) {
   );
 }
 
+/** A wash and a label over a slide's thumbnail, for a slide not presented */
+export function SkipBadge() {
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center bg-gray-900/45"
+      title="Not presented: going forward or back passes over this slide"
+    >
+      <span className="rounded bg-gray-900/80 px-1.5 py-0.5 text-xs font-semibold text-white">
+        not presented
+      </span>
+    </div>
+  );
+}
+
 /** A corner folded down on a slide's thumbnail, for a slide with a TODO */
 export function TodoCorner() {
   return (
