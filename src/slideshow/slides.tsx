@@ -1351,9 +1351,11 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     timing: [22],
     notes: `
-      I also returned to a long-running side project, a math game where the idea for model-driven dragging first originated. 
-      Now powerered by declarative dragging, my primitive prototype grew into a 3d landscape possessed by mathematical ghosts. 
-      Here I drag to perform an algebreic exorcism, simplifyng expressions to return them to the platonic realm.
+      I also returned to a long-running side project, 
+      a math game where the idea for model-driven dragging originated. 
+      In this 3d landscape possessed by mathematical ghosts,
+      declarative dragging powers algebraic exorcisms,
+      letting me simplify expressions to return them to the platonic realm.
     `,
     // uist-nool-v2.mov (Andrew's Screenshots), cut and sped up by
     // d2-talk/video-cuts/supernool-cut.sh
