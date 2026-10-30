@@ -1,5 +1,9 @@
-import { useMemo } from "react";
-import { DragInitContext, dragSpecToBehavior } from "../DragBehavior";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  DragBehavior,
+  DragInitContext,
+  dragSpecToBehavior,
+} from "../DragBehavior";
 import {
   Draggable,
   getOnDragCallbackOnElement,
@@ -19,7 +23,13 @@ import { snippets } from "../talk/snippets";
 import { assertDefined } from "../utils/assert";
 import { BEAD_INK } from "./model-driven/beads";
 import { Cursor } from "./model-driven/ModelDrivenScene";
-import { STAGE_H, STAGE_W, useSlideStep } from "./slide";
+import {
+  STAGE_H,
+  STAGE_W,
+  useSlideCurrent,
+  useSlideShown,
+  useSlideStep,
+} from "./slide";
 import { sourceSans } from "./source-sans";
 
 type BeadsState = { beads: string[] };
@@ -53,6 +63,28 @@ function behaviorOutput<T extends object>(
   pointer: Vec2,
   spec?: (d: DragSpecBuilder<T>) => DragSpecData<T>,
 ): Output<T> {
+  return runBehavior(startBehavior(draggable, state, draggedId, spec), pointer);
+}
+
+function runBehavior<T extends object>(
+  behavior: DragBehavior<T>,
+  pointer: Vec2,
+): Output<T> {
+  const result = behavior({ pointer });
+  return { preview: result.preview(), dropState: result.dropState };
+}
+
+/**
+ * A draggable's drag behavior, the dragged element grabbed at its origin,
+ * to run with pointer positions from there on. The behavior is the dragged
+ * element's own, or `spec`'s if it's given.
+ */
+function startBehavior<T extends object>(
+  draggable: Draggable<T>,
+  state: T,
+  draggedId: string,
+  spec?: (d: DragSpecBuilder<T>) => DragSpecData<T>,
+): DragBehavior<T> {
   const props = makeDraggableProps({
     state,
     draggedId,
@@ -76,14 +108,64 @@ function behaviorOutput<T extends object>(
   };
   const behavior = dragSpecToBehavior(callback(), ctx);
   behavior({ pointer: localToGlobal(found.accumulatedTransform, Vec2(0)) });
-  const result = behavior({ pointer });
-  return { preview: result.preview(), dropState: result.dropState };
+  return behavior;
 }
 
 // Where the pointer has got to: up and right of bead A's place at the top,
 // nearest the slot clockwise of it
 const POINTER = Vec2(258, 52);
 const DRAGGED = "A";
+
+// The behavior panel's pointer wanders around the ring, starting toward
+// POINTER: `t` seconds in, its angle drifts once around every ORBIT_S,
+// swaying back and forth on the way, while its distance from the ring's
+// center weaves in and out across the beads. The sways and weaves are sums
+// of sines with unrelated periods, which never quite repeat: smooth noise.
+const RING_CENTER = Vec2(150, 150);
+const ORBIT_S = 30;
+const SWAY = [
+  { amp: 0.9, period: 9.1, phase: 0 },
+  { amp: 0.4, period: 5.3, phase: 1 },
+];
+const RADIUS = 105;
+const WEAVE = [
+  { amp: 18, period: 6.7, phase: 0.4 },
+  { amp: 8, period: 3.9, phase: 2.1 },
+];
+function sines(t: number, waves: typeof SWAY) {
+  return waves.reduce(
+    (sum, { amp, period, phase }) =>
+      sum + amp * Math.sin((2 * Math.PI * t) / period + phase),
+    0,
+  );
+}
+function pointerAt(t: number) {
+  const angle =
+    POINTER.sub(RING_CENTER).angleRad() +
+    (2 * Math.PI * t) / ORBIT_S +
+    sines(t, SWAY);
+  return RING_CENTER.add(Vec2.polarRad(RADIUS + sines(t, WEAVE), angle));
+}
+
+/**
+ * Seconds that have gone by while `running`, from 0: it holds while it
+ * isn't, and carries on from there when it is again
+ */
+function useRunningClock(running: boolean) {
+  const [t, setT] = useState(0);
+  const tRef = useRef(t);
+  tRef.current = t;
+  useEffect(() => {
+    if (!running) return;
+    const base = performance.now() - tRef.current * 1000;
+    let raf = requestAnimationFrame(function tick() {
+      setT((performance.now() - base) / 1000);
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [running]);
+  return t;
+}
 
 const INK = "#1d1d24";
 const MUTED = "#71717a";
@@ -95,6 +177,7 @@ const PANEL_W = 1660;
 const PANEL_H = 330;
 const PANEL_X = (STAGE_W - PANEL_W) / 2;
 const PANEL_Y = (STAGE_H - PANEL_H) / 2;
+const PANEL_RADIUS = 36;
 
 // Within a panel
 const MID_Y = PANEL_H / 2;
@@ -104,6 +187,7 @@ const THUMB = { x: 970, y: 26, size: 200 };
 const CHIP = { x: 970, h: 60, size: 26, padX: 20 };
 const CHIP_Y = THUMB.y + THUMB.size + 22;
 const CAPTION_GAP = 32;
+const PREVIEW_CURSOR_OPACITY = 0.4;
 
 /**
  * A drag behavior (pointer position in, preview and drop state out); then,
@@ -114,46 +198,96 @@ const CAPTION_GAP = 32;
  */
 export function BehaviorDiagramSlide() {
   const step = useSlideStep();
-  const outputs = useMemo(() => {
+  const { behavior, size } = useMemo(() => {
     const closest = beadsDraggable("ring of beads: closest");
     return {
+      behavior: startBehavior(closest.draggable, closest.state, DRAGGED),
       size: Vec2(closest.width, closest.height),
-      closest: behaviorOutput(
-        closest.draggable,
-        closest.state,
-        DRAGGED,
-        POINTER,
-      ),
     };
   }, []);
+  // While it's on the stage, the pointer drifts and the behavior follows
+  const shown = useSlideShown();
+  const current = useSlideCurrent();
+  const t = useRunningClock(shown && current && step === 0);
+  const pointer = pointerAt(t);
+  const output = useMemo(
+    () => runBehavior(behavior, pointerAt(t)),
+    [behavior, t],
+  );
 
+  // Going on to the tree, the panel shrinks into closest's pill, which it
+  // is: its box takes on the pill's shape and tint while what's in it
+  // fades. Then the pill's name, and the rest of the tree, fade in. Coming
+  // back, it all plays at once.
+  const tree = step >= 1;
+  const scale = CLOSEST_PILL.w / PANEL_W;
+  const shrunk = Vec2(
+    CLOSEST_PILL.x - CLOSEST_PILL.w / 2,
+    CLOSEST_PILL.y - (PANEL_H * scale) / 2,
+  );
   return (
-    <DiagramStage>
+    <DiagramStage
+      backdrop={
+        <div
+          style={{
+            position: "absolute",
+            ...(tree
+              ? {
+                  left: CLOSEST_PILL.x - CLOSEST_PILL.w / 2,
+                  top: CLOSEST_PILL.y - CLOSEST_PILL.h / 2,
+                  width: CLOSEST_PILL.w,
+                  height: CLOSEST_PILL.h,
+                  borderRadius: CLOSEST_PILL.h / 2,
+                  background: PAPER_OP_STYLE.background,
+                }
+              : {
+                  left: PANEL_X,
+                  top: PANEL_Y,
+                  width: PANEL_W,
+                  height: PANEL_H,
+                  borderRadius: PANEL_RADIUS,
+                  background: PANEL_FILL,
+                }),
+            transition: [
+              "left",
+              "top",
+              "width",
+              "height",
+              "border-radius",
+              "background",
+            ]
+              .map((prop) => `${prop} ${SHRINK}`)
+              .join(", "),
+          }}
+        />
+      }
+    >
       <g
-        transform={`translate(${PANEL_X} ${PANEL_Y})`}
         style={{
-          opacity: step === 0 ? 1 : 0,
-          transition: "opacity 500ms ease",
+          transformOrigin: "0 0",
+          transform: tree
+            ? `translate(${shrunk.x}px, ${shrunk.y}px) scale(${scale})`
+            : `translate(${PANEL_X}px, ${PANEL_Y}px)`,
+          opacity: tree ? 0 : 1,
+          transition: tree
+            ? `transform ${SHRINK}, opacity 300ms ease`
+            : `transform ${SHRINK}, opacity 400ms ease 300ms`,
         }}
       >
         <BehaviorPanel
           spec={["d.closest(states)"]}
-          size={outputs.size}
-          output={outputs.closest}
+          size={size}
+          pointer={pointer}
+          output={output}
         />
       </g>
 
-      <g
-        style={{
-          opacity: step >= 1 ? 1 : 0,
-          transition: "opacity 500ms ease",
-        }}
-      >
-        <SchematicTree />
-      </g>
+      <SchematicTree shown={tree} />
     </DiagramStage>
   );
 }
+
+const SHRINK = "700ms cubic-bezier(0.4, 0, 0.2, 1)";
 
 /**
  * The expression tree of the live-coded ring's last behavior, each node
@@ -167,8 +301,17 @@ export function BehaviorTreeSlide() {
   );
 }
 
-/** A white stage, its SVG with the diagrams' markers and filters */
-function DiagramStage({ children }: { children: React.ReactNode }) {
+/**
+ * A white stage, its SVG with the diagrams' markers and filters, over HTML
+ * `backdrop`
+ */
+function DiagramStage({
+  backdrop,
+  children,
+}: {
+  backdrop?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div
       data-behavior-diagram
@@ -177,6 +320,7 @@ function DiagramStage({ children }: { children: React.ReactNode }) {
       <style>
         {`[data-behavior-diagram] text[data-loc] { font-family: ${LETTER_FONT}; }`}
       </style>
+      {backdrop}
       <svg
         width={STAGE_W}
         height={STAGE_H}
@@ -493,6 +637,8 @@ function OpPill({
   h,
   size,
   padX,
+  width,
+  style,
 }: {
   name: string;
   x: number;
@@ -500,9 +646,18 @@ function OpPill({
   h: number;
   size: number;
   padX: number;
+  /** Its width, if not the name's with `padX` either side */
+  width?: number;
+  style?: React.CSSProperties;
 }) {
   return (
-    <foreignObject x={x - 400} y={y - h / 2} width={800} height={h}>
+    <foreignObject
+      x={x - 400}
+      y={y - h / 2}
+      width={800}
+      height={h}
+      style={style}
+    >
       <div
         style={{
           display: "flex",
@@ -515,8 +670,11 @@ function OpPill({
             ...PAPER_OP_STYLE,
             display: "flex",
             alignItems: "center",
+            justifyContent: "center",
             fontSize: size,
             padding: `0 ${padX}px`,
+            width,
+            boxSizing: "border-box",
             borderRadius: h / 2,
           }}
         >
@@ -557,109 +715,153 @@ function CodeLine({
   );
 }
 
-// The same tree, schematically: the states in plain boxes, and the
+// The same tree, schematically: the states named as in the code, and the
 // operators' behaviors just the wires out of them
 const SCHEMA = {
   spineX: STAGE_W / 2,
-  leaf: { w: 170, h: 84, gap: 30, y: 150, size: 44 },
+  // The states' names: their size, how far below one its wires start, and
+  // (for `states`, which is several, its wires parallel, all well within
+  // the name's width) how far apart they are
+  name: { size: 44, wireGap: 30, spread: 24 },
+  statesY: 210,
   // The centers of closest's, whenFar's and withFloating's pills
-  levels: [440, 680, 900],
-  // Where the removed state sits, between closest and whenFar
-  removed: { dx: 380, y: 540 },
+  levels: [400, 640, 860],
+  // How far either side of whenFar's center its two inputs come in.
+  // Closest, and the states above it, sit that far left, so its wire to
+  // whenFar runs straight down.
+  inlet: 70,
+  // Where the removed state's name sits, between closest and whenFar
+  removed: { dx: 200, y: 500 },
   pill: { h: 84, size: 64, padX: 40 },
-  code: { size: 40, gap: 270 },
+  // The code, in the bottom left corner
+  code: { size: 34, x: 80, bottom: 70 },
 };
 
 const OP_CODE = ["d.closest(states)", ".whenFar(removed)", ".withFloating()"];
 
-function SchematicTree() {
-  const { spineX, leaf, levels, removed, pill } = SCHEMA;
+// Closest's pill, sized so the behavior panel can shrink into it exactly
+const CLOSEST_PILL = {
+  x: SCHEMA.spineX - SCHEMA.inlet,
+  y: SCHEMA.levels[0],
+  w: 270,
+  h: SCHEMA.pill.h,
+};
+
+/**
+ * `shown` fades it in, closest's pill first, as the behavior panel finishes
+ * shrinking into it, then the rest; or, unset, out, all at once
+ */
+function SchematicTree({ shown }: { shown: boolean }) {
+  const { spineX, name, statesY, levels, removed, pill, inlet } = SCHEMA;
+  const closestX = CLOSEST_PILL.x;
   const n = 5;
-  const leafX = (i: number) => spineX + (i - (n - 1) / 2) * (leaf.w + leaf.gap);
   const pillTop = (y: number) => y - pill.h / 2 + 8;
   const pillBottom = (y: number) => y + pill.h / 2 - 8;
   const removedX = spineX + removed.dx;
+  const fade = (delay: number) => ({
+    opacity: shown ? 1 : 0,
+    transition: shown ? `opacity 400ms ease ${delay}ms` : "opacity 250ms ease",
+  });
   return (
     <g>
-      {Array.from({ length: n }, (_, i) => (
+      <g style={fade(800)}>
+        {/* One wire per state, so it reads as several */}
+        {Array.from({ length: n }, (_, i) => (
+          <line
+            key={i}
+            x1={closestX + (i - (n - 1) / 2) * name.spread}
+            y1={statesY + name.wireGap}
+            x2={closestX + (i - (n - 1) / 2) * name.spread}
+            y2={pillTop(levels[0])}
+            stroke={WIRE}
+            strokeWidth={4}
+            strokeLinecap="round"
+          />
+        ))}
         <TreeWire
-          key={i}
-          from={Vec2(leafX(i), leaf.y + leaf.h)}
-          to={Vec2(spineX + (i - 2) * 30, pillTop(levels[0]))}
+          from={Vec2(closestX, pillBottom(levels[0]))}
+          to={Vec2(spineX - inlet, pillTop(levels[1]))}
         />
-      ))}
-      <TreeWire
-        from={Vec2(spineX, pillBottom(levels[0]))}
-        to={Vec2(spineX - 36, pillTop(levels[1]))}
-      />
-      <TreeWire
-        from={Vec2(removedX, removed.y + leaf.h / 2)}
-        to={Vec2(spineX + 36, pillTop(levels[1]))}
-      />
-      <TreeWire
-        from={Vec2(spineX, pillBottom(levels[1]))}
-        to={Vec2(spineX, pillTop(levels[2]))}
-      />
+        <TreeWire
+          from={Vec2(removedX, removed.y + name.wireGap)}
+          to={Vec2(spineX + inlet, pillTop(levels[1]))}
+        />
+        <TreeWire
+          from={Vec2(spineX, pillBottom(levels[1]))}
+          to={Vec2(spineX, pillTop(levels[2]))}
+        />
 
-      {Array.from({ length: n }, (_, i) => (
-        <StateBox key={i} x={leafX(i)} y={leaf.y + leaf.h / 2} />
-      ))}
-      <StateBox x={removedX} y={removed.y} />
-      <Caption x={removedX + leaf.w / 2 + CAPTION_GAP} y={removed.y}>
-        removed
-      </Caption>
+        <StateName x={closestX} y={statesY} name="states" />
+        <StateName x={removedX} y={removed.y} name="removed" />
 
-      {["closest", "whenFar", "withFloating"].map((name, i) => (
-        <OpPill
-          key={name}
-          name={name}
-          x={spineX}
-          y={levels[i]}
-          h={pill.h}
-          size={pill.size}
-          padX={pill.padX}
-        />
-      ))}
-      {OP_CODE.map((code, i) => (
-        <CodeLine
-          key={code}
-          code={code}
-          right={spineX - SCHEMA.code.gap}
-          y={levels[i]}
-          size={SCHEMA.code.size}
-        />
-      ))}
+        {["whenFar", "withFloating"].map((name, i) => (
+          <OpPill
+            key={name}
+            name={name}
+            x={spineX}
+            y={levels[i + 1]}
+            h={pill.h}
+            size={pill.size}
+            padX={pill.padX}
+          />
+        ))}
+        {/* The code the tree is of, as it's written */}
+        <foreignObject
+          x={SCHEMA.code.x}
+          y={STAGE_H - SCHEMA.code.bottom - 200}
+          width={800}
+          height={200}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
+              height: "100%",
+              fontSize: SCHEMA.code.size,
+              lineHeight: 1.5,
+              color: "#3f3f46",
+            }}
+          >
+            {[
+              "d.closest(states)",
+              "  .whenFar(removed)",
+              "  .withFloating()",
+            ].map((line) => (
+              <Code key={line} code={line} />
+            ))}
+          </div>
+        </foreignObject>
+      </g>
+      {/* Last, over the wires' ends */}
+      <OpPill
+        name="closest"
+        x={CLOSEST_PILL.x}
+        y={CLOSEST_PILL.y}
+        h={pill.h}
+        size={pill.size}
+        padX={0}
+        width={CLOSEST_PILL.w}
+        style={fade(550)}
+      />
     </g>
   );
 }
 
-/** A state, as a behavior: a plain box, centered on (x, y) */
-function StateBox({ x, y }: { x: number; y: number }) {
-  const { w, h, size } = SCHEMA.leaf;
+/** A state's name in the code, centered on (x, y) */
+function StateName({ x, y, name }: { x: number; y: number; name: string }) {
   return (
-    <g>
-      <rect
-        x={x - w / 2}
-        y={y - h / 2}
-        width={w}
-        height={h}
-        rx={18}
-        fill="white"
-        stroke={INK}
-        strokeWidth={3}
-      />
-      <text
-        x={x}
-        y={y}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontFamily={sourceSans}
-        fontSize={size}
-        fill={INK}
-      >
-        state
-      </text>
-    </g>
+    <text
+      x={x}
+      y={y}
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontFamily={CODE_FONT}
+      fontSize={SCHEMA.name.size}
+      fill={INK}
+    >
+      {name}
+    </text>
   );
 }
 
@@ -747,23 +949,22 @@ function Card({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
 function BehaviorPanel({
   spec,
   size,
+  pointer,
   output,
 }: {
   /** The spec's code, a line each */
   spec: string[];
   size: Vec2;
+  pointer: Vec2;
   output: { preview: LayeredSvgx; dropState: BeadsState };
 }) {
   const boxY = MID_Y - BOX.h / 2;
   const boxRight = Vec2(BOX.x + BOX.w, MID_Y);
-  const thumbScale = THUMB.size / size.x;
   const dropText = `{ beads: [${output.dropState.beads.join(", ")}] }`;
   const chipW = dropText.length * CHIP.size * MONO_ADVANCE + 2 * CHIP.padX;
   const inputY = MID_Y - INPUT.size / 2;
   return (
     <g>
-      <rect width={PANEL_W} height={PANEL_H} rx={36} fill={PANEL_FILL} />
-
       {/* Pointer position in: where it is on the canvas */}
       <Caption x={INPUT.x - CAPTION_GAP} y={MID_Y - 22} anchor="end">
         pointer
@@ -780,24 +981,26 @@ function BehaviorPanel({
         viewBox={`0 0 ${size.x} ${size.y}`}
         overflow="visible"
       >
-        {/* Guides from the canvas's edges, and the coordinates they give */}
+        {/* Guides from the canvas's edges */}
         <g stroke="#a1a1aa" strokeWidth={3} strokeDasharray="9 9">
-          <line x1={POINTER.x} y1={0} x2={POINTER.x} y2={POINTER.y} />
-          <line x1={0} y1={POINTER.y} x2={POINTER.x} y2={POINTER.y} />
+          <line x1={pointer.x} y1={0} x2={pointer.x} y2={pointer.y} />
+          <line x1={0} y1={pointer.y} x2={pointer.x} y2={pointer.y} />
         </g>
-        <text
-          x={size.x / 2}
-          y={size.y * 0.68}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontFamily={CODE_FONT}
-          fontSize={46}
-          fill={INK}
-        >
-          ({POINTER.x}, {POINTER.y})
-        </text>
-        <Cursor at={POINTER} scale={1.4 / (INPUT.size / size.x)} />
+        <Cursor at={pointer} scale={1.4 / (INPUT.size / size.x)} />
       </svg>
+      {/* The coordinates the guides give, under the card, clear of the
+          pointer */}
+      <text
+        x={INPUT.x + INPUT.size / 2}
+        y={inputY + INPUT.size + 30}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontFamily={CODE_FONT}
+        fontSize={24}
+        fill={INK}
+      >
+        ({Math.round(pointer.x)}, {Math.round(pointer.y)})
+      </text>
       {/* L, not H: Firefox turns the marker on an H segment's end sideways */}
       <Wire
         d={`M ${INPUT.x + INPUT.size + 18} ${MID_Y} L ${BOX.x - 14} ${MID_Y}`}
@@ -866,7 +1069,12 @@ function BehaviorPanel({
         overflow="visible"
       >
         {drawLayered(output.preview)}
-        <Cursor at={POINTER} scale={1.4 / thumbScale} />
+        {/* Faint: the pointer isn't part of the preview, just where it is */}
+        <Cursor
+          at={pointer}
+          scale={1.4 / (THUMB.size / size.x)}
+          opacity={PREVIEW_CURSOR_OPACITY}
+        />
       </svg>
       <Caption
         x={THUMB.x + THUMB.size + CAPTION_GAP}
