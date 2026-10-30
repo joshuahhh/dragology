@@ -1223,11 +1223,12 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 3,
     notes: `
-      Here, "between" is composed with two more operators. Each "between" makes a track to one destination state.
+      Here, "between" is composed with two more operators.
 
       ---
 
-      The "closest", which we've seen before, reappears to combine these tracks together.
+      // tracks come on
+      Each "between" makes a track to one destination state. The "closest", which we've seen before, reappears to combine these tracks together.
 
       ---
 
@@ -1249,7 +1250,7 @@ export const outline: (Slide | Heading)[] = [
             {"d."}
             <Hl at={[1]}>closest</Hl>
             {"(newTrees.map((t) =>\n  d."}
-            <Hl at={[0]}>between</Hl>
+            <Hl at={[0, 1]}>between</Hl>
             {"([state, t])))\n .withSnapRadius(1, { "}
             <Hl at={[2]}>chain: true</Hl>
             {" })"}
@@ -1351,11 +1352,14 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Since the paper" },
   {
     transition: "fade-white",
-    steps: 4,
+    steps: 3,
     notes: `
+      // Rails: fidget with cheap and ladder, then scroll down
       Since writing our paper, we've incorporated declarative dragging into some existing projects.
 
       Most of my research is on Hazel, a programming environment where every edit keeps your code meaningful. Using declarative dragging, we've made Hazel's refactorings physical: code moves along meaning-preserving paths.
+
+      ---
 
       // drag bluex in blend's parameters
       For example, I can reorder a function's parameters, and its call sites follow.
@@ -1363,21 +1367,13 @@ export const outline: (Slide | Heading)[] = [
       ---
 
       // grab price * rate / 100 in checkout
-      Or I can pull an expression out into its own variable,
-
-      ---
-
-      and if I keep pulling up,
-
-      ---
-
-      even extract it into a new helper function.
+      Or I can pull an expression out into its own variable, and if I keep pulling up, even extract it into a new helper function.
 
       To tell you about the other place declarative dragging has found a home, we need to go back to the year 2022.
     `,
-    // In rails mode, once recorded: hazel-demo.mp4, a stop per step
+    // In rails mode, hazel-demo.mp4 (d2-talk/recorder/clips/hazel-demo.js)
     content: (
-      <RailsVideo name="hazel-demo.mp4" stops={[0]}>
+      <RailsVideo name="hazel-demo.mp4" stops={[0, 15.56, 20.2]}>
         <HazelSlide />
       </RailsVideo>
     ),
@@ -1458,17 +1454,25 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     // Supernool takes focus and keys once shown
     preload: false,
+    steps: 3,
     notes: `
-      // Space runs supernool's own beats; Escape, then → (or Ctrl+→) moves on
+      // Live: Space runs supernool's own beats; Escape, then Ctrl+→ moves on
+      // Rails: the title spins away to the clearing
       Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype using declarative dragging.
 
+      ---
+
+      // Rails: the traveller walks in and the tree wakes
       Invigorated by the new physicality I quickly moved off the 2D canvas into a 3D world, in which innocent trees are possessed by mathematical ghosts.
 
+      ---
+
+      // Rails: five drags simplify it, and the ghost leaves
       In this encounter, I drag to simplify expressions, which, now exorcised, return to the platonic realm.
     `,
-    // In rails mode, once recorded: supernool-demo.mp4
+    // In rails mode, supernool-demo.mp4 (d2-talk/recorder/clips/supernool-demo.js)
     content: (
-      <RailsVideo name="supernool-demo.mp4">
+      <RailsVideo name="supernool-demo.mp4" stops={[0, 4.06, 9.32]}>
         <SupernoolSlide />
       </RailsVideo>
     ),
