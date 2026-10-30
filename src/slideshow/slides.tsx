@@ -1346,6 +1346,7 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 5,
     notes: `
+      // drag in the yellow note
       We ran a study where thirteen participants got hands-on experience using Dragology.
 
       ---

@@ -384,13 +384,9 @@ const studyInitialState = {
   })),
 };
 
-// Without the studio's drag marks, chain links and chaining checkbox (still
-// there, hidden, for the exit to tick)
-const studyNotes = makeStickyNotes({
-  marks: false,
-  links: false,
-  chainingToggle: false,
-});
+// Without the studio's drag marks or chaining checkbox (still there, hidden,
+// for the exit to tick). The chain's links show once the exit chains them.
+const studyNotes = makeStickyNotes({ marks: false, chainingToggle: false });
 
 /** The user study, its findings on sticky notes dragged onto the board */
 export function StudySlide() {
