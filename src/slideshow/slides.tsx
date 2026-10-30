@@ -1066,6 +1066,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
+    timing: [32, 15, 17],
     notes: `
       Thanks Josh. This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
 
@@ -1110,6 +1111,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 4,
+    timing: [8, 5, 4, 6],
     notes: `
       Vary can be combined freely with other behaviors using Dragology's DSL.
 
@@ -1152,6 +1154,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
+    timing: [14, 2, 3],
     notes: `
       This tessellation editor uses this same pattern, where the discrete states are edge-to-edge snaps, and the continuous states are free-floating shapes.
 
@@ -1188,6 +1191,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 2,
+    timing: [17, 6],
     notes: `
       Our next operator, called "between", interpolates between previews as you drag. 
       In this diagram of an order-preserving map between trees, the black dots can be dragged freely between the gray bubbles.
@@ -1218,6 +1222,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
+    timing: [9, 10, 11],
     notes: `
       In this draggable algebra expression tree, "between" is composed with two more operators.
 
@@ -1259,6 +1264,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
+    timing: [13, 5, 3],
     notes: `
       We found Dragology to be particularly suited to interfaces that combine parallel representations, where you see the same system from different perspectives.
       This is a playground for experimenting with permutations. Interacting with any of these representations
@@ -1288,6 +1294,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
+    timing: [11, 12, 2],
     notes: `
       And as a recursive finale, this block-based programming interface lets a user assemble operators
 
@@ -1316,6 +1323,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 4,
+    timing: [7, 7, 8, 5],
     notes: `
       // drag in the yellow note
       We ran a study where thirteen participants got hands-on experience using Dragology.
@@ -1346,6 +1354,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
+    timing: [30, 9, 9],
     notes: `
       // Video: cheap's branches flip, ladder's lets slide around
       Since finishing the paper, we've incorporated declarative dragging into other existing projects.
@@ -1373,6 +1382,7 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Origins" },
   {
     transition: "fade-white",
+    timing: [17],
     notes: `
       I had a prototype of a tangible math game. It played okay, but the fundamental mechanic, based on selecting transformations from a menu, lacked the tactility I craved.
     `,
@@ -1381,6 +1391,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade",
     steps: 3,
+    timing: [5, 2, 4],
     notes: `
       Eventually I came up with a scheme to make it, and things like it, draggable,
 
@@ -1396,6 +1407,7 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
+    timing: [12],
     notes: `
       // Josh
       On a really nice walk in Seattle back in 2023,
@@ -1408,6 +1420,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade",
     steps: 4,
+    timing: [6, 3, 2, 14],
     notes: `
       // Josh
       That's when my buddy Elliot was playing with order-preserving maps between trees, like you saw earlier.
@@ -1439,6 +1452,7 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
+    timing: [26],
     notes: `
       // Video, on Space: the tree is possessed, five drags simplify it, the ghost leaves and the tree regrows
       Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype using declarative dragging.
@@ -1460,6 +1474,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
+    timing: [7, 18, 3],
     notes: `
       In our own work, declarative dragging has helped us make the digital graspable without being bogged down in implementation details.
 
@@ -1473,6 +1488,7 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
+    timing: [9],
     notes: `
       Thanks!
     `,
