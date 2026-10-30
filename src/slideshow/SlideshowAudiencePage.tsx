@@ -7,7 +7,7 @@ import { STAGE_H, STAGE_W } from "./slide";
 
 /**
  * The slideshow for the audience's screen: the presenter's stage, as video.
- * The presenter's window opens it (A, in the slideshow). Double-click it, or
+ * The presenter's window opens it (⌃⇧A, in the slideshow). Double-click it, or
  * press F, to go fullscreen.
  */
 export function SlideshowAudiencePage() {
@@ -167,7 +167,7 @@ export function SlideshowAudiencePage() {
           <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-lg">
             {status === "no-presenter"
               ? "Open this window from the slideshow, with A."
-              : "Press A in the slideshow to share its stage."}
+              : "Press ⌃⇧A in the slideshow to share its stage."}
           </div>
         )}
       </div>

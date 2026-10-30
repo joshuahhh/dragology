@@ -173,7 +173,7 @@ export function useAudienceFeed(stageRef: RefObject<HTMLElement | null>) {
       if (feed.stream !== stream) return;
       feed.setStream(null);
       showError(
-        "The capture stopped: Stop Sharing was pressed, or the browser or the OS ended it. Press A to share again",
+        "The capture stopped: Stop Sharing was pressed, or the browser or the OS ended it. Press ⌃⇧A to share again",
       );
     });
     if (canCrop && stageRef.current) {
@@ -202,7 +202,7 @@ export function useAudienceFeed(stageRef: RefObject<HTMLElement | null>) {
       );
       if (!feed.audienceWindow) {
         showError(
-          "The audience window was blocked: allow pop-ups for this site, then press A again",
+          "The audience window was blocked: allow pop-ups for this site, then press ⌃⇧A again",
         );
       }
     }

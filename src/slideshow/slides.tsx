@@ -34,9 +34,12 @@ import {
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
-import { BehaviorDiagramSlide, BehaviorTreeSlide } from "./behavior-diagram";
+import { BehaviorDiagramSlide } from "./behavior-diagram";
 import { beadsSubject } from "./model-driven/beads";
-import { script as modelDrivenScript } from "./model-driven/ModelDrivenScene";
+import {
+  MacClosedHand,
+  script as modelDrivenScript,
+} from "./model-driven/ModelDrivenScene";
 import {
   LiveDragLoop,
   ModelDrivenSlide,
@@ -49,7 +52,6 @@ import {
   DemoLink,
   DemoSlide,
   type Heading,
-  ImageSlide,
   type Slide,
   slideFileUrl,
   STAGE_H,
@@ -222,35 +224,6 @@ function LiveDragSlide() {
   );
 }
 
-/**
- * The paper's table of operators, centered; on the second step it moves
- * left, and the Composable Dragging art comes in on the right.
- */
-function OperatorsSlide() {
-  const step = useSlideStep();
-  // operators.png is 1494×1656
-  const tableH = STAGE_H - 96;
-  const tableW = (tableH * 1494) / 1656;
-  const tableLeft = step === 0 ? (STAGE_W - tableW) / 2 : 110;
-  return (
-    <div className="absolute inset-0 bg-white">
-      <img
-        src={slideFileUrl("operators.png")}
-        alt=""
-        draggable={false}
-        style={{
-          position: "absolute",
-          top: (STAGE_H - tableH) / 2,
-          left: tableLeft,
-          height: tableH,
-          transition: `left ${STEP_EASE}`,
-        }}
-      />
-      <SideArt src="composable.png" shown={step >= 1} />
-    </div>
-  );
-}
-
 // ── Demo wrappers ──
 
 // We lazily import the demo components to keep the main bundle lean.
@@ -290,6 +263,47 @@ const montageFiles = Object.keys(
 )
   .map((p) => p.replace("/public/slides/", ""))
   .sort();
+
+/**
+ * The opening slide: the photo of the mountains, with the talk's title and
+ * authors in the bottom-left corner, over a shade that keeps them legible
+ * against the rocks
+ */
+function OpeningSlide() {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <img
+        src={slideFileUrl("earth.jpg")}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover"
+        draggable={false}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 70% at 0% 100%, rgba(0,0,0,0.75), rgba(0,0,0,0.45) 45%, rgba(0,0,0,0))",
+        }}
+      />
+      <div
+        className="absolute text-white"
+        style={{
+          left: 80,
+          bottom: 72,
+          fontFamily: sourceSans,
+          textShadow: "0 2px 12px rgba(0,0,0,0.4)",
+        }}
+      >
+        <div style={{ fontSize: 88, fontWeight: 600, lineHeight: 1.1 }}>
+          Declarative Dragging
+        </div>
+        <div style={{ fontSize: 40, fontWeight: 400, marginTop: 16 }}>
+          Joshua Horowitz, Andrew Blinn, Jeffrey Heer
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * The montage of drag and drop: clips cut one to the next on black, in name
@@ -345,11 +359,6 @@ function MontageSlide() {
 // The Declarative Dragging slide: two rows of demo videos scroll endlessly in
 // opposite directions behind an inset that changes with each step.
 
-/** Every video in public/slides/awe, found at build time (only the names). */
-const reelFiles = Object.keys(import.meta.glob("/public/slides/awe/*.mp4"))
-  .map((p) => p.replace("/public/slides/", ""))
-  .sort();
-
 const REEL_ROW_H = 480;
 const REEL_GAP = 32;
 /** How fast the rows scroll, in stage pixels per second */
@@ -357,11 +366,57 @@ const REEL_SPEED = 60;
 /** How long a video's last frame takes to crossfade into its start */
 const REEL_CROSSFADE_S = 0.5;
 
-// Each row gets every other video
-const reelRows: { files: string[]; direction: "left" | "right" }[] = [
-  { files: reelFiles.filter((_, i) => i % 2 === 0), direction: "left" },
-  { files: reelFiles.filter((_, i) => i % 2 === 1), direction: "right" },
+/**
+ * The videos in each row, by name in public/slides/awe (without ".mp4").
+ * Each row starts with its first video at the stage's left edge, the next
+ * ones after it, so put favorites first.
+ */
+const reelRows: { names: string[]; direction: "left" | "right" }[] = [
+  {
+    direction: "left",
+    names: [
+      "nool-tree",
+      "nodes-and-noodles",
+      "gantt",
+      "regex-nfa-sync",
+      "lambda-beta",
+      "braid",
+      "spec-workshop",
+      "two-types-of-tree",
+    ],
+  },
+  {
+    direction: "right",
+    names: [
+      "catalan-explorer",
+      "interval-graph",
+      // "lists-of-lists",
+      "permutation-lab",
+      "proof-by-dragging",
+      "rotations-splay",
+      "pivot-table",
+      "tactile-tesselations",
+      "order-preserving",
+    ],
+  },
 ];
+
+{
+  // Every video in public/slides/awe, found at build time (only the names)
+  const inFolder = Object.keys(
+    import.meta.glob("/public/slides/awe/*.mp4"),
+  ).map((p) => p.replace("/public/slides/awe/", "").replace(/\.mp4$/, ""));
+  const listed = reelRows.flatMap((row) => row.names);
+  const missing = _.difference(listed, inFolder);
+  const unlisted = _.difference(inFolder, listed);
+  if (missing.length > 0)
+    console.warn("Reel videos not in public/slides/awe:", missing);
+  if (unlisted.length > 0)
+    console.warn(
+      "Videos in public/slides/awe not in either reel row:",
+      unlisted,
+    );
+}
 
 /** An inset drawn as a whole, margins and all, in an image in public/slides */
 function ImageInset({ src }: { src: string }) {
@@ -437,18 +492,9 @@ function TitleInset({ children }: { children: ReactNode }) {
   );
 }
 
-// Lucide's "grab" icon (ISC license), a closed hand
-const grabHandPaths = [
-  "M18 11.5V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1.4",
-  "M14 10V8a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2",
-  "M10 9.9V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v5",
-  "M6 14a2 2 0 0 0-2-2a2 2 0 0 0-2 2",
-  "M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8 2 2 0 1 1 4 0",
-];
-
 /**
- * A grabbing hand carrying a card away from the dashed outline of where it
- * was
+ * A grabbing hand (the Mac's own, as the slides' cursors are) carrying a card
+ * away from the dashed outline of where it was
  */
 function DragAndDropIcon({ size }: { size: number }) {
   return (
@@ -472,15 +518,11 @@ function DragAndDropIcon({ size }: { size: number }) {
         fill="currentColor"
         fillOpacity={0.15}
       />
-      <g transform="translate(12 9) scale(0.95)">
-        {/* The hand's outline is open, so fill it in a pass of its own, under
-            the strokes, to hide the card behind it */}
-        {grabHandPaths.map((d) => (
-          <path key={`fill-${d}`} d={d} fill="white" stroke="none" />
-        ))}
-        {grabHandPaths.map((d) => (
-          <path key={d} d={d} />
-        ))}
+      <g
+        transform="translate(23.5 22.5) scale(1.5) translate(-16.3 -18)"
+        strokeWidth={1}
+      >
+        <MacClosedHand />
       </g>
     </svg>
   );
@@ -662,21 +704,36 @@ function DeclarativeDraggingIntro() {
       ),
     [],
   );
+  // The title reads fine over the reel at full strength; from the next step
+  // on, the reel fades back, so the insets you have to read stand out
+  const subdued = useSlideStep() > 0;
   return (
     <div className="absolute inset-0 overflow-hidden">
       <div
         className="absolute inset-0 flex flex-col justify-center"
-        style={{ gap: REEL_GAP }}
+        style={{
+          gap: REEL_GAP,
+          filter: `saturate(${subdued ? 0.35 : 1})`,
+          transition: "filter 600ms ease",
+        }}
       >
-        {reelRows.map((row, i) => (
+        {reelRows.map(({ names, direction }, i) => (
           <VideoReelRow
             key={i}
-            {...row}
+            files={names.map((name) => `awe/${name}.mp4`)}
+            direction={direction}
             aspects={aspects}
             onAspect={onAspect}
           />
         ))}
       </div>
+      <div
+        className="absolute inset-0 bg-white"
+        style={{
+          opacity: subdued ? 0.45 : 0,
+          transition: "opacity 600ms ease",
+        }}
+      />
       <SlideInsets insets={introInsets} />
     </div>
   );
@@ -810,7 +867,7 @@ function AnimateAlgebraClean() {
 export const outline: (Slide | Heading)[] = [
   { heading: "Intro" },
   {
-    content: <ImageSlide src="earth.jpg" />,
+    content: <OpeningSlide />,
     timing: [7],
     notes: `
       A photograph is a portal into another place on Earth.
@@ -823,14 +880,14 @@ export const outline: (Slide | Heading)[] = [
     notes: `
       // prob 38 sec total
 
-      Interfaces can show you worlds of information, imagination, structures, patterns, simulation.
+      Interfaces can show us worlds of information, imagination, structures, patterns, and simulation.
 
-      And unlike photographs, interfaces let us reach into these worlds, tug things around, and see how they respond.
+      And unlike photographs, interfaces let us reach into these worlds, to tug things around, and see how they respond.
 
       ---
       Often, we do this with drag and drop, which gives us virtual hands to act in virtual worlds
 
-      But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. If you want interactions with the fluidity and tangibility of an imagined world, you'll need complex and cross-cutting choreography.
+      But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. If you want interactions with the fluidity and tangibility of an imagined world, you need complex and cross-cutting choreography.
 
       We think interface inventors need better infrastructure.
     `,
@@ -843,11 +900,9 @@ export const outline: (Slide | Heading)[] = [
     content: <DeclarativeDraggingIntro />,
     timing: [11, 9, 10, 10],
     notes: `
-      // TODO: consider fading background or something
-
       So we’d like to share **Declarative Dragging**, a new approach which makes it possible to build higher quality drag-and-drop interfaces with less work.
 
-      Declarative Dragging combines two ideas.
+      Declarative Dragging combines two new ideas.
 
       ---
 
@@ -931,7 +986,7 @@ export const outline: (Slide | Heading)[] = [
   {
     timing: [8, 10],
     notes: `
-      // These views and positions provide 
+      // These views and positions provide
       ... the engine has enough information to run a high-quality animated drag-and-drop interaction.
 
       ---
@@ -999,6 +1054,8 @@ export const outline: (Slide | Heading)[] = [
       ---
       Finally, we can layer on a whole new feature. Maybe a bead should be removed if it’s dropped far from any target.
       We can do that with the “whenFar” modifier, using another helper function that produces the removed state. [removed(state, idx) BEFORE withFloating]
+
+      You may wonder, at this point: What are these structures we're building and returning from dragologyOnDrag? For that, I'll pass it to Andrew.
     `,
     content: <LiveCodeSlide />,
   },
@@ -1021,26 +1078,6 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: <BehaviorDiagramSlide />,
   },
-  {
-    // For reference: the tree on the slide before, each node showing its
-    // behavior's preview
-    skip: true,
-    content: <BehaviorTreeSlide />,
-  },
-  {
-    steps: 2,
-    timing: [10, 16],
-    notes: `
-      We've developed a core set of operators that you can plug together in different ways to create a surprising variety of interactions. (And you can make your own if you like.)
-      // TODO: new graphics here
-
-      ---
-      Because this approach is centered around composing behaviors, we call it composable dragging.
-      We’ve found that it lets us incrementally build up refined interactions while keeping the underlying simplicity of model-driven dragging.
-      Andrew's going to share some more examples of what these ingredients can do together.
-    `,
-    content: <OperatorsSlide />,
-  },
 
   { heading: "Demos" },
   // Scheduler (130-155s)
@@ -1049,7 +1086,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 3,
     timing: [8, 8, 18],
     notes: `
-      Thanks Josh. This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
+      This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
 
       ---
 
@@ -1174,7 +1211,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 2,
     timing: [17, 6],
     notes: `
-      Our next operator, called "between", interpolates between previews as you drag. 
+      Our next operator, called "between", interpolates between previews as you drag.
       In this diagram of an order-preserving map between trees, the black dots can be dragged freely between the gray bubbles.
       As you drag, bubbles grow, anticipating the arrival of the dot.
 
@@ -1342,8 +1379,8 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     timing: [22],
     notes: `
-      I also returned to a long-running side project, 
-      a math game where the idea for model-driven dragging originated. 
+      I also returned to a long-running side project,
+      a math game where the idea for model-driven dragging originated.
       In this 3d landscape possessed by mathematical ghosts,
       declarative dragging powers algebraic exorcisms,
       letting me simplify expressions to return them to the platonic realm.
