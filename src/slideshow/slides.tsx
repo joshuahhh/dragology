@@ -919,14 +919,14 @@ export const outline: (Slide | Heading)[] = [
     notes: `
       // prob 38 sec total
 
-      Interfaces can show you worlds of information, imagination, structures, patterns, simulation.
+      Interfaces can show you worlds of information, imagination, structures, patterns, and simulation.
 
-      And unlike photographs, interfaces let us reach into these worlds, tug things around, and see how they respond.
+      And unlike photographs, interfaces let us reach into these worlds, to tug things around, and see how they respond.
 
       ---
       Often, we do this with drag and drop, which gives us virtual hands to act in virtual worlds
 
-      But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. If you want interactions with the fluidity and tangibility of an imagined world, you'll need complex and cross-cutting choreography.
+      But drag-and-drop interactions are difficult to make, or at least difficult to make **well**. If you want interactions with the fluidity and tangibility of an imagined world, you need complex and cross-cutting choreography.
 
       We think interface inventors need better infrastructure.
     `,
