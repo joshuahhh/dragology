@@ -32,6 +32,7 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
       { combos: [["⌃", "⇧", "F"]], does: "Fullscreen" },
       { combos: [["⌃", "⇧", "S"]], does: "Stage only" },
       { combos: [["⌃", "⇧", "R"]], does: "Reload this slide" },
+      { combos: [["⌃", "⇧", "D"]], does: "Demo settings bars" },
       { combos: [["⌃", "⇧", "T"]], does: "Time a run-through" },
       { combos: [["⌃", "⇧", "P"]], does: "This panel" },
     ],

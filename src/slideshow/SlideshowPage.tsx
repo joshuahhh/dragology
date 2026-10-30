@@ -37,6 +37,7 @@ import {
   STAGE_H,
   STAGE_W,
   StatusBarSlotContext,
+  toggleDemoBars,
 } from "./slide";
 import { numberedOutline, outlineIndexOfSlide, slides } from "./slides";
 import {
@@ -885,6 +886,7 @@ export function SlideshowPage() {
       else if (!e.shiftKey) return;
       else if (e.code === "KeyP") setPanelOpen((open) => !open);
       else if (e.code === "KeyA") shareWithAudience();
+      else if (e.code === "KeyD") toggleDemoBars();
       else if (e.code === "KeyF") toggleFullscreen(showError);
       else if (e.code === "KeyT" && timingEnabled) {
         const { run, start, stop } = timingRef.current;

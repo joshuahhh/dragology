@@ -4,6 +4,7 @@ import {
   useContext,
   useLayoutEffect,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
@@ -214,6 +215,40 @@ export function notesFirstLine(notes: string | undefined): string | undefined {
 }
 
 /** A demo, zoomed to fit the stage, with the demo settings bar. */
+// Demo slides' settings bars (the toggles for the debug views) are hidden
+// unless shown with Ctrl+Shift+D, for every demo slide at once and
+// remembered across reloads. Steps still turn the views on themselves.
+const DEMO_BARS_KEY = "slideshow-demo-bars";
+let demoBarsShown = (() => {
+  try {
+    return localStorage.getItem(DEMO_BARS_KEY) === "true";
+  } catch {
+    return false;
+  }
+})();
+const demoBarsListeners = new Set<() => void>();
+
+/** Shows or hides demo slides' settings bars */
+export function toggleDemoBars() {
+  demoBarsShown = !demoBarsShown;
+  try {
+    localStorage.setItem(DEMO_BARS_KEY, String(demoBarsShown));
+  } catch {
+    // Not remembered, then
+  }
+  demoBarsListeners.forEach((l) => l());
+}
+
+function useDemoBarsShown() {
+  return useSyncExternalStore(
+    (l) => {
+      demoBarsListeners.add(l);
+      return () => demoBarsListeners.delete(l);
+    },
+    () => demoBarsShown,
+  );
+}
+
 export function DemoSlide({
   children,
   width = 400,
@@ -231,6 +266,7 @@ export function DemoSlide({
   const padX = 64;
   const padY = overlayTitle ? 120 : 64;
   const zoom = Math.min((STAGE_W - padX) / width, (STAGE_H - padY) / height, 3);
+  const barShown = useDemoBarsShown();
   return (
     <DemoSettingsProvider persist={false}>
       {overlayTitle && (
@@ -257,7 +293,7 @@ export function DemoSlide({
       >
         {children}
       </div>
-      <DemoSettingsBar compact />
+      {barShown && <DemoSettingsBar compact />}
     </DemoSettingsProvider>
   );
 }
