@@ -11,7 +11,7 @@ import {
 import { DemoDraggable } from "../demo/ui";
 import ringOfBeadsSource from "../demos/ring-of-beads-vanilla-js/ringOfBeads.ts?raw";
 import { DraggableRenderer } from "../DraggableRenderer";
-import { LETTER_FONT } from "../talk/fonts";
+import { CODE_FONT, LETTER_FONT } from "../talk/fonts";
 import {
   CODE_FLEX,
   DIAGRAM_FILL,
@@ -77,12 +77,150 @@ function LiveCodeSlide() {
       <LiveCode
         snippets={[slideSnippet]}
         highlight={step === 0}
-        excerpt={step === 2}
+        excerpt={step === 4}
         hasKeyboard={hasKeyboard}
       />
+      <ReinsertionsInset shown={step === 2} />
     </div>
   );
 }
+
+const REINSERTIONS_BEADS = ["A", "B", "C", "D", "E"];
+const REINSERTIONS_IDX = 1;
+
+/**
+ * An example of what the live-code slide's `reinsertions` helper does: a
+ * state, an index, and the states it returns. It slides in from the stage's
+ * right edge, over the diagram, and back out.
+ */
+function ReinsertionsInset({ shown }: { shown: boolean }) {
+  const moved = REINSERTIONS_BEADS[REINSERTIONS_IDX];
+  // The column (in ch, monospace) of the middle of the moved bead's
+  // `"B"` on the state's line: past `state = { beads: [` and a `"A", `
+  // for each bead before it
+  const movedCenter = 18 + REINSERTIONS_IDX * 5 + 1.5;
+  const results = REINSERTIONS_BEADS.map((_, targetIdx) => {
+    const beads = REINSERTIONS_BEADS.filter((b) => b !== moved);
+    beads.splice(targetIdx, 0, moved);
+    return beads;
+  });
+  // The editor's colors, in its default syntax theme ("quiet")
+  const p = (text: string) => <span style={{ color: "#a1a1aa" }}>{text}</span>;
+  const beadsLine = (beads: string[]) => (
+    <span>
+      {p("{ ")}beads{p(": [")}
+      {beads.map((bead, i) => (
+        <span key={i}>
+          {i > 0 && p(", ")}
+          <span
+            style={
+              bead === moved
+                ? // The bright look's colors for this bead
+                  {
+                    background: "#93c5fd",
+                    color: "#1d4ed8",
+                    fontWeight: 700,
+                    borderRadius: 6,
+                    boxShadow: "0 0 0 3px #93c5fd",
+                  }
+                : { color: "#0f766e" }
+            }
+          >
+            "{bead}"
+          </span>
+        </span>
+      ))}
+      {p("] }")}
+    </span>
+  );
+  const indent = { paddingLeft: 32 };
+  const label = (text: string) => (
+    <div
+      style={{
+        fontFamily: sourceSans,
+        fontSize: 26,
+        fontWeight: 600,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        color: "#a1a1aa",
+        lineHeight: 1,
+        marginBottom: 12,
+      }}
+    >
+      {text}
+    </div>
+  );
+  return (
+    <div
+      style={{
+        position: "absolute",
+        right: 40,
+        top: "50%",
+        zIndex: 10,
+        padding: "36px 44px",
+        background: "white",
+        border: "2px solid #e4e4e7",
+        borderRadius: 20,
+        boxShadow: "0 12px 40px rgba(0, 0, 0, 0.18)",
+        fontFamily: CODE_FONT,
+        fontSize: 28,
+        lineHeight: 1.6,
+        color: "#18181b",
+        whiteSpace: "pre",
+        // Off past the stage's right edge when hidden
+        transform: `translate(${shown ? "0" : "calc(100% + 60px)"}, -50%)`,
+        transition: `transform ${INSET_SLIDE}`,
+      }}
+    >
+      <div style={{ marginBottom: 28 }}>
+        <b>reinsertions</b>
+        {p("(")}
+        <b>state</b>
+        {p(", ")}
+        <b>idx</b>
+        {p(")")}
+      </div>
+      {label("input")}
+      <div style={indent}>
+        <div>
+          <b>state</b> {p("=")} {beadsLine(REINSERTIONS_BEADS)}
+        </div>
+        {/* Under the moved bead, pointing up at it */}
+        <div style={{ paddingLeft: `${movedCenter}ch`, lineHeight: 1 }}>
+          <span
+            style={{
+              display: "inline-block",
+              transform: "translateX(-50%)",
+              fontSize: 44,
+              fontWeight: 700,
+              color: "#1d4ed8",
+            }}
+          >
+            ↑
+          </span>
+        </div>
+        <div style={{ paddingLeft: `${movedCenter - 3.5}ch` }}>
+          <b>idx</b> {p("=")}{" "}
+          <span style={{ color: "#c2410c" }}>{REINSERTIONS_IDX}</span>
+        </div>
+      </div>
+      <div style={{ marginTop: 28 }}>{label("output")}</div>
+      <div style={indent}>
+        <div>{p("[")}</div>
+        {results.map((beads, i) => (
+          <div key={i}>
+            {"  "}
+            {beadsLine(beads)}
+            {p(",")}
+          </div>
+        ))}
+        <div>{p("]")}</div>
+      </div>
+    </div>
+  );
+}
+
+const INSET_SLIDE = "450ms cubic-bezier(0.4, 0, 0.2, 1)";
 
 /**
  * The library's title, beside the ring of beads, live. The ring sits right
@@ -1012,10 +1150,11 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade",
     // Highlighting is on for the first stage, off after. The third
-    // shows just the drag spec, with the spec tree, in the studio's
-    // layout.
-    steps: 3,
-    timing: [18, 59, 26, 24, 36],
+    // brings in an example of what reinsertions does, and the fourth
+    // takes it away. The fifth shows just the drag spec, with the spec
+    // tree, in the studio's layout.
+    steps: 5,
+    timing: [18, 35, 12, 12, 26, 24, 36],
     notes: `
       This "draggable" is a function that, given a model state, returns a static view.
       Here’s the line that draws the background ring…
@@ -1028,15 +1167,16 @@ export const outline: (Slide | Heading)[] = [
       So we'll go to the beads and add a special attribute, called “dragologyOnDrag”.
       We'll set it to a handler function with two parts.
       First, we'll compute the set of states reachable by dragging the bead.
-        And we'll do that using a readymade function down here.
+        And we'll do that using a pre-written function down here, called reinsertions.
+
+      ---
+      This is just some JavaScript code that takes a state of the ring, and an index of a dragged bead, and returns new states where the dragged bead goes somewhere else.
+      So I'll copy that in... [copy it, then next]
+
+      ---
       Second, we'll use Dragology's domain-specific language to specify HOW drag-and-drop should access these states.
       We'll start with the simplest option, a combinator called "closest".
       Once we've added this, the beads are draggable!
-
-      dragologyOnDrag={() => {
-        const states = reinsertions(state, idx);
-        return d.closest(states);
-       }}
 
       ---
       "Closest" simply snaps the dragged element to the closest target position to the pointer.
