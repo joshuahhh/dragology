@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { DragInitContext, dragSpecToBehavior } from "../DragBehavior";
-import { DragSpecBuilder, DragSpecData } from "../DragSpec";
 import {
   Draggable,
   getOnDragCallbackOnElement,
   makeDraggableProps,
 } from "../draggable";
+import { DragSpecBuilder, DragSpecData } from "../DragSpec";
 import { Vec2 } from "../math/vec2";
 import { PAPER_OP_STYLE } from "../studio/StudioHackContext";
 import { findElement } from "../svgx";
