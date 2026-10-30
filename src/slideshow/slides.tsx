@@ -1106,11 +1106,7 @@ export const outline: (Slide | Heading)[] = [
 
       ---
 
-      So our DSL offers an operator called "vary" which controls one or more numeric parameters in the model.
-
-      ---
-
-      Behind the scenes, Dragology uses numerical optimization to search for the best parameter settings. Numerical optimization lets us extend model-driven dragging to continuous state spaces.
+      So our DSL offers an operator called "vary" which controls one or more numeric parameters in the model. Behind the scenes, Dragology uses numerical optimization to search for the best parameter settings. Numerical optimization lets us extend model-driven dragging to continuous state spaces.
     `,
     content: (
       <Rails id="scheduler">
