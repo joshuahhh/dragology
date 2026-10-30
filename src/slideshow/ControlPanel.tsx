@@ -4,11 +4,21 @@ import { type AudienceFeed } from "./audienceFeed";
 import { StageInfo } from "./StageInfo";
 import { formatSeconds, savedTotal, type TimingMode } from "./timing";
 
+/** What the hotkeys that aren't Ctrl+Shift commands do */
+export type PanelAction = "next" | "prev" | "saveNotes" | "cancelNotes";
+
+/** How to do each action, or null where it can't be done now */
+export type PanelActions = Record<PanelAction, (() => void) | null>;
+
 /**
  * A hotkey as the panel lists it: its alternative key combos, each a list of
- * keys drawn as one keycap, and what it does
+ * keys drawn as one keycap, what it does, and how its row does it: as an
+ * action, or as the Ctrl+Shift command with that key's `code`
  */
-type Hotkey = { combos: string[][]; does: string };
+type Hotkey = { combos: string[][]; does: string } & (
+  | { action: PanelAction }
+  | { code: string }
+);
 
 const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
   {
@@ -17,25 +27,35 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
       {
         combos: [["→"], ["↓"], ["Space"], ["⌃", "⇧", "→"], ["⌃", "⇧", "↓"]],
         does: "Next",
+        action: "next",
       },
       {
         combos: [["←"], ["↑"], ["⌃", "⇧", "←"], ["⌃", "⇧", "↑"]],
         does: "Previous",
+        action: "prev",
       },
-      { combos: [["⌃", "⇧", "O"]], does: "Outline" },
+      { combos: [["⌃", "⇧", "O"]], does: "Outline", code: "KeyO" },
     ],
   },
   {
     title: "Present",
     hotkeys: [
-      { combos: [["⌃", "⇧", "A"]], does: "Share with audience window" },
-      { combos: [["⌃", "⇧", "F"]], does: "Fullscreen" },
-      { combos: [["⌃", "⇧", "S"]], does: "Stage only" },
-      { combos: [["⌃", "⇧", "B"]], does: "Stage in its own window" },
-      { combos: [["⌃", "⇧", "R"]], does: "Reload this slide" },
-      { combos: [["⌃", "⇧", "D"]], does: "Demo settings bars" },
-      { combos: [["⌃", "⇧", "T"]], does: "Time a run-through" },
-      { combos: [["⌃", "⇧", "P"]], does: "This panel" },
+      {
+        combos: [["⌃", "⇧", "A"]],
+        does: "Share with audience window",
+        code: "KeyA",
+      },
+      { combos: [["⌃", "⇧", "F"]], does: "Fullscreen", code: "KeyF" },
+      { combos: [["⌃", "⇧", "S"]], does: "Stage only", code: "KeyS" },
+      {
+        combos: [["⌃", "⇧", "B"]],
+        does: "Stage in its own window",
+        code: "KeyB",
+      },
+      { combos: [["⌃", "⇧", "R"]], does: "Reload this slide", code: "KeyR" },
+      { combos: [["⌃", "⇧", "D"]], does: "Demo settings bars", code: "KeyD" },
+      { combos: [["⌃", "⇧", "T"]], does: "Time a run-through", code: "KeyT" },
+      { combos: [["⌃", "⇧", "P"]], does: "This panel", code: "KeyP" },
     ],
   },
   {
@@ -47,8 +67,9 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
           ["⌘", "Enter"],
         ],
         does: "Save",
+        action: "saveNotes",
       },
-      { combos: [["Esc"]], does: "Cancel" },
+      { combos: [["Esc"]], does: "Cancel", action: "cancelNotes" },
     ],
   },
 ];
@@ -57,17 +78,22 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
  * The presenter's control panel, opened from the button at the right end of
  * the status bar (or Ctrl+Shift+P): the hotkeys, timing (run-throughs during dev), and how the
  * stage reaches the audience. Only the arrow keys and Space yield to a focused editor or demo;
- * the Ctrl+Shift keys work everywhere.
+ * the Ctrl+Shift keys work everywhere. Clicking a hotkey's row does what the key does.
  */
 export function ControlPanel({
   stageRef,
   feed,
   timing,
+  actions,
+  onCommand,
   onClose,
 }: {
   stageRef: RefObject<HTMLElement | null>;
   feed: AudienceFeed;
   timing: TimingMode | null;
+  actions: PanelActions;
+  /** Does the Ctrl+Shift command with this key's `code` */
+  onCommand: (code: string) => void;
   onClose: () => void;
 }) {
   return (
@@ -97,25 +123,38 @@ export function ControlPanel({
         {HOTKEY_SECTIONS.map(({ title, hotkeys }) => (
           <section key={title}>
             <SectionTitle>{title}</SectionTitle>
-            <div className="flex flex-col gap-1">
-              {hotkeys.map(({ combos, does }) => (
-                <div
-                  key={does}
-                  className="flex items-center justify-between gap-3"
-                >
-                  <span>{does}</span>
-                  <span className="flex flex-wrap items-center justify-end gap-1">
-                    {combos.map((combo, i) => (
-                      <span key={i} className="flex items-center gap-1">
-                        {i > 0 && <span className="text-zinc-600">/</span>}
-                        <kbd className="min-w-[1.25rem] rounded border border-white/15 bg-white/5 px-1 text-center font-sans text-[11px] leading-[18px] tracking-wider text-zinc-200">
-                          {combo.join("")}
-                        </kbd>
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              ))}
+            <div className="-mx-1.5 flex flex-col">
+              {hotkeys.map((hotkey) => {
+                const { combos, does } = hotkey;
+                const run =
+                  "code" in hotkey
+                    ? () => onCommand(hotkey.code)
+                    : actions[hotkey.action];
+                return (
+                  <button
+                    key={does}
+                    type="button"
+                    disabled={!run}
+                    // Keep focus where it is: in the notes editor, a blur would
+                    // save the edit before Cancel could drop it
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => run?.()}
+                    className="flex items-center justify-between gap-3 rounded px-1.5 py-0.5 text-left enabled:hover:bg-white/10 enabled:hover:text-zinc-100 disabled:opacity-50"
+                  >
+                    <span>{does}</span>
+                    <span className="flex flex-wrap items-center justify-end gap-1">
+                      {combos.map((combo, i) => (
+                        <span key={i} className="flex items-center gap-1">
+                          {i > 0 && <span className="text-zinc-600">/</span>}
+                          <kbd className="min-w-[1.25rem] rounded border border-white/15 bg-white/5 px-1 text-center font-sans text-[11px] leading-[18px] tracking-wider text-zinc-200">
+                            {combo.join("")}
+                          </kbd>
+                        </span>
+                      ))}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
         ))}

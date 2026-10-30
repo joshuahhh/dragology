@@ -2,8 +2,10 @@ import { EditorView } from "@codemirror/view";
 import dedent from "dedent";
 import _ from "lodash";
 import {
+  type Ref,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useRef,
   useState,
@@ -11,7 +13,11 @@ import {
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTitle } from "../useTitle";
 import { useAudienceFeed } from "./audienceFeed";
-import { ControlPanel, ControlPanelButton } from "./ControlPanel";
+import {
+  ControlPanel,
+  ControlPanelButton,
+  type PanelActions,
+} from "./ControlPanel";
 import { ErrorToasts } from "./ErrorToasts";
 import { toggleFullscreen } from "./fullscreen";
 import {
@@ -230,12 +236,15 @@ function SlideNotes({
   step,
   wide,
   onUnsavedChange,
+  handleRef,
 }: {
   slideIdx: number;
   step: number;
   wide: boolean;
   /** Whether there are edits that would be lost by leaving the page */
   onUnsavedChange: (unsaved: boolean) => void;
+  /** Gets what ⌘S and Escape do, for the control panel's buttons */
+  handleRef: Ref<NotesHandle>;
 }) {
   const notes = slides[slideIdx].notes;
   const steps = slideSteps(slides[slideIdx]);
@@ -322,6 +331,17 @@ function SlideNotes({
       });
   };
 
+  const cancel = () => {
+    const d = draftRef.current;
+    if (d?.slideIdx === slideIdx && d.status === "editing") {
+      setDraft(null);
+    }
+  };
+  useImperativeHandle(handleRef, () => ({
+    save: () => save({ retry: true }),
+    cancel,
+  }));
+
   if (!editable && !saved) return null;
   return (
     <div
@@ -385,17 +405,14 @@ function SlideNotes({
           onChange={onChange}
           onBlur={() => save({ retry: false })}
           onSave={() => save({ retry: true })}
-          onCancel={() => {
-            const d = draftRef.current;
-            if (d?.slideIdx === slideIdx && d.status === "editing") {
-              setDraft(null);
-            }
-          }}
+          onCancel={cancel}
         />
       </div>
     </div>
   );
 }
+
+type NotesHandle = { save: () => void; cancel: () => void };
 
 type Draft = {
   slideIdx: number;
@@ -932,6 +949,15 @@ export function SlideshowPage() {
     return true;
   };
 
+  const notesRef = useRef<NotesHandle>(null);
+  // The control panel's buttons for the hotkeys that aren't commands
+  const panelActions: PanelActions = {
+    next: goNext,
+    prev: goPrev,
+    saveNotes: notesUnsaved ? () => notesRef.current?.save() : null,
+    cancelNotes: notesUnsaved ? () => notesRef.current?.cancel() : null,
+  };
+
   useEffect(() => {
     // Ctrl+Shift+<key> shortcuts always work: caught on the way down, before
     // a focused editor or an embedded demo can take them, and while typing.
@@ -1186,6 +1212,7 @@ export function SlideshowPage() {
               step={currentStep}
               wide={wide}
               onUnsavedChange={setNotesUnsaved}
+              handleRef={notesRef}
             />
           )}
           {wide && statusBar}
@@ -1211,6 +1238,8 @@ export function SlideshowPage() {
             stageRef={stageRef}
             feed={audienceFeed}
             timing={timingEnabled ? timing : null}
+            actions={panelActions}
+            onCommand={(code) => commandRef.current(code)}
             onClose={() => setPanelOpen(false)}
           />
         )}
