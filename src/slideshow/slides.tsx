@@ -49,7 +49,6 @@ import {
   DemoLink,
   DemoSlide,
   type Heading,
-  ImageSlide,
   type Slide,
   slideFileUrl,
   STAGE_H,
@@ -290,6 +289,47 @@ const montageFiles = Object.keys(
 )
   .map((p) => p.replace("/public/slides/", ""))
   .sort();
+
+/**
+ * The opening slide: the photo of the mountains, with the talk's title and
+ * authors in the bottom-left corner, over a shade that keeps them legible
+ * against the rocks
+ */
+function OpeningSlide() {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <img
+        src={slideFileUrl("earth.jpg")}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover"
+        draggable={false}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 70% at 0% 100%, rgba(0,0,0,0.75), rgba(0,0,0,0.45) 45%, rgba(0,0,0,0))",
+        }}
+      />
+      <div
+        className="absolute text-white"
+        style={{
+          left: 80,
+          bottom: 72,
+          fontFamily: sourceSans,
+          textShadow: "0 2px 12px rgba(0,0,0,0.4)",
+        }}
+      >
+        <div style={{ fontSize: 88, fontWeight: 600, lineHeight: 1.1 }}>
+          Declarative Dragging
+        </div>
+        <div style={{ fontSize: 40, fontWeight: 400, marginTop: 16 }}>
+          Joshua Horowitz, Andrew Blinn, Jeffrey Heer
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * The montage of drag and drop: clips cut one to the next on black, in name
@@ -866,7 +906,7 @@ function AnimateAlgebraClean() {
 export const outline: (Slide | Heading)[] = [
   { heading: "Intro" },
   {
-    content: <ImageSlide src="earth.jpg" />,
+    content: <OpeningSlide />,
     timing: [7],
     notes: `
       A photograph is a portal into another place on Earth.
