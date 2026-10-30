@@ -1435,7 +1435,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 3,
     timing: [7, 18, 3],
     notes: `
-      In our own work, declarative dragging has helped us make the digital graspable without being bogged down in implementation details.
+      In our own work, declarative dragging has helped us make the digital graspable without being bogged down in implementation.
 
       ---
 
@@ -1443,7 +1443,7 @@ export const outline: (Slide | Heading)[] = [
 
       ---
 
-      We hope declarative dragging will let them work in the semantic worlds they live in, helping them turn the rules of their worlds into rich tangible interactions in ours.
+      We hope declarative dragging will let them work in the semantic worlds they inhabit, helping them turn the rules of their worlds into rich tangible interactions in ours.
     `,
     content: <ClosingMontageSlide />,
   },
