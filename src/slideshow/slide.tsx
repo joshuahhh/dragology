@@ -1,4 +1,10 @@
-import { createContext, ReactNode, useContext } from "react";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { DemoSettingsBar, DemoSettingsProvider } from "../demo/ui";
 
@@ -123,6 +129,28 @@ export function useSlideCurrent() {
  */
 export function useSlideArrivedForward() {
   return useContext(SlidePresenceContext).arrivedForward;
+}
+
+/**
+ * Where a slide that glides into place on arrival is in that: at the start,
+ * as it's preloaded and while it fades in; gliding, once we've come to it
+ * going forward; or at the end, having come to it any other way
+ */
+export function useArrivalGlide(): "start" | "gliding" | "end" {
+  const current = useSlideCurrent();
+  const shown = useSlideShown();
+  const arrivedForward = useSlideArrivedForward();
+  const [phase, setPhase] = useState<"start" | "gliding" | "end">("start");
+  // Before paint, so that coming to it some other way never shows the start
+  useLayoutEffect(() => {
+    if (current && !arrivedForward) setPhase("end");
+    else if (!shown) setPhase("start");
+    if (!current || !arrivedForward) return;
+    // A frame at the start first, for the glide to go from
+    const raf = requestAnimationFrame(() => setPhase("gliding"));
+    return () => cancelAnimationFrame(raf);
+  }, [current, shown, arrivedForward]);
+  return phase;
 }
 
 /**

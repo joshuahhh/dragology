@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { useSlideCurrent, useSlideStep } from "../slide";
+import { useArrivalGlide, useSlideCurrent, useSlideStep } from "../slide";
 import { cubicBezier } from "./anim";
 import { beadsSubject } from "./beads";
 import {
   type Frame,
+  lerpFrame,
   LiveDrag,
   ModelDrivenScene,
   script,
@@ -17,18 +18,23 @@ import {
  * `stops` split the stretch into stages, one per step of the slide (so a
  * slide with n stops has n + 1 steps): each step plays from its stop to the
  * next, then holds. Steps past the last stop leave the last stage playing.
+ *
+ * With `arriveFrom`, the start view's beads come in at that frame, where the
+ * slide before left them, and glide into place as the rest fades in.
  */
 export function ModelDrivenSlide({
   from,
   to = from,
   stops = [],
   aside = false,
+  arriveFrom,
 }: {
   from: number;
   to?: number;
   stops?: number[];
   /** Whether the live drag moves over to the left, alone (animated) */
   aside?: boolean;
+  arriveFrom?: Frame;
 }) {
   const current = useSlideCurrent();
   const step = useSlideStep();
@@ -39,30 +45,48 @@ export function ModelDrivenSlide({
 
   const asideU = useTween(aside ? 1 : 0);
 
+  const phase = useArrivalGlide();
+  const arriveU = useTween(phase === "start" ? 0 : 1, {
+    instant: phase !== "gliding",
+    delayMs: ARRIVE_DELAY_MS,
+  });
+
   return (
     <ModelDrivenScene
       subject={beadsSubject}
       t={t}
       drive={current}
       aside={asideU}
+      arrival={arriveFrom && { from: arriveFrom, u: arriveU }}
     />
   );
 }
+
+/** Long enough for the crossfade in */
+const ARRIVE_DELAY_MS = 350;
 
 /** A pause before the press, with the cursor on the bead */
 const LOOP_LEAD = 0.5;
 
 /**
  * Just the explainer's live drag, at `frame`, going round and round from the
- * moment the slide comes up. Put it in a stage-sized box.
+ * moment the slide comes up. Put it in a stage-sized box. With `aside`, it
+ * moves over to where the explainer sets its own live drag aside (animated).
  */
-export function LiveDragLoop({ frame }: { frame: Frame }) {
+export function LiveDragLoop({
+  frame: home,
+  aside = false,
+}: {
+  frame: Frame;
+  aside?: boolean;
+}) {
   const current = useSlideCurrent();
   const t = usePlayhead(
     current,
     beadsSubject.track[0][0] - LOOP_LEAD,
     Infinity,
   );
+  const frame = lerpFrame(home, script.bigAside, useTween(aside ? 1 : 0));
   return (
     <LiveDrag
       subject={beadsSubject}
@@ -101,21 +125,35 @@ function usePlayhead(playing: boolean, from: number, to: number): number {
 const ASIDE_MS = 600;
 const asideEase = cubicBezier(0.4, 0, 0.2, 1);
 
-/** A number that eases to each new `target` it's given */
-function useTween(target: number): number {
+/**
+ * A number that eases to each new `target` it's given, after `delayMs`, or
+ * jumps there if `instant`
+ */
+function useTween(
+  target: number,
+  { instant = false, delayMs = 0 } = {},
+): number {
   const [value, setValue] = useState(target);
   const valueRef = useRef(value);
   valueRef.current = value;
   useEffect(() => {
     const from = valueRef.current;
     if (from === target) return;
-    const start = performance.now();
+    if (instant) {
+      setValue(target);
+      return;
+    }
+    const start = performance.now() + delayMs;
     let raf = requestAnimationFrame(function tick() {
-      const u = Math.min(1, (performance.now() - start) / ASIDE_MS);
+      const u = Math.max(
+        0,
+        Math.min(1, (performance.now() - start) / ASIDE_MS),
+      );
       setValue(from + (target - from) * asideEase(u));
       if (u < 1) raf = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(raf);
-  }, [target]);
-  return value;
+  }, [target, instant, delayMs]);
+  // Jumping, not a frame late
+  return instant ? target : value;
 }

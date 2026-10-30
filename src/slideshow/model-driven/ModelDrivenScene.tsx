@@ -126,7 +126,7 @@ const flightEase = cubicBezier(0.3, 0, 0.3, 1);
 export type Frame = { x: number; y: number; scale: number };
 type Rect = { x: number; y: number; w: number; h: number };
 
-function lerpFrame(a: Frame, b: Frame, u: number): Frame {
+export function lerpFrame(a: Frame, b: Frame, u: number): Frame {
   return {
     x: lerp(a.x, b.x, u),
     y: lerp(a.y, b.y, u),
@@ -150,6 +150,7 @@ export function ModelDrivenScene<T extends object>({
   t,
   drive,
   aside = 0,
+  arrival,
 }: {
   subject: ExplainerSubject<T>;
   t: number;
@@ -163,6 +164,11 @@ export function ModelDrivenScene<T extends object>({
    * make room for something on the right
    */
   aside?: number;
+  /**
+   * Where the start view's canvas comes in from, and how far (0 to 1) it's
+   * come to its place, as everything else fades in around it
+   */
+  arrival?: { from: Frame; u: number };
 }) {
   const { draggable, state, draggedId, width, height } = subject;
   const analysis = useMemo(
@@ -189,7 +195,8 @@ export function ModelDrivenScene<T extends object>({
   const s = script;
   const panX = lerp(s.panFrom, 0, eased(t, s.pan, panEase));
   const move = eased(t, s.toRow, moveEase);
-  const codeOpacity = 1 - progress(t, s.codeOut);
+  const arriveU = arrival?.u ?? 1;
+  const codeOpacity = (1 - progress(t, s.codeOut)) * arriveU;
 
   /** A view's box and frame in the row across the top, by spec order */
   const rowSlot = (i: number): { box: Rect; frame: Frame } => {
@@ -214,11 +221,14 @@ export function ModelDrivenScene<T extends object>({
     w: s.viewBox.w,
     h: s.thumbBox.h * viewScale,
   };
-  const startFrame0: Frame = {
+  const startFrameHome: Frame = {
     x: startBox0.x + startBox0.w / 2,
     y: startBox0.y + startBox0.h / 2 + s.thumbBox.contentDy * viewScale,
     scale: s.thumbBox.scale * viewScale,
   };
+  const startFrame0 = arrival
+    ? lerpFrame(arrival.from, startFrameHome, arrival.u)
+    : startFrameHome;
   const startSlot = rowSlot(startIdx);
   const startBox = lerpRect(startBox0, startSlot.box, move);
   const startFrame = lerpFrame(startFrame0, startSlot.frame, move);
@@ -365,6 +375,7 @@ export function ModelDrivenScene<T extends object>({
           parts={parts[startIdx]}
           othersOpacity={othersOpacity}
           bounce={bounceOf(startIdx)}
+          boxOpacity={arriveU}
         />
         <g opacity={codeOpacity}>
           <DownArrow
@@ -606,6 +617,7 @@ function ViewBox({
   parts,
   othersOpacity,
   bounce,
+  boxOpacity = 1,
 }: {
   box: Rect;
   frame: Frame;
@@ -613,11 +625,14 @@ function ViewBox({
   parts: ViewParts;
   othersOpacity: number;
   bounce: Bounce;
+  boxOpacity?: number;
 }) {
   const view = { frame, canvasCenter };
   return (
     <g>
-      <BoxRect rect={box} />
+      <g opacity={boxOpacity}>
+        <BoxRect rect={box} />
+      </g>
       <CanvasView {...view} layered={parts.background} />
       {othersOpacity > 0 && (
         <g opacity={othersOpacity}>
