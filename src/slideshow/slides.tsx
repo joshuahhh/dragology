@@ -1046,7 +1046,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [32, 15, 17],
+    timing: [8, 8, 18],
     notes: `
       Thanks Josh. This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
 
@@ -1091,7 +1091,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 4,
-    timing: [8, 5, 4, 6],
+    timing: [7, 5, 3, 6],
     notes: `
       Vary can be combined freely with other behaviors using Dragology's DSL.
 
@@ -1134,7 +1134,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [14, 2, 3],
+    timing: [9, 3, 4],
     notes: `
       This tessellation editor uses this same pattern, where the discrete states are edge-to-edge snaps, and the continuous states are free-floating shapes.
 
@@ -1202,7 +1202,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [9, 10, 11],
+    timing: [4, 10, 10],
     notes: `
       In this draggable algebra expression tree, "between" is composed with two more operators.
 
@@ -1244,7 +1244,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [13, 5, 3],
+    timing: [15, 4, 2],
     notes: `
       We found Dragology to be particularly suited to interfaces that combine parallel representations, where you see the same system from different perspectives.
       This is a playground for experimenting with permutations. Interacting with any of these representations
@@ -1274,7 +1274,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [11, 12, 2],
+    timing: [8, 4, 9],
     notes: `
       And as a recursive finale, this block-based programming interface lets a user assemble operators
 
@@ -1284,7 +1284,7 @@ export const outline: (Slide | Heading)[] = [
 
       ---
 
-      So, to be clear, this is an interface made with Dragology, for composing Dragology behaviors. Would you believe us if we told you we were computer scientists?
+      So, to be clear, this is an interface made with Dragology, for composing Dragology behaviors. If you saw this coming, you may just be a computer scientist.
     `,
     content: (
       <Rails id="drag-spec-designer">
@@ -1305,7 +1305,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 4,
-    timing: [7, 7, 8, 5],
+    timing: [6, 6, 9, 4],
     notes: `
       // drag in the yellow note
       We ran a study where thirteen participants got hands-on experience using Dragology.
@@ -1335,7 +1335,7 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Since the paper" },
   {
     transition: "fade-white",
-    timing: [30],
+    timing: [19],
     notes: `
       // Video, on Space
       Since finishing the paper, we've incorporated declarative dragging into other existing projects.
@@ -1349,11 +1349,11 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
-    timing: [26],
+    timing: [22],
     notes: `
-      Not long after we submitted the paper, I went back to my math game, 
-      rebuilding my prototype as a 3d game where innocent trees are possessed by mathematical ghosts. 
-      Declarative dragging powers an interaction to simplify expressions, which, now exorcised, return to the platonic realm.
+      I also returned to a long-running side project, a math game where the idea for model-driven dragging first originated. 
+      Now powerered by declarative dragging, my primitive prototype grew into a 3d landscape possessed by mathematical ghosts. 
+      Here I drag to perform an algebreic exorcism, simplifyng expressions to return them to the platonic realm.
     `,
     // uist-nool-v2.mov (Andrew's Screenshots), cut and sped up by
     // d2-talk/video-cuts/supernool-cut.sh
@@ -1448,13 +1448,15 @@ export const outline: (Slide | Heading)[] = [
 
       Our study suggests people from diverse disciplines want the same thing: from educators, to game designers, to mathematicians, to creative tool builders.
 
+      ---
+
       We hope declarative dragging will let them work in the semantic worlds they live in, helping them turn the rules of their worlds into rich tangible interactions in ours.
     `,
     content: <ClosingMontageSlide />,
   },
   {
     transition: "fade-white",
-    timing: [9],
+    timing: [0],
     notes: `
       Thanks!
     `,
