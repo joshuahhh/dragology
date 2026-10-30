@@ -1008,7 +1008,7 @@ export function CallToActionSlide() {
             color: "#1f2937",
           }}
         >
-          <div style={{ width: 320, justifySelf: "center" }}>
+          <div style={{ width: 296, justifySelf: "center" }}>
             <QrCode text={SITE_URL} />
           </div>
           <div style={{ fontSize: 28, fontWeight: 600, whiteSpace: "nowrap" }}>
