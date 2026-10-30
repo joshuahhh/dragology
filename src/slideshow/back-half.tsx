@@ -5,8 +5,9 @@
 import qrcode from "qrcode-generator";
 import {
   Children,
-  createContext,
   type CSSProperties,
+  Fragment,
+  isValidElement,
   type ReactNode,
   useContext,
   useEffect,
@@ -40,7 +41,6 @@ import {
 } from "./slide";
 import { sourceSans } from "./source-sans";
 
-const HIGHLIGHT = "#d5e5a3";
 const EASE = "cubic-bezier(0.45, 0, 0.25, 1)";
 
 /** A file in public/slides/back-half */
@@ -50,7 +50,6 @@ function file(name: string) {
 
 // ── Code callouts ──
 
-/** Code highlighted at the given steps of the slide. */
 // Code as the live-code slide shows it: DejaVu Sans Mono in its "quiet"
 // colors, with drag spec operators' names in the paper's style
 const CODE_COLORS = {
@@ -60,77 +59,132 @@ const CODE_COLORS = {
   literal: "#c2410c",
 };
 
-/** Whether the Hl around some code is lit, which takes over from the operators' tint */
-const HlLit = createContext(false);
+// What's highlighted at a step is ringed in the live-code slide's highlight
+// color, with a faint wash of it multiplied over the code (tinting the
+// operators a little too, without dimming the text); both draw themselves in
+// from the left as the step arrives
+const HL_COLOR = "#d946ef";
+const HL_RING = "0.12em";
+const HL_FILL = "rgba(217, 70, 239, 0.15)";
+const HL_INSET = "-0.14em -0.1em";
+const HL_WIPE_MS = 800;
+const HL_KEYFRAMES = `@keyframes code-hl-wipe {
+  from { clip-path: inset(-20% 100% -20% 0); }
+  to { clip-path: inset(-20% 0 -20% 0); }
+}`;
 
-/**
- * A run of code, colored. A name is an operator's if it follows a dot, or
- * starts the run (as in `{"d."}<Hl>vary</Hl>`).
- */
-function CodeText({ text }: { text: string }) {
-  const lit = useContext(HlLit);
-  const out: ReactNode[] = [];
-  const token =
-    /("[^"]*")|(\d+|true|false)\b|([A-Za-z_]\w*)|([()[\]{},.:=>])|(\s+|.)/g;
-  let prev = "";
-  for (const [tok, str, literal, name, punct] of text.matchAll(token)) {
-    const style: CSSProperties | undefined = str
-      ? { color: CODE_COLORS.string }
-      : literal
-        ? { color: CODE_COLORS.literal }
-        : name && OP_NAMES.has(name) && (prev === "." || prev === "")
-          ? {
-              ...PAPER_OP_STYLE,
-              padding: "0 2px",
-              borderRadius: 2,
-              background: lit ? "transparent" : PAPER_OP_STYLE.background,
-            }
-          : punct
-            ? { color: CODE_COLORS.punctuation }
-            : undefined;
-    out.push(
-      style ? (
-        <span key={out.length} style={style}>
-          {tok}
-        </span>
-      ) : (
-        tok
-      ),
-    );
-    if (tok.trim()) prev = tok;
-  }
-  return <>{out}</>;
+/** Code highlighted at the given steps, in a CodeCallout (which draws it) */
+export function Hl({ children }: { at: number[]; children: ReactNode }) {
+  return <>{children}</>;
 }
 
-/** Code children, their strings colored */
-function code(children: ReactNode) {
-  return Children.map(children, (child) =>
-    typeof child === "string" ? <CodeText text={child} /> : child,
+type Piece = { text: string; lit: boolean };
+type Token = { text: string; style?: CSSProperties };
+/** Neighbouring code on one line that's lit, or not, together */
+type Run = { lit: boolean; text: string; tokens: Token[] };
+
+/** A callout's code as pieces, lit where an Hl is at `step` */
+function codePieces(children: ReactNode, step: number): Piece[] {
+  const out: Piece[] = [];
+  Children.forEach(children, (child) => {
+    if (typeof child === "string") out.push({ text: child, lit: false });
+    else if (
+      isValidElement<{ at: number[]; children: ReactNode }>(child) &&
+      child.type === Hl
+    ) {
+      const lit = child.props.at.includes(step);
+      Children.forEach(child.props.children, (c) => {
+        if (typeof c === "string") out.push({ text: c, lit });
+      });
+    }
+  });
+  return out;
+}
+
+const TOKEN =
+  /("[^"]*")|(\d+|true|false)\b|([A-Za-z_]\w*)|([()[\]{},.:=>])|(\s+|.)/g;
+
+/**
+ * The pieces as lines of runs, colored. A name is an operator's if it
+ * follows a dot, or starts the code (as in `{"d."}<Hl>vary</Hl>`, it
+ * follows one across pieces).
+ */
+function codeRuns(pieces: Piece[]): Run[][] {
+  const lines: Run[][] = [[]];
+  let prev = "";
+  for (const { text, lit } of pieces) {
+    text.split("\n").forEach((part, i) => {
+      if (i > 0) lines.push([]);
+      const line = lines[lines.length - 1];
+      for (const [tok, str, literal, name, punct] of part.matchAll(TOKEN)) {
+        const style: CSSProperties | undefined = str
+          ? { color: CODE_COLORS.string }
+          : literal
+            ? { color: CODE_COLORS.literal }
+            : name && OP_NAMES.has(name) && (prev === "." || prev === "")
+              ? { ...PAPER_OP_STYLE, padding: "0 2px", borderRadius: 2 }
+              : punct
+                ? { color: CODE_COLORS.punctuation }
+                : undefined;
+        const last = line[line.length - 1];
+        if (last && last.lit === lit) {
+          last.tokens.push({ text: tok, style });
+          last.text += tok;
+        } else line.push({ lit, text: tok, tokens: [{ text: tok, style }] });
+        if (tok.trim()) prev = tok;
+      }
+    });
+  }
+  return lines;
+}
+
+/** Which runs are lit, by line, as `line:text` */
+function litRuns(lines: Run[][]) {
+  return new Set(
+    lines.flatMap((line, i) =>
+      line.filter((r) => r.lit).map((r) => `${i}:${r.text}`),
+    ),
   );
 }
 
-/** Code highlighted at the given steps (in a CodeCallout) */
-export function Hl({ at, children }: { at: number[]; children: ReactNode }) {
-  const on = at.includes(useSlideStep());
-  return (
+function RunView({ run, entering }: { run: Run; entering: boolean }) {
+  const mark = (style: CSSProperties) => (
     <span
       style={{
-        backgroundColor: on ? HIGHLIGHT : "transparent",
-        // Padded into the margin, so the code lays out as it would unlit
-        padding: "0 6px",
-        margin: "0 -6px",
-        borderRadius: 4,
-        transition: "background-color 300ms ease",
+        position: "absolute",
+        inset: HL_INSET,
+        borderRadius: "0.3em",
+        pointerEvents: "none",
+        animation: entering
+          ? `code-hl-wipe ${HL_WIPE_MS}ms cubic-bezier(.3, .7, .3, 1) both`
+          : undefined,
+        ...style,
       }}
-    >
-      <HlLit.Provider value={on}>{code(children)}</HlLit.Provider>
+    />
+  );
+  return (
+    <span style={{ position: "relative" }}>
+      {/* The wash and the ring both go over the code, operators and all */}
+      {run.lit &&
+        mark({ background: HL_FILL, mixBlendMode: "multiply", zIndex: 1 })}
+      {run.tokens.map((t, i) =>
+        t.style ? (
+          <span key={i} style={t.style}>
+            {t.text}
+          </span>
+        ) : (
+          t.text
+        ),
+      )}
+      {run.lit && mark({ border: `${HL_RING} solid ${HL_COLOR}`, zIndex: 2 })}
     </span>
   );
 }
 
 /**
- * Code in a corner of the stage, shown from step `from`. Put it beside a
- * DemoSlide, not in it, so that it's drawn at stage scale.
+ * Code in a corner of the stage, shown from step `from`, with its `Hl`s
+ * ringed at their steps. Put it beside a DemoSlide, not in it, so that it's
+ * drawn at stage scale.
  */
 export function CodeCallout({
   children,
@@ -141,8 +195,20 @@ export function CodeCallout({
   from?: number;
   corner?: "bottom-right" | "bottom-left" | "top-right";
 }) {
-  const shown = useSlideStep() >= from;
+  const step = useSlideStep();
+  const shown = step >= from;
   const [v, h] = corner.split("-") as ["top" | "bottom", "left" | "right"];
+  const lines = codeRuns(codePieces(children, step));
+  // Runs lit now that weren't at the step before wipe in; arriving, they're
+  // just there
+  const prevStep = useRef<number | null>(null);
+  const before =
+    prevStep.current === null || prevStep.current === step
+      ? null
+      : litRuns(codeRuns(codePieces(children, prevStep.current)));
+  useEffect(() => {
+    prevStep.current = step;
+  }, [step]);
   return (
     <pre
       style={{
@@ -150,11 +216,12 @@ export function CodeCallout({
         [v]: 72,
         [h]: 64,
         zIndex: 10,
+        isolation: "isolate",
         margin: 0,
-        padding: "20px 28px",
+        padding: "22px 30px",
         fontFamily: CODE_FONT,
-        fontSize: 30,
-        lineHeight: 1.5,
+        fontSize: 36,
+        lineHeight: 1.55,
         color: CODE_COLORS.text,
         background: "white",
         border: "1px solid #e5e7eb",
@@ -166,7 +233,19 @@ export function CodeCallout({
         pointerEvents: "none",
       }}
     >
-      {code(children)}
+      <style>{HL_KEYFRAMES}</style>
+      {lines.map((line, i) => (
+        <Fragment key={i}>
+          {i > 0 && "\n"}
+          {line.map((run, j) => (
+            <RunView
+              key={`${j}:${run.text}:${run.lit}`}
+              run={run}
+              entering={!!before && run.lit && !before.has(`${i}:${run.text}`)}
+            />
+          ))}
+        </Fragment>
+      ))}
     </pre>
   );
 }
@@ -914,13 +993,13 @@ export function CallToActionSlide() {
       />
       <div className="absolute inset-0 flex items-center justify-center">
         <div
-          // One column as wide as the address, which the QR code spans exactly
+          // One column as wide as the address; the QR code a little narrower
           className="bg-white"
           style={{
             display: "grid",
             gridTemplateColumns: "max-content",
             boxShadow:
-              "0 36px 90px rgba(0,0,0,0.55), 0 10px 28px rgba(0,0,0,0.3)",
+              "0 32px 84px rgba(0,0,0,0.45), 0 8px 22px rgba(0,0,0,0.2)",
             border: "1px solid #e5e7eb",
             borderRadius: 24,
             padding: "44px 44px 36px",
@@ -929,7 +1008,9 @@ export function CallToActionSlide() {
             color: "#1f2937",
           }}
         >
-          <QrCode text={SITE_URL} />
+          <div style={{ width: 320, justifySelf: "center" }}>
+            <QrCode text={SITE_URL} />
+          </div>
           <div style={{ fontSize: 28, fontWeight: 600, whiteSpace: "nowrap" }}>
             {SITE_URL.replace(/^https:\/\/|\/$/g, "")}
           </div>
