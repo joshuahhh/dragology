@@ -22,6 +22,7 @@ import {
 import { NotesEditor } from "./NotesEditor";
 import { useRailsMode } from "./rails";
 import {
+  contentStep,
   type Heading,
   NEXT_KEYS,
   notesFirstLine,
@@ -1117,7 +1118,9 @@ export function SlideshowPage() {
                           arrivedForward: arrival.forward,
                         }}
                       >
-                        <SlideStepContext.Provider value={stepOf(slideIdx)}>
+                        <SlideStepContext.Provider
+                          value={contentStep(s, stepOf(slideIdx))}
+                        >
                           <StatusBarSlotContext.Provider value={statusBarSlot}>
                             {s.content}
                           </StatusBarSlotContext.Provider>

@@ -43,7 +43,8 @@ export type Slide = {
    * How many steps the slide goes through before going on to the next slide
    * (default 1). The slide stays mounted throughout, so whatever it's doing
    * carries on from step to step; its content reads the step with
-   * `useSlideStep`.
+   * `useSlideStep`. Notes with more stages than this give the slide more
+   * steps, through which its content holds on its last.
    */
   steps?: number;
   /**
@@ -61,8 +62,25 @@ export type Slide = {
  */
 export type Heading = { heading: string; level?: 1 | 2 };
 
+// A line of notes that's just --- starts the notes for the slide's next step
+export const STAGE_BREAK = /^\s*---\s*$/;
+
+/** How many stages a slide's notes are divided into by --- lines. */
+function notesStages(notes: string | undefined): number {
+  if (!notes) return 1;
+  return 1 + notes.split("\n").filter((l) => STAGE_BREAK.test(l)).length;
+}
+
 export function slideSteps(slide: Slide) {
-  return slide.steps ?? 1;
+  return Math.max(slide.steps ?? 1, notesStages(slide.notes));
+}
+
+/**
+ * The step a slide's content sees at `step`: steps past its own `steps`,
+ * which only its notes have, hold on its last.
+ */
+export function contentStep(slide: Slide, step: number) {
+  return Math.min(step, (slide.steps ?? 1) - 1);
 }
 
 export const SlideStepContext = createContext(0);
