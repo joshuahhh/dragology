@@ -209,8 +209,15 @@ function nodeDrag(
         );
       }
     }
-    // States can also snap into spec slots via an auto-created fixed adapter
-    if (myKind === "state" && slotKind === "spec") {
+  }
+
+  // States can also snap into spec slots via an auto-created fixed adapter.
+  // These come after every direct slot: an adapter in front of an empty
+  // fixed puts the state exactly where filling that fixed would, and closest
+  // breaks ties by order, so filling it should win
+  if (myKind === "state") {
+    for (const [sid, sn] of Object.entries(base.nodes)) {
+      if (sid === nid || exprSlotKind(sn.expr) !== "spec") continue;
       for (const i of exprOpenSlots(sn.expr)) {
         targets.push(
           d
