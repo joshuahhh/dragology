@@ -36,7 +36,10 @@ import {
 } from "./back-half";
 import { BehaviorDiagramSlide } from "./behavior-diagram";
 import { beadsSubject } from "./model-driven/beads";
-import { script as modelDrivenScript } from "./model-driven/ModelDrivenScene";
+import {
+  MacClosedHand,
+  script as modelDrivenScript,
+} from "./model-driven/ModelDrivenScene";
 import {
   LiveDragLoop,
   ModelDrivenSlide,
@@ -518,18 +521,9 @@ function TitleInset({ children }: { children: ReactNode }) {
   );
 }
 
-// Lucide's "grab" icon (ISC license), a closed hand
-const grabHandPaths = [
-  "M18 11.5V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1.4",
-  "M14 10V8a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2",
-  "M10 9.9V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v5",
-  "M6 14a2 2 0 0 0-2-2a2 2 0 0 0-2 2",
-  "M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8 2 2 0 1 1 4 0",
-];
-
 /**
- * A grabbing hand carrying a card away from the dashed outline of where it
- * was
+ * A grabbing hand (the Mac's own, as the slides' cursors are) carrying a card
+ * away from the dashed outline of where it was
  */
 function DragAndDropIcon({ size }: { size: number }) {
   return (
@@ -553,15 +547,11 @@ function DragAndDropIcon({ size }: { size: number }) {
         fill="currentColor"
         fillOpacity={0.15}
       />
-      <g transform="translate(12 9) scale(0.95)">
-        {/* The hand's outline is open, so fill it in a pass of its own, under
-            the strokes, to hide the card behind it */}
-        {grabHandPaths.map((d) => (
-          <path key={`fill-${d}`} d={d} fill="white" stroke="none" />
-        ))}
-        {grabHandPaths.map((d) => (
-          <path key={d} d={d} />
-        ))}
+      <g
+        transform="translate(23.5 22.5) scale(1.5) translate(-16.3 -18)"
+        strokeWidth={1}
+      >
+        <MacClosedHand />
       </g>
     </svg>
   );
@@ -919,7 +909,7 @@ export const outline: (Slide | Heading)[] = [
     notes: `
       // prob 38 sec total
 
-      Interfaces can show you worlds of information, imagination, structures, patterns, and simulation.
+      Interfaces can show us worlds of information, imagination, structures, patterns, and simulation.
 
       And unlike photographs, interfaces let us reach into these worlds, to tug things around, and see how they respond.
 

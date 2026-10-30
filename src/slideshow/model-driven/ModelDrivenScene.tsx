@@ -963,6 +963,18 @@ const HAND_CREASES: [number, number, number, number][] = [
   [19.57, 20.73, 19.57, 17.28],
 ];
 
+/** The closed hand, filled white, in the stroke it's given */
+export function MacClosedHand() {
+  return (
+    <g>
+      <path d={HAND_OUTLINE} fill="white" strokeLinejoin="round" />
+      {HAND_CREASES.map(([x1, y1, x2, y2]) => (
+        <line key={x1} x1={x1} y1={y1} x2={x2} y2={y2} strokeLinecap="round" />
+      ))}
+    </g>
+  );
+}
+
 export function Cursor({
   at,
   scale,
@@ -984,10 +996,7 @@ export function Cursor({
       stroke={INK}
       strokeWidth={0.75}
     >
-      <path d={HAND_OUTLINE} fill="white" strokeLinejoin="round" />
-      {HAND_CREASES.map(([x1, y1, x2, y2]) => (
-        <line key={x1} x1={x1} y1={y1} x2={x2} y2={y2} strokeLinecap="round" />
-      ))}
+      <MacClosedHand />
     </g>
   );
 }
