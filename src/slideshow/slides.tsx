@@ -911,7 +911,7 @@ export const outline: (Slide | Heading)[] = [
 
       ---
 
-      To make it possible for model-driven dragging to express different drag-and-drop styles, we extend it with a powerful DSL of behaviors. We call that **composable dragging**.
+      To make it possible for model-driven dragging to express *different* drag-and-drop styles, we extend it with a powerful DSL of behaviors. We call that **composable dragging**.
 
       ---
 
