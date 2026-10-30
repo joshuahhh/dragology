@@ -810,7 +810,7 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Intro" },
   {
     content: <ImageSlide src="earth.jpg" />,
-    timing: [16],
+    timing: [7],
     notes: `
       A photograph is a portal into another place on Earth.
 
@@ -818,7 +818,7 @@ export const outline: (Slide | Heading)[] = [
     `,
   },
   {
-    timing: [15, 23],
+    timing: [14, 22],
     notes: `
       // prob 38 sec total
 
@@ -840,7 +840,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 4,
     transition: "fade-white",
     content: <DeclarativeDraggingIntro />,
-    timing: [13, 9, 11, 15],
+    timing: [11, 9, 10, 10],
     notes: `
       // TODO: consider fading background or something
 
@@ -871,7 +871,7 @@ export const outline: (Slide | Heading)[] = [
     // Then, beside the ring, the drag code you'd write without a library,
     // then the Model-Driven Dragging art
     steps: 3,
-    timing: [5, 8, 3],
+    timing: [5, 8, 4],
     notes: `
       We’ll start with a simple drag-and-drop interface for reordering beads in a ring.
 
@@ -888,7 +888,7 @@ export const outline: (Slide | Heading)[] = [
   {
     // The ring glides on from beside the art
     transition: "fade",
-    timing: [9],
+    timing: [10],
     notes: `
       First, the interface developer implements a static version of the interface as a function from a model state to a view tree, like in React.
     `,
@@ -897,7 +897,7 @@ export const outline: (Slide | Heading)[] = [
     ),
   },
   {
-    timing: [16],
+    timing: [14],
     notes: `
       Next, they specify, for each draggable element, a set of new model states the user should be able to **access** by dragging that element.
 
@@ -916,7 +916,7 @@ export const outline: (Slide | Heading)[] = [
     // The dragged element singled out in each view; then the views line up
     // and send its positions down onto one ring
     steps: 2,
-    timing: [8, 3],
+    timing: [7, 4],
     notes: `
       ... and examines where the dragged element ends up in each of these hypothetical future worlds.
 
@@ -928,7 +928,7 @@ export const outline: (Slide | Heading)[] = [
     content: <ModelDrivenSlide from={17.5} stops={[20.6]} to={23} />,
   },
   {
-    timing: [7, 10],
+    timing: [8, 10],
     notes: `
       // These views and positions provide 
       ... the engine has enough information to run a high-quality animated drag-and-drop interaction.
@@ -947,7 +947,7 @@ export const outline: (Slide | Heading)[] = [
   {
     // The ring glides over from the live drag
     transition: "fade",
-    timing: [10],
+    timing: [9],
     notes: `
       To show you how this works in practice, and introduce the complementary concept of composable dragging, we’ll make this ring demo using our library Dragology.
     `,
@@ -959,7 +959,7 @@ export const outline: (Slide | Heading)[] = [
     // shows just the drag spec, with the spec tree, in the studio's
     // layout.
     steps: 3,
-    timing: [22, 56, 29, 24, 28],
+    timing: [20, 54, 29, 26, 31],
     notes: `
       This "draggable" is a function that, given a model state, returns a static view.
       Here’s the line that draws the background ring…
@@ -1004,7 +1004,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [17, 5],
+    timing: [18, 14, 12],
     notes: `
       So what is this thing we're building and returning from dragologyOnDrag? It's a **drag behavior**: a function that runs every frame during a drag, reading in a changing pointer position and producing a preview to be shown on screen and a state to be transitioned to on drop.
 
