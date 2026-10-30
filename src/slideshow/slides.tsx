@@ -1220,12 +1220,14 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 2,
     notes: `
-      Our next operator, called "between", interpolates between previews as you drag. In this diagram of an order-preserving map between trees, the black dots can be dragged freely between the gray bubbles. As you drag, bubbles grow, anticipating the arrival of the dot.
+      Our next operator, called "between", interpolates between previews as you drag. 
+      In this diagram of an order-preserving map between trees, the black dots can be dragged freely between the gray bubbles.
+      As you drag, bubbles grow, anticipating the arrival of the dot.
 
       ---
 
       // purple overlay comes on
-      "Between" produces this interpolation by tracking the dot's position in a triangulation of target positions.
+      "Between" produces this interpolation by tracking the dot's location in a triangulation of target positions.
     `,
     content: (
       <Rails id="twisted-trees">
@@ -1494,7 +1496,7 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 3,
     notes: `
-      In our own work, declarative dragging has helped us make the digital graspable without being bogged down by implementation details.
+      In our own work, declarative dragging has helped us make the digital graspable without being bogged down in implementation details.
 
       ---
 
