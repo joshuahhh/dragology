@@ -45,6 +45,7 @@ import {
   ModelDrivenSlide,
 } from "./model-driven/ModelDrivenSlide";
 import { ClosingMontage } from "./montage/closing";
+import { MONTAGE_CREDITS } from "./montage/montageCredits";
 import { Rails } from "./rails";
 import { robotoMono } from "./roboto-mono";
 import { ART_CENTER_X, SideArt, STEP_EASE } from "./side-art";
@@ -489,7 +490,36 @@ function MontageSlide() {
           style={{ visibility: i === clip ? "visible" : "hidden" }}
         />
       ))}
+      <MontageCredit file={montageFiles[clip]} />
       <SlideInsets insets={[null, dragAndDropInset]} bottom={96} />
+    </div>
+  );
+}
+
+/** A small note in the corner naming a montage clip's system and source */
+function MontageCredit({ file }: { file: string }) {
+  const credit = MONTAGE_CREDITS[file.replace("montage/", "")];
+  if (!credit) return null;
+  return (
+    <div
+      className="absolute"
+      style={{
+        right: 20,
+        bottom: 16,
+        padding: "4px 12px",
+        borderRadius: 6,
+        // A dark backing, so it reads over white clips as well as black
+        background: "rgba(0,0,0,0.55)",
+        fontFamily: sourceSans,
+        fontSize: 20,
+        color: "rgba(255,255,255,0.9)",
+        pointerEvents: "none",
+      }}
+    >
+      <span style={{ fontWeight: 700 }}>{credit.system}</span>
+      {credit.credit && (
+        <span style={{ opacity: 0.75 }}> · {credit.credit}</span>
+      )}
     </div>
   );
 }
