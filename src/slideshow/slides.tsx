@@ -1114,10 +1114,8 @@ export const outline: (Slide | Heading)[] = [
     notes: `
       ... and examines where the dragged element ends up in each of these hypothetical future worlds.
 
-      Putting all this information together...
-
       ---
-      // keep going
+      Putting all this information together...
     `,
     content: <ModelDrivenSlide from={17.5} stops={[20.6]} to={23} />,
   },
