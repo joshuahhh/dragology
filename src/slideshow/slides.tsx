@@ -35,7 +35,7 @@ import {
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
-import { BehaviorDiagramSlide } from "./behavior-diagram";
+import { BehaviorDiagramSlide, BehaviorTreeSlide } from "./behavior-diagram";
 import { beadsSubject } from "./model-driven/beads";
 import { script as modelDrivenScript } from "./model-driven/ModelDrivenScene";
 import {
@@ -1070,9 +1070,14 @@ export const outline: (Slide | Heading)[] = [
 
       ---
       As we apply operators like "withFloating", we're producing new behaviors from old ones.
-      // TODO: show tree of compositions
     `,
     content: <BehaviorDiagramSlide />,
+  },
+  {
+    // For reference: the tree on the slide before, each node showing its
+    // behavior's preview
+    skip: true,
+    content: <BehaviorTreeSlide />,
   },
   {
     steps: 2,
