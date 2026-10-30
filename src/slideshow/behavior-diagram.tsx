@@ -16,6 +16,7 @@ import { CODE_FONT, LETTER_FONT } from "../talk/fonts";
 import { OP_NAMES } from "../talk/opMarks";
 import { snippets } from "../talk/snippets";
 import { assertDefined } from "../utils/assert";
+import { BEAD_INK } from "./model-driven/beads";
 import { Cursor } from "./model-driven/ModelDrivenScene";
 import { STAGE_H, STAGE_W, useSlideStep } from "./slide";
 import { sourceSans } from "./source-sans";
@@ -84,14 +85,6 @@ const INK = "#1d1d24";
 const MUTED = "#71717a";
 const WIRE = "#52525b";
 const PANEL_FILL = "#f2f2f4";
-// The bright beads' ink colors (talk/snippets.ts)
-const BEAD_INK: Record<string, string> = {
-  A: "#b91c1c",
-  B: "#1d4ed8",
-  C: "#a16207",
-  D: "#15803d",
-  E: "#6d28d9",
-};
 const MONO_ADVANCE = 0.602; // DejaVu Sans Mono's characters are all this wide
 
 const PANEL_W = 1660;
