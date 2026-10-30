@@ -52,7 +52,7 @@ import {
   slideFileUrl,
   STAGE_H,
   STAGE_W,
-  useSlideArrivedForward,
+  useArrivalGlide,
   useSlideCurrent,
   useSlideShown,
   useSlideStep,
@@ -171,28 +171,6 @@ const TITLE_GLIDE = "700ms cubic-bezier(0.4, 0, 0.2, 1)";
 const RING_GLIDE_DELAY_MS = 350;
 const TITLE_IN_DELAY_MS = 650;
 
-/**
- * Where a slide that glides into place on arrival is in that: at the start,
- * as it's preloaded and while it fades in; gliding, once we've come to it
- * going forward; or at the end, having come to it any other way
- */
-function useArrivalGlide(): "start" | "gliding" | "end" {
-  const current = useSlideCurrent();
-  const shown = useSlideShown();
-  const arrivedForward = useSlideArrivedForward();
-  const [phase, setPhase] = useState<"start" | "gliding" | "end">("start");
-  // Before paint, so that coming to it some other way never shows the start
-  useLayoutEffect(() => {
-    if (current && !arrivedForward) setPhase("end");
-    else if (!shown) setPhase("start");
-    if (!current || !arrivedForward) return;
-    // A frame at the start first, for the glide to go from
-    const raf = requestAnimationFrame(() => setPhase("gliding"));
-    return () => cancelAnimationFrame(raf);
-  }, [current, shown, arrivedForward]);
-  return phase;
-}
-
 // The Model-Driven and Composable Dragging art (model-driven.png is
 // 1125×1620, composable.png the same shape smaller), as the live drag and
 // operators slides show it on the right on their second steps
@@ -222,40 +200,36 @@ function SideArt({ src, shown }: { src: string; shown: boolean }) {
 }
 
 /**
- * Where we are in the talk: Declarative Dragging's two ideas, drawn with the
- * intro's art, the one we're on and the one to come, faded
+ * The ring of beads, live; on the second step it moves left and the drag code
+ * you'd write by hand comes in on the right, then gives way to the
+ * Model-Driven Dragging art. The explainer that follows glides the ring on
+ * from where this leaves it.
  */
-function RoadmapSlide({ on }: { on: "model-driven" | "composable" }) {
-  const art = (src: string, centerX: number) => (
-    <img
-      src={slideFileUrl(src)}
-      alt=""
-      draggable={false}
-      style={{
-        position: "absolute",
-        top: 280,
-        left: centerX - ART_W / 2,
-        height: ART_H,
-        opacity: src.startsWith(on) ? 1 : 0.2,
-        mixBlendMode: "multiply",
-      }}
-    />
-  );
+function VanillaDragSlide() {
+  const step = useSlideStep();
   return (
     <div className="absolute inset-0 bg-white">
+      <LiveDragLoop
+        frame={{ x: STAGE_W / 2, y: STAGE_H / 2, scale: 3 }}
+        aside={step >= 1}
+      />
+      <DemoLink demoId="ring-of-beads" />
       <div
         style={{
           position: "absolute",
-          left: 110,
-          top: 64,
-          fontFamily: sourceSans,
-          fontSize: 104,
+          top: "50%",
+          left: ART_CENTER_X,
+          opacity: step === 1 ? 1 : 0,
+          transform: `translate(-50%, -50%) translateX(${step === 0 ? 60 : 0}px)`,
+          transition: `opacity ${STEP_EASE}, transform ${STEP_EASE}`,
+          boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
+          pointerEvents: "none",
         }}
+        className="bg-white"
       >
-        Declarative Dragging
+        <VanillaDragCode />
       </div>
-      {art("model-driven.png", 580)}
-      {art("composable.png", 1350)}
+      <SideArt src="model-driven.png" shown={step >= 2} />
     </div>
   );
 }
@@ -921,38 +895,33 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Model-driven dragging" },
   {
     transition: "fade-white",
-    // Then the drag code you'd write without a library, over the ring
-    steps: 2,
-    timing: [5, 8],
+    // Then, beside the ring, the drag code you'd write without a library,
+    // then the Model-Driven Dragging art
+    steps: 3,
+    timing: [5, 8, 3],
     notes: `
       We’ll start with a simple drag-and-drop interface for reordering beads in a ring.
 
       ---
 
       Traditionally you would make this manually, by adding listeners to pointer events, and managing ephemeral state during the drag.
-    `,
-    content: (
-      <div className="absolute inset-0 bg-white">
-        <LiveDragLoop frame={{ x: STAGE_W / 2, y: STAGE_H / 2, scale: 3 }} />
-        <DemoLink demoId="ring-of-beads" />
-        <SlideInsets insets={[null, <VanillaDragCode />]} />
-      </div>
-    ),
-  },
-  {
-    transition: "fade-white",
-    notes: `
+
+      ---
+
       **Model-driven dragging** works at a higher level.
     `,
-    content: <RoadmapSlide on="model-driven" />,
+    content: <VanillaDragSlide />,
   },
   {
-    transition: "fade-white",
+    // The ring glides on from beside the art
+    transition: "fade",
     timing: [9],
     notes: `
       First, the interface developer implements a static version of the interface as a function from a model state to a view tree, like in React.
     `,
-    content: <ModelDrivenSlide from={0} />,
+    content: (
+      <ModelDrivenSlide from={0} arriveFrom={modelDrivenScript.bigAside} />
+    ),
   },
   {
     timing: [16],
