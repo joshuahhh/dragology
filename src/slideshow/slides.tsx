@@ -868,7 +868,7 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Intro" },
   {
     content: <OpeningSlide />,
-    timing: [7],
+    timing: [10],
     notes: `
       A photograph is a portal into another place on Earth.
 
@@ -876,7 +876,7 @@ export const outline: (Slide | Heading)[] = [
     `,
   },
   {
-    timing: [14, 22],
+    timing: [14, 23],
     notes: `
       // prob 38 sec total
 
@@ -898,7 +898,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 4,
     transition: "fade-white",
     content: <DeclarativeDraggingIntro />,
-    timing: [11, 9, 10, 10],
+    timing: [11, 9, 10, 12],
     notes: `
       So we’d like to share **Declarative Dragging**, a new approach which makes it possible to build higher quality drag-and-drop interfaces with less work.
 
@@ -944,7 +944,7 @@ export const outline: (Slide | Heading)[] = [
   {
     // The ring glides on from beside the art
     transition: "fade",
-    timing: [10],
+    timing: [8],
     notes: `
       First, the interface developer implements a static version of the interface as a function from a model state to a view tree, like in React.
     `,
@@ -962,7 +962,7 @@ export const outline: (Slide | Heading)[] = [
     content: <ModelDrivenSlide from={7.5} to={9} />,
   },
   {
-    timing: [6],
+    timing: [5],
     notes: `
       When a drag starts, an engine speculatively renders each of these states to a view...
     `,
@@ -972,7 +972,7 @@ export const outline: (Slide | Heading)[] = [
     // The dragged element singled out in each view; then the views line up
     // and send its positions down onto one ring
     steps: 2,
-    timing: [7, 4],
+    timing: [6, 1],
     notes: `
       ... and examines where the dragged element ends up in each of these hypothetical future worlds.
 
@@ -1003,7 +1003,7 @@ export const outline: (Slide | Heading)[] = [
   {
     // The ring glides over from the live drag
     transition: "fade",
-    timing: [9],
+    timing: [11],
     notes: `
       To show you how this works in practice, and introduce the complementary concept of composable dragging, we’ll make this ring demo using our library Dragology.
     `,
@@ -1015,7 +1015,7 @@ export const outline: (Slide | Heading)[] = [
     // shows just the drag spec, with the spec tree, in the studio's
     // layout.
     steps: 3,
-    timing: [20, 54, 29, 26, 31],
+    timing: [18, 59, 26, 24, 36],
     notes: `
       This "draggable" is a function that, given a model state, returns a static view.
       Here’s the line that draws the background ring…
@@ -1064,7 +1064,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [18, 14, 12],
+    timing: [16, 13, 10],
     notes: `
       So what is this thing we're building and returning from dragologyOnDrag? It's a **drag behavior**: a function that runs every frame during a drag, reading in a changing pointer position and producing a preview to be shown on screen and a state to be transitioned to on drop.
 
@@ -1084,7 +1084,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [8, 8, 18],
+    timing: [6, 9, 17],
     notes: `
       This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
 
@@ -1129,7 +1129,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 4,
-    timing: [7, 5, 3, 6],
+    timing: [5, 6, 4, 6],
     notes: `
       Vary can be combined freely with other behaviors using Dragology's DSL.
 
@@ -1172,7 +1172,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [9, 3, 4],
+    timing: [8, 3, 5],
     notes: `
       This tessellation editor uses this same pattern, where the discrete states are edge-to-edge snaps, and the continuous states are free-floating shapes.
 
@@ -1209,7 +1209,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 2,
-    timing: [17, 6],
+    timing: [16, 7],
     notes: `
       Our next operator, called "between", interpolates between previews as you drag.
       In this diagram of an order-preserving map between trees, the black dots can be dragged freely between the gray bubbles.
@@ -1240,7 +1240,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 3,
-    timing: [4, 10, 10],
+    timing: [6, 7, 9],
     notes: `
       In this draggable algebra expression tree, "between" is composed with two more operators.
 
@@ -1281,7 +1281,7 @@ export const outline: (Slide | Heading)[] = [
   // Permutation Playground
   {
     transition: "fade-white",
-    timing: [21],
+    timing: [20],
     notes: `
       We found Dragology to be particularly suited to interfaces that combine parallel representations, where you see the same system from different perspectives.
       This is a playground for experimenting with permutations. Interacting with any of these representations
@@ -1304,7 +1304,7 @@ export const outline: (Slide | Heading)[] = [
   // Drag-Spec Designer (230-240s)
   {
     transition: "fade-white",
-    timing: [21],
+    timing: [20],
     notes: `
       // On Space, one continuous take: the spec is assembled, then its preview dragged
       And as a recursive finale, this block-based programming interface lets a user assemble operators
@@ -1333,7 +1333,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 4,
-    timing: [6, 6, 9, 4],
+    timing: [5, 7, 7, 6],
     notes: `
       // drag in the yellow note
       We ran a study where thirteen participants got hands-on experience using Dragology.
@@ -1363,7 +1363,7 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Since the paper" },
   {
     transition: "fade-white",
-    timing: [19],
+    timing: [17],
     notes: `
       // Video, on Space
       Since finishing the paper, we've incorporated declarative dragging into other existing projects.
@@ -1377,7 +1377,7 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
-    timing: [22],
+    timing: [18],
     notes: `
       I also returned to a long-running side project,
       a math game where the idea for model-driven dragging originated.
@@ -1470,7 +1470,7 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 4,
-    timing: [7, 18, 3, 0],
+    timing: [6, 8, 11, 1],
     notes: `
       In our own work, declarative dragging has helped us make the digital graspable without being bogged down in implementation.
 
