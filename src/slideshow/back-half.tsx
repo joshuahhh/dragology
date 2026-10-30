@@ -1021,6 +1021,17 @@ export function CallToActionCard({ fromStep }: { fromStep?: number }) {
             color: "#1f2937",
           }}
         >
+          <div
+            style={{
+              fontSize: 40,
+              fontWeight: 600,
+              textAlign: "center",
+              whiteSpace: "nowrap",
+              marginBottom: 10,
+            }}
+          >
+            Declarative Dragging
+          </div>
           <div style={{ width: 296, justifySelf: "center" }}>
             <QrCode text={SITE_URL} />
           </div>
