@@ -421,6 +421,9 @@ export function StagedVideo({
     <video
       ref={ref}
       src={file(name)}
+      // Its first frame, beside it: shown until the video has one to show
+      // (and in slide snapshots, whose browser may not decode it)
+      poster={file(name.replace(/\.mp4$/, ".jpg"))}
       muted
       playsInline
       preload="auto"
