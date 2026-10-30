@@ -1331,34 +1331,42 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Since the paper" },
   {
     transition: "fade-white",
-    steps: 3,
-    timing: [30, 9, 9],
+    timing: [30],
     notes: `
-      // Video: cheap's branches flip, ladder's lets slide around
+      // Video, on Space
       Since finishing the paper, we've incorporated declarative dragging into other existing projects.
 
       Most of my research is on Hazel, a programming environment where every edit keeps your code meaningful.
       Using declarative dragging, we've made Hazel's refactorings physical: code moves along meaning-preserving paths.
-
-      ---
-
-      // Video: blend's first two parameters swap, and mixture's arguments
-      For example, I can reorder a function's parameters, and its call sites follow.
-
-      ---
-
-      // Video: price * rate / 100 is extracted, hoisted, then lifted to a helper
-      Or I can pull an expression out into its own variable, and if I keep pulling up, even extract it into a new helper function.
-
-      To tell you about the other place declarative dragging has found a home, we need to go back to the year 2022.
     `,
     // Andrew's recording of the live Hazel demo (Screen Recording 2026-10-29
-    // at 6.45 PM, without its sound), paused at each stage's end
-    content: <StagedVideo name="hazel-demo.mp4" stops={[0, 19.6, 25]} />,
+    // at 10.39 PM, without its sound)
+    content: <StagedVideo name="hazel-demo.mp4" />,
+  },
+  {
+    transition: "fade-white",
+    timing: [26],
+    notes: `
+      // Video, on Space: the tree is possessed, five drags simplify it, the ghost leaves and the tree regrows
+      Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype using declarative dragging.
+
+      Invigorated by the new physicality I quickly moved off the 2D canvas into a 3D world, in which innocent trees are possessed by mathematical ghosts.
+
+      In this encounter, I drag to simplify expressions, which, now exorcised, return to the platonic realm.
+
+      // TODO: josh draft:
+      Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype as a 3d game where innocent trees are possessed by mathematical ghosts. 
+      Declarative dragging powers an interaction to simplify expressions, which, now exorcised, return to the platonic realm.
+    `,
+    // uist-nool-v2.mov (Andrew's Screenshots), cut and sped up by
+    // d2-talk/video-cuts/supernool-cut.sh
+    content: <StagedVideo name="supernool-demo.mp4" />,
   },
 
   { heading: "Origins" },
+  // Origins, cut for time: kept for reference, passed over
   {
+    skip: true,
     transition: "fade-white",
     timing: [17],
     notes: `
@@ -1367,6 +1375,7 @@ export const outline: (Slide | Heading)[] = [
     content: <NoolClassicSlide />,
   },
   {
+    skip: true,
     transition: "fade",
     steps: 3,
     timing: [5, 2, 4],
@@ -1384,6 +1393,7 @@ export const outline: (Slide | Heading)[] = [
     content: <WhiteboardSlide />,
   },
   {
+    skip: true,
     transition: "fade-white",
     timing: [12],
     notes: `
@@ -1396,6 +1406,7 @@ export const outline: (Slide | Heading)[] = [
     content: <WalkSlide />,
   },
   {
+    skip: true,
     transition: "fade",
     steps: 4,
     timing: [6, 3, 2, 14],
@@ -1428,26 +1439,6 @@ export const outline: (Slide | Heading)[] = [
       </Rails>
     ),
   },
-  {
-    transition: "fade-white",
-    timing: [26],
-    notes: `
-      // Video, on Space: the tree is possessed, five drags simplify it, the ghost leaves and the tree regrows
-      Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype using declarative dragging.
-
-      Invigorated by the new physicality I quickly moved off the 2D canvas into a 3D world, in which innocent trees are possessed by mathematical ghosts.
-
-      In this encounter, I drag to simplify expressions, which, now exorcised, return to the platonic realm.
-
-      // TODO: josh draft:
-      Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype as a 3d game where innocent trees are possessed by mathematical ghosts. 
-      Declarative dragging powers an interaction to simplify expressions, which, now exorcised, return to the platonic realm.
-    `,
-    // The first 27 s of uist-nool-v2.mov (Andrew's Screenshots), cropped to
-    // 16:9, without its sound
-    content: <StagedVideo name="supernool-demo.mp4" />,
-  },
-
   { heading: "Close" },
   {
     transition: "fade-white",
