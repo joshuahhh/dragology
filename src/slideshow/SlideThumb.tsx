@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { type Slide, slideFileUrl } from "./slide";
 
 // Content slides are too heavy to render live in a grid, so they're shown from
-// snapshots taken by snapshot-slides.sh, which the dev server runs on changes
-// to the slides once a page showing them tells it it's open
+// snapshots taken by snapshot-slides.ts, which the dev server runs on changes
+// to the slides while a page showing them is open and visible
 // (useSlideSnapshots). The script writes a manifest of content hashes
 // alongside them; the hashes bust the browser's image cache, and since the
 // manifest is a module, a new snapshot updates the page by HMR. (Globbed so
@@ -74,9 +74,23 @@ export function TodoCorner() {
   );
 }
 
-/** Tells the dev server to keep the snapshots current. */
+/**
+ * Tells the dev server to keep the snapshots current while this component is
+ * mounted and its tab is visible.
+ */
 export function useSlideSnapshots() {
   useEffect(() => {
-    import.meta.hot?.send("slide-snapshots:open");
+    const hot = import.meta.hot;
+    if (!hot) return;
+    const id = Math.random().toString(36).slice(2);
+    const report = (visible: boolean) =>
+      hot.send("slide-snapshots:watch", { id, visible });
+    const onVisibility = () => report(!document.hidden);
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      report(false);
+    };
   }, []);
 }

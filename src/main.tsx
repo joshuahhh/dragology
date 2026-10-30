@@ -14,6 +14,7 @@ import { SlideshowAudiencePage } from "./slideshow/SlideshowAudiencePage";
 import { SlideshowOutlinePage } from "./slideshow/SlideshowOutlinePage";
 import { SlideshowPage } from "./slideshow/SlideshowPage";
 import { SlideshowSnapshotPage } from "./slideshow/SlideshowSnapshotPage";
+import { SlideshowTimingPage } from "./slideshow/SlideshowTimingPage";
 import { StudioPage } from "./studio/StudioPage";
 import { SingleStudyPage } from "./study/SingleStudyPage";
 import { StudyPage } from "./study/StudyPage";
@@ -56,6 +57,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         {autoRoute("/slideshow-audience", SlideshowAudiencePage)}
         {autoRoute("/slideshow-outline", SlideshowOutlinePage)}
         {autoRoute("/slideshow-snapshot", SlideshowSnapshotPage)}
+        {autoRoute("/slideshow-timing", SlideshowTimingPage)}
         {autoRoute("/montage-editor", MontageEditorPage)}
         {autoRoute("/model-driven", ModelDrivenPage)}
         {autoRoute("/studio", StudioPage)}
