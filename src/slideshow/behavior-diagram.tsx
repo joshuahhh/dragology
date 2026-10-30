@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import _ from "lodash";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   DragBehavior,
   DragInitContext,
@@ -23,6 +24,7 @@ import { snippets } from "../talk/snippets";
 import { assertDefined } from "../utils/assert";
 import { BEAD_INK } from "./model-driven/beads";
 import { Cursor } from "./model-driven/ModelDrivenScene";
+import { SideArt } from "./side-art";
 import {
   STAGE_H,
   STAGE_W,
@@ -192,7 +194,8 @@ const PREVIEW_CURSOR_OPACITY = 0.4;
 /**
  * A drag behavior (pointer position in, preview and drop state out); then,
  * on the second step, the expression tree that the live-coded ring's last
- * behavior is built from, drawn schematically. The behavior is the ring of
+ * behavior is built from, drawn schematically; then, on the third, the
+ * tree's operators join the rest in a table of them. The behavior is the ring of
  * beads', really run: its preview and drop state are what it gives for the
  * pointer position shown.
  */
@@ -220,6 +223,9 @@ export function BehaviorDiagramSlide() {
   // fades. Then the pill's name, and the rest of the tree, fade in. Coming
   // back, it all plays at once.
   const tree = step >= 1;
+  // Going on to the table, all but the tree's operators fade, and they move
+  // into their places in it as the rest of it fades in
+  const table = step >= 2;
   const scale = CLOSEST_PILL.w / PANEL_W;
   const shrunk = Vec2(
     CLOSEST_PILL.x - CLOSEST_PILL.w / 2,
@@ -228,38 +234,58 @@ export function BehaviorDiagramSlide() {
   return (
     <DiagramStage
       backdrop={
-        <div
-          style={{
-            position: "absolute",
-            ...(tree
-              ? {
-                  left: CLOSEST_PILL.x - CLOSEST_PILL.w / 2,
-                  top: CLOSEST_PILL.y - CLOSEST_PILL.h / 2,
-                  width: CLOSEST_PILL.w,
-                  height: CLOSEST_PILL.h,
-                  borderRadius: CLOSEST_PILL.h / 2,
-                  background: PAPER_OP_STYLE.background,
-                }
-              : {
-                  left: PANEL_X,
-                  top: PANEL_Y,
-                  width: PANEL_W,
-                  height: PANEL_H,
-                  borderRadius: PANEL_RADIUS,
-                  background: PANEL_FILL,
-                }),
-            transition: [
-              "left",
-              "top",
-              "width",
-              "height",
-              "border-radius",
-              "background",
-            ]
-              .map((prop) => `${prop} ${SHRINK}`)
-              .join(", "),
-          }}
-        />
+        <>
+          <SideArt
+            src="composable.png"
+            shown={tree && !table}
+            delay={800}
+            // Further out than the tree is in: its picture is narrower
+            // than the image
+            centerX={STAGE_W / 2 + 420}
+          />
+          <div
+            style={{
+              position: "absolute",
+              // Closest's pill, moving off to the table, takes its own
+              // background with it
+              opacity: table ? 0 : 1,
+              ...(tree
+                ? {
+                    left: CLOSEST_PILL.x - CLOSEST_PILL.w / 2,
+                    top: CLOSEST_PILL.y - CLOSEST_PILL.h / 2,
+                    width: CLOSEST_PILL.w,
+                    height: CLOSEST_PILL.h,
+                    borderRadius: CLOSEST_PILL.h / 2,
+                    background: PAPER_OP_STYLE.background,
+                  }
+                : {
+                    left: PANEL_X,
+                    top: PANEL_Y,
+                    width: PANEL_W,
+                    height: PANEL_H,
+                    borderRadius: PANEL_RADIUS,
+                    background: PANEL_FILL,
+                  }),
+              transition: [
+                ...[
+                  "left",
+                  "top",
+                  "width",
+                  "height",
+                  "border-radius",
+                  "background",
+                ].map((prop) => `${prop} ${SHRINK}`),
+                "opacity 200ms ease",
+              ].join(", "),
+            }}
+          />
+        </>
+      }
+      overlay={
+        <>
+          <OperatorTable shown={table} />
+          <OperatorPills step={step} />
+        </>
       }
     >
       <g
@@ -282,12 +308,13 @@ export function BehaviorDiagramSlide() {
         />
       </g>
 
-      <SchematicTree shown={tree} />
+      <SchematicTree shown={tree && !table} />
     </DiagramStage>
   );
 }
 
 const SHRINK = "700ms cubic-bezier(0.4, 0, 0.2, 1)";
+const MOVE = "900ms cubic-bezier(0.4, 0, 0.2, 1)";
 
 /**
  * The expression tree of the live-coded ring's last behavior, each node
@@ -302,14 +329,16 @@ export function BehaviorTreeSlide() {
 }
 
 /**
- * A white stage, its SVG with the diagrams' markers and filters, over HTML
- * `backdrop`
+ * A white stage, its SVG with the diagrams' markers and filters, between
+ * HTML `backdrop` and `overlay`
  */
 function DiagramStage({
   backdrop,
+  overlay,
   children,
 }: {
   backdrop?: React.ReactNode;
+  overlay?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -344,6 +373,7 @@ function DiagramStage({
         </defs>
         {children}
       </svg>
+      {overlay}
     </div>
   );
 }
@@ -665,24 +695,37 @@ function OpPill({
           height: "100%",
         }}
       >
-        <div
-          style={{
-            ...PAPER_OP_STYLE,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: size,
-            padding: `0 ${padX}px`,
-            width,
-            boxSizing: "border-box",
-            borderRadius: h / 2,
-          }}
-        >
-          {name}
-        </div>
+        <div style={pillStyle({ size, h, padX, width })}>{name}</div>
       </div>
     </foreignObject>
   );
+}
+
+/** An operator's pill, `width` wide, or as wide as its name and `padX` */
+function pillStyle({
+  size,
+  h,
+  padX,
+  width,
+}: {
+  size: number;
+  h: number;
+  padX: number;
+  width?: number | string;
+}): React.CSSProperties {
+  return {
+    ...PAPER_OP_STYLE,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: size,
+    height: h,
+    padding: `0 ${padX}px`,
+    width,
+    boxSizing: "border-box",
+    borderRadius: h / 2,
+    whiteSpace: "nowrap",
+  };
 }
 
 /** A line of code, its right end at `right`, centered on `y` */
@@ -718,7 +761,10 @@ function CodeLine({
 // The same tree, schematically: the states named as in the code, and the
 // operators' behaviors just the wires out of them
 const SCHEMA = {
-  spineX: STAGE_W / 2,
+  // The tree, left, and the Composable Dragging art, right, share the
+  // slide, with even margins. (The tree reaches from withFloating's left
+  // end to removed's right, centered about 30px right of its spine.)
+  spineX: STAGE_W / 2 - 360 - 30,
   // The states' names: their size, how far below one its wires start, and
   // (for `states`, which is several, its wires parallel, all well within
   // the name's width) how far apart they are
@@ -748,8 +794,8 @@ const CLOSEST_PILL = {
 };
 
 /**
- * `shown` fades it in, closest's pill first, as the behavior panel finishes
- * shrinking into it, then the rest; or, unset, out, all at once
+ * The tree but its operators' pills (OperatorPills draws those, over its
+ * wires' ends). `shown` fades it in, after closest's pill; or, unset, out
  */
 function SchematicTree({ shown }: { shown: boolean }) {
   const { spineX, name, statesY, levels, removed, pill, inlet } = SCHEMA;
@@ -764,7 +810,7 @@ function SchematicTree({ shown }: { shown: boolean }) {
   });
   return (
     <g>
-      <g style={fade(800)}>
+      <g style={fade(TREE_FADE_DELAY)}>
         {/* One wire per state, so it reads as several */}
         {Array.from({ length: n }, (_, i) => (
           <line
@@ -794,18 +840,8 @@ function SchematicTree({ shown }: { shown: boolean }) {
         <StateName x={closestX} y={statesY} name="states" />
         <StateName x={removedX} y={removed.y} name="removed" />
 
-        {["whenFar", "withFloating"].map((name, i) => (
-          <OpPill
-            key={name}
-            name={name}
-            x={spineX}
-            y={levels[i + 1]}
-            h={pill.h}
-            size={pill.size}
-            padX={pill.padX}
-          />
-        ))}
-        {/* The code the tree is of, as it's written */}
+        {/* The code the tree is of, as it's written. Out for now: with the
+            Composable Dragging art in, the slide's too crowded.
         <foreignObject
           x={SCHEMA.code.x}
           y={STAGE_H - SCHEMA.code.bottom - 200}
@@ -831,19 +867,8 @@ function SchematicTree({ shown }: { shown: boolean }) {
               <Code key={line} code={line} />
             ))}
           </div>
-        </foreignObject>
+        </foreignObject> */}
       </g>
-      {/* Last, over the wires' ends */}
-      <OpPill
-        name="closest"
-        x={CLOSEST_PILL.x}
-        y={CLOSEST_PILL.y}
-        h={pill.h}
-        size={pill.size}
-        padX={0}
-        width={CLOSEST_PILL.w}
-        style={fade(550)}
-      />
     </g>
   );
 }
@@ -862,6 +887,331 @@ function StateName({ x, y, name }: { x: number; y: number; name: string }) {
     >
       {name}
     </text>
+  );
+}
+
+// # The operators, on their way from the tree to the table
+
+// The tree's fading in: closest's pill first, as the behavior panel
+// finishes shrinking into it, then the rest
+const CLOSEST_FADE_DELAY = 550;
+const TREE_FADE_DELAY = 800;
+
+// The paper's table of operators, streamlined: just their names and what
+// they do. The tree's operators move into it from the tree.
+const OPERATOR_TABLE: {
+  kind: string;
+  gist: string;
+  rows: { name: string; op: boolean; does: string }[];
+}[] = [
+  {
+    kind: "Primitives",
+    gist: "produce base behaviors",
+    rows: [
+      { name: "state", op: false, does: "Use a state as a static behavior." },
+      {
+        name: "vary",
+        op: true,
+        does: "Pull the dragged element to the pointer by varying numbers.",
+      },
+      {
+        name: "dropTarget",
+        op: true,
+        does: "Go to a new state when dropped over a given element.",
+      },
+    ],
+  },
+  {
+    kind: "Combinators",
+    gist: "compose behaviors",
+    rows: [
+      {
+        name: "closest",
+        op: true,
+        does: "Pick the behavior whose target is nearest the pointer.",
+      },
+      {
+        name: "between",
+        op: true,
+        does: "Interpolate smoothly between behaviors.",
+      },
+      {
+        name: "whenFar",
+        op: true,
+        does: "Switch to another behavior far from this one's targets.",
+      },
+      {
+        name: "switchToStateAndFollow",
+        op: true,
+        does: "Switch to a new state at once, and follow a new element.",
+      },
+    ],
+  },
+  {
+    kind: "Modifiers",
+    gist: "layer on additional features",
+    rows: [
+      {
+        name: "withFloating",
+        op: true,
+        does: "Detach the dragged element and make it follow the pointer.",
+      },
+      {
+        name: "withSnapRadius",
+        op: true,
+        does: "Pull the preview to the drop state when close enough.",
+      },
+      {
+        name: "onDrop",
+        op: true,
+        does: "Transform the drop state with a given function.",
+      },
+    ],
+  },
+];
+
+// The kinds of operator stand out; what each does is fine print
+const TABLE = {
+  x: 300,
+  // How far the rows are indented under their headings
+  indent: 40,
+  // Where what each does starts, right of the widest pill
+  doesX: 880,
+  headingH: 80,
+  rowH: 62,
+  sectionGap: 34,
+  kindSize: 44,
+  gistSize: 34,
+  // Between a kind of operator and its gist
+  kindGap: 22,
+  doesSize: 28,
+  doesColor: "#a1a1aa",
+  // Its pills are the tree's, scaled down
+  pillScale: 0.625,
+};
+
+/** Where the table's headings and rows go: their centers, down the stage */
+const TABLE_LAYOUT = (() => {
+  const height =
+    OPERATOR_TABLE.length * TABLE.headingH +
+    _.sumBy(OPERATOR_TABLE, (s) => s.rows.length) * TABLE.rowH +
+    (OPERATOR_TABLE.length - 1) * TABLE.sectionGap;
+  let y = (STAGE_H - height) / 2;
+  const headings: { kind: string; gist: string; y: number }[] = [];
+  const rows: { name: string; op: boolean; does: string; y: number }[] = [];
+  for (const section of OPERATOR_TABLE) {
+    headings.push({
+      kind: section.kind,
+      gist: section.gist,
+      y: y + TABLE.headingH / 2,
+    });
+    y += TABLE.headingH;
+    for (const row of section.rows) {
+      rows.push({ ...row, y: y + TABLE.rowH / 2 });
+      y += TABLE.rowH;
+    }
+    y += TABLE.sectionGap;
+  }
+  return { headings, rows };
+})();
+
+/** The tree's operators, where they are in the tree */
+const TREE_OPS: {
+  name: string;
+  center: Vec2;
+  /** Its width, if fixed */
+  width?: number;
+  fadeDelay: number;
+}[] = [
+  {
+    name: "closest",
+    center: Vec2(CLOSEST_PILL.x, CLOSEST_PILL.y),
+    width: CLOSEST_PILL.w,
+    fadeDelay: CLOSEST_FADE_DELAY,
+  },
+  {
+    name: "whenFar",
+    center: Vec2(SCHEMA.spineX, SCHEMA.levels[1]),
+    fadeDelay: TREE_FADE_DELAY,
+  },
+  {
+    name: "withFloating",
+    center: Vec2(SCHEMA.spineX, SCHEMA.levels[2]),
+    fadeDelay: TREE_FADE_DELAY,
+  },
+];
+
+/**
+ * The tree's operators' pills: from the second step, in the tree, fading
+ * in; from the third, in their rows of the table, scaled down to its size
+ */
+function OperatorPills({ step }: { step: number }) {
+  const { pill } = SCHEMA;
+  // The pills' widths, which center them in the tree, measured once their
+  // font is in
+  const els = useRef(new Map<string, HTMLDivElement>());
+  const [widths, setWidths] = useState(new Map<string, number>());
+  useLayoutEffect(() => {
+    const measure = () =>
+      setWidths(
+        new Map([...els.current].map(([name, el]) => [name, el.offsetWidth])),
+      );
+    measure();
+    void document.fonts.ready.then(measure);
+  }, []);
+
+  const s = TABLE.pillScale;
+  return (
+    <>
+      {TREE_OPS.map(({ name, center, width, fadeDelay }) => {
+        const w = width ?? widths.get(name) ?? 0;
+        const row = TABLE_LAYOUT.rows.find((r) => r.name === name)!;
+        const [left, top, scale] =
+          step >= 2
+            ? [TABLE.x + TABLE.indent, row.y - (pill.h * s) / 2, s]
+            : [center.x - w / 2, center.y - pill.h / 2, 1];
+        return (
+          <div
+            key={name}
+            ref={(el) => {
+              if (el) els.current.set(name, el);
+              else els.current.delete(name);
+            }}
+            style={{
+              ...pillStyle({
+                size: pill.size,
+                h: pill.h,
+                padX: width === undefined ? pill.padX : 0,
+                width,
+              }),
+              position: "absolute",
+              left,
+              top,
+              transform: `scale(${scale})`,
+              transformOrigin: "0 0",
+              opacity: step >= 1 ? 1 : 0,
+              transition: [
+                step >= 1
+                  ? `opacity 400ms ease ${step === 1 ? fadeDelay : 0}ms`
+                  : "opacity 250ms ease",
+                `left ${MOVE}`,
+                `top ${MOVE}`,
+                `transform ${MOVE}`,
+              ].join(", "),
+            }}
+          >
+            {name}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * The table of operators, but for the tree's, which OperatorPills moves
+ * into the places it leaves for them
+ */
+function OperatorTable({ shown }: { shown: boolean }) {
+  const { pill } = SCHEMA;
+  const s = TABLE.pillScale;
+  const treeOp = (name: string) => TREE_OPS.find((op) => op.name === name);
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        opacity: shown ? 1 : 0,
+        transition: shown ? "opacity 500ms ease 450ms" : "opacity 200ms ease",
+      }}
+    >
+      {TABLE_LAYOUT.headings.map(({ kind, gist, y }) => (
+        <div
+          key={kind}
+          style={{
+            position: "absolute",
+            left: TABLE.x,
+            top: y - TABLE.headingH / 2,
+            height: TABLE.headingH,
+            display: "flex",
+            alignItems: "baseline",
+            gap: TABLE.kindGap,
+            paddingTop: 18,
+            boxSizing: "border-box",
+            fontFamily: sourceSans,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span
+            style={{ fontSize: TABLE.kindSize, fontWeight: 700, color: INK }}
+          >
+            {kind}
+          </span>
+          <span style={{ fontSize: TABLE.gistSize, color: MUTED }}>{gist}</span>
+        </div>
+      ))}
+      {TABLE_LAYOUT.rows.map(({ name, op, does, y }) => {
+        const moving = treeOp(name);
+        return (
+          <div
+            key={name}
+            style={{
+              position: "absolute",
+              left: TABLE.x + TABLE.indent,
+              top: y - TABLE.rowH / 2,
+              height: TABLE.rowH,
+              display: "flex",
+              alignItems: "center",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <div style={{ width: TABLE.doesX - TABLE.x - TABLE.indent }}>
+              {op ? (
+                <div
+                  style={{
+                    ...pillStyle({
+                      size: pill.size * s,
+                      h: pill.h * s,
+                      padX: moving?.width === undefined ? pill.padX * s : 0,
+                      // Not stretched across its column
+                      width:
+                        moving?.width === undefined
+                          ? "fit-content"
+                          : moving.width * s,
+                    }),
+                    // The tree's own pill lands here
+                    visibility: moving ? "hidden" : undefined,
+                  }}
+                >
+                  {name}
+                </div>
+              ) : (
+                <span
+                  style={{
+                    fontFamily: CODE_FONT,
+                    fontSize: SCHEMA.pill.size * s,
+                    color: INK,
+                    // In line with the pills' names, not their ends
+                    paddingLeft: SCHEMA.pill.padX * s,
+                  }}
+                >
+                  {name}
+                </span>
+              )}
+            </div>
+            <span
+              style={{
+                fontFamily: sourceSans,
+                fontSize: TABLE.doesSize,
+                color: TABLE.doesColor,
+              }}
+            >
+              {does}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

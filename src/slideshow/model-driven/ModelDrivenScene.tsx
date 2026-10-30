@@ -382,6 +382,7 @@ export function ModelDrivenScene<T extends object>({
             x={s.modelBox.x + panX + s.modelBox.w / 2}
             y1={modelRect.y + modelRect.h - 5}
             y2={s.viewBox.y + 2}
+            label="render"
           />
         </g>
 
@@ -676,10 +677,10 @@ function Label({
   return (
     <text
       x={rect.x + 4}
-      y={below ? rect.y + rect.h + 40 : rect.y - 14}
+      y={below ? rect.y + rect.h + 46 : rect.y - 14}
       fontFamily={sourceSans}
       fontWeight={700}
-      fontSize={36}
+      fontSize={44}
     >
       {children}
     </text>
@@ -793,7 +794,21 @@ function CodeBox({
   );
 }
 
-function DownArrow({ x, y1, y2 }: { x: number; y1: number; y2: number }) {
+/**
+ * A maroon arrow straight down, with an optional label to the left of its
+ * middle (the grey arrow sweeps up past its right)
+ */
+function DownArrow({
+  x,
+  y1,
+  y2,
+  label,
+}: {
+  x: number;
+  y1: number;
+  y2: number;
+  label?: string;
+}) {
   const headH = 19;
   const headW = 22;
   return (
@@ -802,6 +817,19 @@ function DownArrow({ x, y1, y2 }: { x: number; y1: number; y2: number }) {
       <path
         d={`M ${x - headW / 2} ${y2 - headH} L ${x + headW / 2} ${y2 - headH} L ${x} ${y2} Z`}
       />
+      {label && (
+        <text
+          x={x - 16}
+          y={(y1 + y2) / 2}
+          textAnchor="end"
+          dominantBaseline="central"
+          fontFamily={sourceSans}
+          fontStyle="italic"
+          fontSize={36}
+        >
+          {label}
+        </text>
+      )}
     </g>
   );
 }
