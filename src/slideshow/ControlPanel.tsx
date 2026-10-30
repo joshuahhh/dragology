@@ -1,4 +1,5 @@
 import { type RefObject } from "react";
+import { Link } from "react-router-dom";
 import { type AudienceFeed } from "./audienceFeed";
 import { StageInfo } from "./StageInfo";
 import { formatSeconds, savedTotal, type TimingMode } from "./timing";
@@ -52,7 +53,7 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
 
 /**
  * The presenter's control panel, opened from the button at the right end of
- * the status bar (or Ctrl+Shift+P): the hotkeys, timing (during dev), and how the
+ * the status bar (or Ctrl+Shift+P): the hotkeys, timing (run-throughs during dev), and how the
  * stage reaches the audience. Only the arrow keys and Space yield to a focused editor or demo;
  * the Ctrl+Shift keys work everywhere.
  */
@@ -116,12 +117,10 @@ export function ControlPanel({
             </div>
           </section>
         ))}
-        {timing && (
-          <section>
-            <SectionTitle>Timing</SectionTitle>
-            <TimingControls timing={timing} />
-          </section>
-        )}
+        <section>
+          <SectionTitle>Timing</SectionTitle>
+          <TimingControls timing={timing} />
+        </section>
         <section>
           <SectionTitle>Stage size</SectionTitle>
           <StageInfo stageRef={stageRef} feed={feed} />
@@ -131,39 +130,53 @@ export function ControlPanel({
   );
 }
 
-function TimingControls({ timing }: { timing: TimingMode }) {
-  const { run, saving, start, stop, discard } = timing;
+function TimingControls({ timing }: { timing: TimingMode | null }) {
   const total = savedTotal();
-  const button =
-    "rounded border border-white/15 bg-white/5 px-2 py-0.5 text-zinc-200 hover:bg-white/10 disabled:opacity-50";
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="text-zinc-400">
+      <div className="flex items-baseline justify-between gap-2 text-zinc-400">
         {total.slides > 0
           ? `Latest timings: ${formatSeconds(total.seconds)} over ${total.slides} slides`
           : "No slides timed yet"}
-      </div>
-      <div className="flex gap-1.5">
-        {run ? (
-          <>
-            <button
-              type="button"
-              className={button}
-              onClick={stop}
-              disabled={saving}
-            >
-              {saving ? "Saving…" : "Stop and save"}
-            </button>
-            <button type="button" className={button} onClick={discard}>
-              Discard run
-            </button>
-          </>
-        ) : (
-          <button type="button" className={button} onClick={start}>
-            Start timing
-          </button>
+        {total.slides > 0 && (
+          <Link
+            to="/slideshow-timing"
+            className="shrink-0 text-zinc-200 underline decoration-zinc-600 underline-offset-2 hover:decoration-zinc-300"
+          >
+            Breakdown
+          </Link>
         )}
       </div>
+      {timing && <RunControls timing={timing} />}
+    </div>
+  );
+}
+
+function RunControls({ timing }: { timing: TimingMode }) {
+  const { run, saving, start, stop, discard } = timing;
+  const button =
+    "rounded border border-white/15 bg-white/5 px-2 py-0.5 text-zinc-200 hover:bg-white/10 disabled:opacity-50";
+  return (
+    <div className="flex gap-1.5">
+      {run ? (
+        <>
+          <button
+            type="button"
+            className={button}
+            onClick={stop}
+            disabled={saving}
+          >
+            {saving ? "Saving…" : "Stop and save"}
+          </button>
+          <button type="button" className={button} onClick={discard}>
+            Discard run
+          </button>
+        </>
+      ) : (
+        <button type="button" className={button} onClick={start}>
+          Start timing
+        </button>
+      )}
     </div>
   );
 }
