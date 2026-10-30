@@ -47,10 +47,12 @@ export type ExplainerSubject<T extends object> = {
   /** How to show a state as code, marking the dragged element in it */
   formatState: (state: T) => CodeLine[];
   /**
-   * Where the pointer goes in the live drag: [time, x, y], in canvas
-   * coordinates. It presses at the first sample.
+   * Where the pointer goes in the live drag: [time, x, y, down?], in canvas
+   * coordinates. It's pressed from each sample on to the next whose `down`
+   * says otherwise (pressed if left out), so a track without any presses at
+   * its first sample and never lets go.
    */
-  track: readonly (readonly [number, number, number])[];
+  track: readonly (readonly [number, number, number, boolean?])[];
   /**
    * If set, the drag never ends: past the track's end, the pointer heads back
    * to where it was at this time and goes round again from there
@@ -947,9 +949,10 @@ function TargetHalo({
   );
 }
 
-// The grabbing cursor: macOS's own closed hand, traced from the system's
-// cursor art (HIServices.framework's cursors/closedhand/cursor.pdf), in its
-// 32-point space
+// The grabbing cursor: macOS's own closed hand, and the open hand it shows
+// over things it could grab, traced from the system's cursor art
+// (HIServices.framework's cursors/closedhand/cursor.pdf and
+// cursors/openhand/cursor.pdf), in their 32-point space. They share creases.
 
 const INK = "#1d1d24";
 const HAND_HOTSPOT = [16, 16] as const;
@@ -957,6 +960,8 @@ const HAND_HOTSPOT = [16, 16] as const;
 const HAND_ART_SCALE = 1.35;
 const HAND_OUTLINE =
   "M 12.57 13.04 C 13.05 12.86 14 12.97 14.25 13.51 C 14.46 13.97 14.64 14.75 14.66 14.59 C 14.68 14.21 14.63 13.42 14.79 13 C 14.91 12.7 15.14 12.41 15.48 12.31 C 15.77 12.22 16.1 12.19 16.39 12.25 C 16.71 12.32 17.04 12.54 17.16 12.75 C 17.52 13.38 17.53 14.65 17.55 14.59 C 17.61 14.31 17.61 13.36 17.83 13 C 17.97 12.77 18.32 12.55 18.52 12.52 C 18.81 12.47 19.17 12.45 19.48 12.51 C 19.73 12.56 20.07 12.86 20.16 13 C 20.38 13.34 20.5 14.32 20.54 14.66 C 20.55 14.8 20.61 14.27 20.83 13.92 C 21.23 13.28 22.67 13.16 22.73 14.56 C 22.75 15.21 22.75 15.18 22.75 15.62 C 22.75 16.14 22.73 16.45 22.71 16.83 C 22.68 17.23 22.59 18.13 22.46 18.57 C 22.38 18.87 22.09 19.55 21.81 19.95 C 21.81 19.95 20.74 21.2 20.62 21.77 C 20.5 22.33 20.54 22.33 20.52 22.73 C 20.5 23.13 20.64 23.65 20.64 23.65 C 20.64 23.65 19.84 23.76 19.41 23.69 C 19.02 23.62 18.53 22.85 18.41 22.61 C 18.23 22.28 17.87 22.34 17.72 22.59 C 17.5 22.97 17.02 23.66 16.68 23.7 C 16 23.78 14.62 23.73 13.54 23.72 C 13.54 23.72 13.72 22.71 13.31 22.36 C 13 22.1 12.48 21.58 12.16 21.3 L 11.33 20.38 C 11.05 20.02 10.33 19.45 10.09 18.39 C 9.88 17.46 9.89 17 10.12 16.62 C 10.36 16.24 10.8 16.04 10.98 16 C 11.19 15.96 11.67 15.96 11.86 16.06 C 12.08 16.18 12.17 16.22 12.34 16.45 C 12.57 16.76 12.65 16.91 12.55 16.57 C 12.48 16.31 12.23 15.98 12.12 15.61 C 12.01 15.24 11.72 14.66 11.74 14.08 C 11.75 13.86 11.84 13.31 12.57 13.04";
+const OPEN_HAND_OUTLINE =
+  "M 12.55 16.57 C 12.46 16.2 12.36 15.73 12.15 15.02 C 11.98 14.46 11.81 14.16 11.68 13.79 C 11.52 13.34 11.38 13.07 11.18 12.61 C 11.04 12.28 10.82 11.56 10.73 11.17 C 10.61 10.66 10.76 10.25 10.97 9.96 C 11.22 9.62 11.93 9.47 12.33 9.61 C 12.7 9.74 13.07 10.12 13.24 10.4 C 13.53 10.86 13.6 11.03 13.96 11.94 C 14.36 12.93 14.52 13.86 14.57 14.17 L 14.66 14.63 C 14.66 14.59 14.61 13.5 14.61 13.46 C 14.58 12.43 14.55 11.64 14.57 10.52 C 14.58 10.4 14.64 9.94 14.66 9.81 C 14.74 9.31 14.96 9.01 15.33 8.83 C 15.74 8.63 16.26 8.61 16.73 8.81 C 17.16 8.98 17.36 9.36 17.42 9.84 C 17.43 9.94 17.52 10.82 17.51 10.94 C 17.5 11.96 17.52 12.58 17.53 13.11 C 17.53 13.35 17.53 14.74 17.54 14.59 C 17.61 13.93 17.64 11.39 17.89 10.64 C 18.03 10.21 18.29 9.89 18.68 9.71 C 19.11 9.51 19.8 9.64 20.09 9.96 C 20.37 10.26 20.53 10.65 20.57 11.11 C 20.6 11.52 20.55 12.01 20.55 12.36 C 20.55 13.22 20.53 13.68 20.51 14.48 C 20.51 14.51 20.5 14.77 20.54 14.66 C 20.63 14.38 20.72 14.11 20.8 13.91 C 20.85 13.79 21.04 13.3 21.16 13.05 C 21.27 12.82 21.37 12.68 21.57 12.36 C 21.77 12.05 21.99 11.92 22.24 11.8 C 22.78 11.57 23.35 11.92 23.54 12.39 C 23.63 12.61 23.55 13.11 23.52 13.5 C 23.45 14.15 23.26 14.8 23.16 15.15 C 23.04 15.59 22.89 16.38 22.82 16.75 C 22.75 17.14 22.59 18.13 22.46 18.57 C 22.38 18.87 22.09 19.55 21.81 19.95 C 21.81 19.95 20.74 21.2 20.62 21.77 C 20.5 22.33 20.54 22.33 20.52 22.73 C 20.5 23.13 20.64 23.65 20.64 23.65 C 20.64 23.65 19.84 23.76 19.41 23.69 C 19.02 23.62 18.53 22.85 18.41 22.61 C 18.23 22.28 17.87 22.34 17.73 22.59 C 17.5 22.97 17.02 23.66 16.67 23.7 C 16 23.78 14.62 23.73 13.54 23.72 C 13.54 23.72 13.72 22.71 13.31 22.36 C 13 22.1 12.48 21.58 12.16 21.3 L 11.33 20.38 C 11.05 20.02 10.7 19.29 10.09 18.39 C 9.74 17.89 9.06 17.31 8.8 16.82 C 8.58 16.39 8.47 15.86 8.61 15.49 C 8.84 14.9 9.29 14.59 9.98 14.66 C 10.5 14.71 10.82 14.86 11.21 15.2 C 11.44 15.39 11.79 15.73 11.96 15.95 C 12.13 16.14 12.17 16.22 12.34 16.45 C 12.57 16.76 12.64 16.91 12.55 16.57";
 const HAND_CREASES: [number, number, number, number][] = [
   [15.55, 17.3, 15.57, 20.73],
   [17.55, 20.75, 17.54, 17.27],
@@ -965,9 +970,13 @@ const HAND_CREASES: [number, number, number, number][] = [
 
 /** The closed hand, filled white, in the stroke it's given */
 export function MacClosedHand() {
+  return <MacHand outline={HAND_OUTLINE} />;
+}
+
+function MacHand({ outline }: { outline: string }) {
   return (
     <g>
-      <path d={HAND_OUTLINE} fill="white" strokeLinejoin="round" />
+      <path d={outline} fill="white" strokeLinejoin="round" />
       {HAND_CREASES.map(([x1, y1, x2, y2]) => (
         <line key={x1} x1={x1} y1={y1} x2={x2} y2={y2} strokeLinecap="round" />
       ))}
@@ -979,10 +988,13 @@ export function Cursor({
   at,
   scale,
   opacity = 1,
+  open = false,
 }: {
   at: Vec2;
   scale: number;
   opacity?: number;
+  /** The open hand, rather than the closed one */
+  open?: boolean;
 }) {
   const [hx, hy] = HAND_HOTSPOT;
   return (
@@ -996,7 +1008,7 @@ export function Cursor({
       stroke={INK}
       strokeWidth={0.75}
     >
-      <MacClosedHand />
+      {open ? <MacHand outline={OPEN_HAND_OUTLINE} /> : <MacClosedHand />}
     </g>
   );
 }
@@ -1035,13 +1047,36 @@ function pointerAt(
   return Vec2(last[1], last[2]);
 }
 
+/** Whether the pointer's pressed at time t, along a track */
+function downAt(
+  track: ExplainerSubject<object>["track"],
+  loopFrom: number | undefined,
+  t: number,
+): boolean {
+  const end = track[track.length - 1][0];
+  if (loopFrom !== undefined && t > end) {
+    const lap = end - loopFrom + LOOP_RETURN;
+    const into = (t - end) % lap;
+    // On the way back to the loop's start, as it was at the end
+    if (into < LOOP_RETURN) return downAt(track, undefined, end);
+    return downAt(track, undefined, loopFrom + into - LOOP_RETURN);
+  }
+  let down = track[0][3] ?? true;
+  for (const sample of track) {
+    if (sample[0] > t) break;
+    down = sample[3] ?? true;
+  }
+  return down;
+}
+
 /**
  * The draggable, live, in the big view, dragged along the subject's track by
  * synthetic pointer events (as rails.tsx plays recorded tracks). Going back in
  * time starts it over.
  *
- * The real pointer can't nudge the scripted drag, but pressing it takes over:
- * the scripted drag lets go, and the press starts a drag of the viewer's own.
+ * The real pointer can't nudge the scripted drag, but pressing it on the stage
+ * takes over: the scripted drag lets go and stops, and the press starts a drag
+ * of the viewer's own.
  */
 export function LiveDrag<T extends object>({
   subject,
@@ -1070,6 +1105,8 @@ export function LiveDrag<T extends object>({
     down: false,
     /** Where the last event put the pointer, in client coordinates */
     client: Vec2(0, 0),
+    /** Where the scripted drag last pressed, in client coordinates */
+    pressedAt: Vec2(0, 0),
   });
   const [takenOver, setTakenOver] = useState(false);
   // The renderer takes a frame after mounting to be ready for a press
@@ -1084,6 +1121,7 @@ export function LiveDrag<T extends object>({
     frame.y - (height / 2) * frame.scale,
   );
   const pointer = pointerAt(track, loopFrom, t);
+  const down = downAt(track, loopFrom, t);
   /** Where a point on the canvas is on the page */
   const toClient = (c: Vec2) => {
     // The host is on the stage, scaled however the page scales it
@@ -1104,6 +1142,7 @@ export function LiveDrag<T extends object>({
         t: -Infinity,
         down: false,
         client: Vec2(0, 0),
+        pressedAt: Vec2(0, 0),
       };
     }
     const p = played.current;
@@ -1133,19 +1172,24 @@ export function LiveDrag<T extends object>({
       button,
       buttons,
     });
-    if (!p.down) {
-      const client = toClient(Vec2(track[0][1], track[0][2]));
+    if (down && !p.down) {
+      const client = toClient(pointer);
       const under = document.elementFromPoint(client.x, client.y);
       // (Not there yet? Try again next time.)
       if (!under || !host.contains(under)) return;
       under.dispatchEvent(new PointerEvent("pointerdown", init(client, 1, 0)));
       p.down = true;
       p.client = client;
+      p.pressedAt = client;
       p.t = t;
       // Moves wait for the next time, once the renderer listens for them
       return;
     }
     p.t = t;
+    if (!down) {
+      if (p.down) letGo();
+      return;
+    }
     p.client = toClient(pointer);
     document.dispatchEvent(
       new PointerEvent("pointermove", init(p.client, 1, -1)),
@@ -1169,27 +1213,28 @@ export function LiveDrag<T extends object>({
 
   // Let go on leaving, so the drag doesn't hang on to the real pointer. It
   // lets go where it pressed, so the element settles back into its place and
-  // the state is the one it started in, as the next slide shows it.
+  // the state is the one the drag started in, as the next slide shows it.
   useLayoutEffect(() => {
-    if (!drive && played.current.down) {
-      letGo(toClient(Vec2(track[0][1], track[0][2])));
-    }
+    if (!drive && played.current.down) letGo(played.current.pressedAt);
     // Only on leaving
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drive]);
 
   // While the scripted drag holds on, the renderer hears only it: real moves
-  // and releases are kept from it. A real press lets go of the scripted drag,
-  // re-rendering at once so the press lands on the dropped state's elements.
+  // and releases are kept from it. A real press on the stage takes over,
+  // letting go of any scripted drag and re-rendering at once so the press
+  // lands on the dropped state's elements. Presses off the stage (on the
+  // notes, say) leave it be.
   useEffect(() => {
     const onReal = (e: PointerEvent) => {
-      if (!e.isTrusted || !played.current.down) return;
+      if (!e.isTrusted) return;
       if (e.type === "pointerdown") {
+        const stage = hostRef.current?.parentElement;
+        if (!(e.target instanceof Node && stage?.contains(e.target))) return;
         flushSync(() => {
-          letGo();
+          if (played.current.down) letGo();
           setTakenOver(true);
         });
-      } else {
+      } else if (played.current.down) {
         e.stopImmediatePropagation();
       }
     };
@@ -1244,6 +1289,7 @@ export function LiveDrag<T extends object>({
             at={origin.add(shownPointer.mul(frame.scale))}
             scale={cursorScale}
             opacity={opacity}
+            open={!down}
           />
         )}
       </svg>
