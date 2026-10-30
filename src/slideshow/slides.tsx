@@ -703,11 +703,18 @@ function DeclarativeDraggingIntro() {
       ),
     [],
   );
+  // The title reads fine over the reel at full strength; from the next step
+  // on, the reel fades back, so the insets you have to read stand out
+  const subdued = useSlideStep() > 0;
   return (
     <div className="absolute inset-0 overflow-hidden">
       <div
         className="absolute inset-0 flex flex-col justify-center"
-        style={{ gap: REEL_GAP }}
+        style={{
+          gap: REEL_GAP,
+          filter: `saturate(${subdued ? 0.35 : 1})`,
+          transition: "filter 600ms ease",
+        }}
       >
         {reelRows.map(({ names, direction }, i) => (
           <VideoReelRow
@@ -719,6 +726,13 @@ function DeclarativeDraggingIntro() {
           />
         ))}
       </div>
+      <div
+        className="absolute inset-0 bg-white"
+        style={{
+          opacity: subdued ? 0.45 : 0,
+          transition: "opacity 600ms ease",
+        }}
+      />
       <SlideInsets insets={introInsets} />
     </div>
   );
