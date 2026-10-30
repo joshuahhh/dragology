@@ -1098,7 +1098,7 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 4,
     notes: `
-      This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
+      Thanks Josh. This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
 
       ---
 
@@ -1383,9 +1383,10 @@ export const outline: (Slide | Heading)[] = [
     steps: 3,
     notes: `
       // Video: cheap's branches flip, ladder's lets slide around
-      Since writing our paper, we've incorporated declarative dragging into some existing projects.
+      Since finishing the paper, we've incorporated declarative dragging into other existing projects.
 
-      Most of my research is on Hazel, a programming environment where every edit keeps your code meaningful. Using declarative dragging, we've made Hazel's refactorings physical: code moves along meaning-preserving paths.
+      Most of my research is on Hazel, a programming environment where every edit keeps your code meaningful.
+      Using declarative dragging, we've made Hazel's refactorings physical: code moves along meaning-preserving paths.
 
       ---
 
@@ -1508,6 +1509,8 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     notes: `
+      TODO: awe continues. Inset with: names. QR code. Thanks. No Questions.
+
       If you give Dragology a try we'd love to here about it, or even just your ideas of what you dream about making.
 
       Thanks a bunch.
