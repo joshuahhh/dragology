@@ -4,6 +4,9 @@
 
 import qrcode from "qrcode-generator";
 import {
+  Children,
+  createContext,
+  type CSSProperties,
   type ReactNode,
   useContext,
   useEffect,
@@ -21,6 +24,9 @@ import {
   makeDraggable as makeStickyNotes,
   initialState as stickyInitialState,
 } from "../studio/sticky-notes";
+import { PAPER_OP_STYLE } from "../studio/StudioHackContext";
+import { CODE_FONT } from "../talk/fonts";
+import { OP_NAMES } from "../talk/opMarks";
 import { EmbedSlide } from "./EmbedSlide";
 import hazelProgram from "./hazel-demo-program.txt?raw";
 import { MONTAGE_PLAN_TIMED, MontagePlayer } from "./montage/MontageCanvas";
@@ -45,18 +51,79 @@ function file(name: string) {
 // ── Code callouts ──
 
 /** Code highlighted at the given steps of the slide. */
+// Code as the live-code slide shows it: DejaVu Sans Mono in its "quiet"
+// colors, with drag spec operators' names in the paper's style
+const CODE_COLORS = {
+  text: "#18181b",
+  punctuation: "#a1a1aa",
+  string: "#0f766e",
+  literal: "#c2410c",
+};
+
+/** Whether the Hl around some code is lit, which takes over from the operators' tint */
+const HlLit = createContext(false);
+
+/**
+ * A run of code, colored. A name is an operator's if it follows a dot, or
+ * starts the run (as in `{"d."}<Hl>vary</Hl>`).
+ */
+function CodeText({ text }: { text: string }) {
+  const lit = useContext(HlLit);
+  const out: ReactNode[] = [];
+  const token =
+    /("[^"]*")|(\d+|true|false)\b|([A-Za-z_]\w*)|([()[\]{},.:=>])|(\s+|.)/g;
+  let prev = "";
+  for (const [tok, str, literal, name, punct] of text.matchAll(token)) {
+    const style: CSSProperties | undefined = str
+      ? { color: CODE_COLORS.string }
+      : literal
+        ? { color: CODE_COLORS.literal }
+        : name && OP_NAMES.has(name) && (prev === "." || prev === "")
+          ? {
+              ...PAPER_OP_STYLE,
+              padding: "0 2px",
+              borderRadius: 2,
+              background: lit ? "transparent" : PAPER_OP_STYLE.background,
+            }
+          : punct
+            ? { color: CODE_COLORS.punctuation }
+            : undefined;
+    out.push(
+      style ? (
+        <span key={out.length} style={style}>
+          {tok}
+        </span>
+      ) : (
+        tok
+      ),
+    );
+    if (tok.trim()) prev = tok;
+  }
+  return <>{out}</>;
+}
+
+/** Code children, their strings colored */
+function code(children: ReactNode) {
+  return Children.map(children, (child) =>
+    typeof child === "string" ? <CodeText text={child} /> : child,
+  );
+}
+
+/** Code highlighted at the given steps (in a CodeCallout) */
 export function Hl({ at, children }: { at: number[]; children: ReactNode }) {
   const on = at.includes(useSlideStep());
   return (
     <span
       style={{
         backgroundColor: on ? HIGHLIGHT : "transparent",
+        // Padded into the margin, so the code lays out as it would unlit
         padding: "0 6px",
+        margin: "0 -6px",
         borderRadius: 4,
         transition: "background-color 300ms ease",
       }}
     >
-      {children}
+      <HlLit.Provider value={on}>{code(children)}</HlLit.Provider>
     </span>
   );
 }
@@ -85,10 +152,10 @@ export function CodeCallout({
         zIndex: 10,
         margin: 0,
         padding: "20px 28px",
-        fontFamily: "monospace",
-        fontSize: 32,
-        fontWeight: "bold",
-        lineHeight: 1.45,
+        fontFamily: CODE_FONT,
+        fontSize: 30,
+        lineHeight: 1.5,
+        color: CODE_COLORS.text,
         background: "white",
         border: "1px solid #e5e7eb",
         borderRadius: 12,
@@ -99,7 +166,7 @@ export function CodeCallout({
         pointerEvents: "none",
       }}
     >
-      {children}
+      {code(children)}
     </pre>
   );
 }
@@ -225,6 +292,17 @@ export function StagedVideo({
   stopsRef.current = stops;
   // The step it last played for, or null when it isn't on screen
   const playedRef = useRef<number | null>(null);
+  // Escape pauses it where it is; the next step plays on from there
+  useEffect(() => {
+    if (!current) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.metaKey || e.ctrlKey || e.altKey) return;
+      cue.current = null;
+      ref.current?.pause();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [current, cue]);
   useEffect(() => {
     const video = ref.current!;
     const stops = stopsRef.current;
@@ -286,15 +364,16 @@ export function StagedVideo({
 // out of shot; here they peek up from the bottom edge, ready to drag in. Each
 // snaps to its place on the board once it's dragged near it. They wait in
 // groups, in the order they're brought in (yellow, green, orange, blue),
-// each peeking up a little differently.
+// peeking up only a sliver, their text below the edge; the greens step
+// down left to right.
 const STUDY_NOTE_REST = [
-  { x: 10, peek: 50 },
-  { x: 222, peek: 62 },
-  { x: 282, peek: 50 },
-  { x: 342, peek: 58 },
-  { x: 556, peek: 54 },
-  { x: 758, peek: 60 },
-  { x: 800, peek: 48 },
+  { x: 10, peek: 14 },
+  { x: 222, peek: 30 },
+  { x: 282, peek: 20 },
+  { x: 342, peek: 10 },
+  { x: 556, peek: 25 },
+  { x: 758, peek: 22 },
+  { x: 800, peek: 12 },
 ];
 const studyInitialState = {
   ...stickyInitialState,

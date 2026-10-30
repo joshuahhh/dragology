@@ -3,7 +3,7 @@
 // in advance. In "live" mode (the default) the demo is left to the presenter.
 //
 // R switches between the modes, for every slide at once. Backspace starts the
-// current slide's demo over, in either mode.
+// current slide's demo over, in either mode; Escape stops a track partway.
 //
 // A slide can also script steps, with tracks made up as the step starts (from
 // where things are on the stage), which play in either mode: for moves a
@@ -261,11 +261,14 @@ export function Rails({
     };
   }, [active, railsMode, recording, runner]);
 
-  // Backspace starts the demo over
+  // Backspace starts the demo over. Escape stops what's playing where it is
+  // (letting go of a drag); moving on from there catches the demo up first,
+  // as arriving at a step does.
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Backspace" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "Backspace" && e.key !== "Escape") return;
       if (
         e.target instanceof HTMLElement &&
         e.target.closest("input, textarea, [contenteditable]")
@@ -274,7 +277,7 @@ export function Rails({
       }
       runner.clear();
       playedRef.current = null;
-      setGeneration((g) => g + 1);
+      if (e.key === "Backspace") setGeneration((g) => g + 1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
