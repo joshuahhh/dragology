@@ -31,6 +31,7 @@ import {
   studyExit,
   StudySlide,
   SupernoolSlide,
+  twistedTreesWander,
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
@@ -1413,18 +1414,12 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
-    steps: 3,
     notes: `
       // Josh
       On a really nice walk in Seattle back in 2023,
-
-      ---
-
       Andrew shared his draggy ideas with me.
 
-      ---
-
-      I kept thinking about them over the years, but didn't do anything about it.
+      I was intrigued, but it took two years for me to do anything about it.
     `,
     content: <WalkSlide />,
   },
@@ -1433,8 +1428,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 4,
     notes: `
       // Josh
-      And then last year, it all came together.
-      My buddy Elliot was playing with order-preserving maps between trees, like you saw earlier.
+      That's when my buddy Elliot was playing with order-preserving maps between trees, like you saw earlier.
 
       ---
 
@@ -1449,13 +1443,16 @@ export const outline: (Slide | Heading)[] = [
       I wanted to reach in and pull them around, and feel out their dynamics. That felt pretty tough, until I remembered Andrew's ideas. I got working on a library that, with Andrew's help, grew into the work we are presenting today.
     `,
     content: (
-      <ElliotSlide
-        live={
-          <DemoSlide width={400} height={600} demoId="twisted-trees">
-            <TwistedTrees7 />
-          </DemoSlide>
-        }
-      />
+      // The live demo drags itself around
+      <Rails id="elliot" script={{ 3: twistedTreesWander() }} loop>
+        <ElliotSlide
+          live={
+            <DemoSlide width={400} height={600} demoId="twisted-trees">
+              <TwistedTrees7 />
+            </DemoSlide>
+          }
+        />
+      </Rails>
     ),
   },
   {
