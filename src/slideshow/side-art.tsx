@@ -38,6 +38,8 @@ export function SideArt({
         // Its white background vanishes on the explainer's off-white
         mixBlendMode: "multiply",
         transition: `opacity ${STEP_EASE} ${shown ? delay : 0}ms`,
+        // Shown or not, it's never in the way of the demo it sits by
+        pointerEvents: "none",
       }}
     />
   );
