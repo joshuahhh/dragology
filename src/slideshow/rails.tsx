@@ -26,7 +26,55 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { InStatusBar, useSlideCurrent, useSlideStep } from "./slide";
+import { InStatusBar, NEXT_KEYS, useSlideCurrent, useSlideStep } from "./slide";
+
+/**
+ * A slide's cue: while `cue.current` is set, the slide's first → or Space
+ * goes to it instead of on to the next step. A demo slide sets it on
+ * arriving, so that it waits, still, for the presenter to start it. (Ctrl+→
+ * still moves on.)
+ */
+export function useCue(active: boolean) {
+  const cue = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!active) {
+      cue.current = null;
+      return;
+    }
+    // On the way down, before the slideshow's own keys
+    const onKey = (e: KeyboardEvent) => {
+      const go = cue.current;
+      if (!go || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (!NEXT_KEYS.includes(e.key) && e.key !== " ") return;
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("input, textarea, [contenteditable]")
+      ) {
+        return;
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      cue.current = null;
+      go();
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKey, { capture: true });
+  }, [active]);
+  return cue;
+}
+
+// Real pointer events, which rails mode keeps from the demo
+const POINTER_EVENTS = [
+  "pointerdown",
+  "pointermove",
+  "pointerup",
+  "pointercancel",
+  "mousedown",
+  "mousemove",
+  "mouseup",
+  "click",
+] as const;
 
 /** A moment of a track. x and y are fractions of the stage. */
 export type Sample = { t: number; x: number; y: number; down: boolean };
@@ -140,16 +188,19 @@ export function Rails({
   // hot update (which, in dev, any saved file can set off), and that mustn't
   // replay or restart anything
   const ranForRef = useRef<unknown[]>([]);
+  const cue = useCue(active);
 
   // Rails: play the step's track when we get to it. Moving on before it's done
   // rushes it to its end first, so the next step starts from where it
   // expects. Arriving any other way (onto the slide, back a step, a jump, or
   // switching to rails) starts the demo over and rushes through the steps
-  // before. Scripted steps play in live mode too.
+  // before. Arriving at the start, a recorded first step waits for its cue.
+  // Scripted steps play in live mode too.
   useEffect(() => {
     const ranFor = [active, railsMode, step, tracks];
     if (ranFor.every((v, i) => v === ranForRef.current[i])) return;
     ranForRef.current = ranFor;
+    cue.current = null;
     if (!active) {
       runner.clear();
       playedRef.current = null;
@@ -164,6 +215,7 @@ export function Rails({
       if (script?.[step]) runner.enqueue(make(step), false, loop);
       return;
     }
+    const arriving = playedRef.current === null;
     if (playedRef.current !== null && playedRef.current === step - 1) {
       runner.rushAll();
     } else {
@@ -172,11 +224,42 @@ export function Rails({
       setGeneration((g) => g + 1);
       for (let k = 0; k < step; k++) runner.enqueue(make(k), true);
     }
-    runner.enqueue(make(step), false, loop && !!script?.[step]);
-    playedRef.current = step;
+    const play = () => {
+      runner.enqueue(make(step), false, loop && !!script?.[step]);
+      playedRef.current = step;
+    };
+    if (arriving && step === 0 && !script?.[0] && tracks[0]?.length) {
+      cue.current = play;
+    } else {
+      play();
+    }
     // Not on `script`, which is made anew on each render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, railsMode, step, tracks]);
+
+  // Rails: the real pointer stays out of the demo, so that a presenter's hand
+  // on the mouse can't grab, nudge or drop what a track is dragging: no real
+  // pointer events on the stage, and none at all while a track plays (a drag
+  // listens on the window). Except while recording a track, which is made
+  // with the real pointer.
+  useEffect(() => {
+    if (!active || railsMode !== "rails" || recording) return;
+    const block = (e: Event) => {
+      if (!e.isTrusted) return;
+      const stage = frameRef.current?.parentElement;
+      const onStage = e.target instanceof Node && !!stage?.contains(e.target);
+      if (!onStage && !runner.busy) return;
+      e.stopImmediatePropagation();
+      if (e.type.endsWith("down")) e.preventDefault();
+    };
+    const opts = { capture: true };
+    for (const t of POINTER_EVENTS) window.addEventListener(t, block, opts);
+    return () => {
+      for (const t of POINTER_EVENTS) {
+        window.removeEventListener(t, block, opts);
+      }
+    };
+  }, [active, railsMode, recording, runner]);
 
   // Backspace starts the demo over
   useEffect(() => {
@@ -306,6 +389,11 @@ class Runner {
   enqueue(make: () => Sample[] | null, rush: boolean, loop = false) {
     this.queue.push({ make, rush, loop });
     this.kick();
+  }
+
+  /** Whether a track is playing or waiting to */
+  get busy() {
+    return !!this.player || this.queue.length > 0;
   }
 
   /** Hurries what's playing and queued to its end */

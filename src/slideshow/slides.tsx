@@ -23,14 +23,12 @@ import {
   CallToActionSlide,
   CodeCallout,
   ElliotSlide,
-  HazelSlide,
   Hl,
   NoolClassicSlide,
-  RailsVideo,
+  StagedVideo,
   StepToggles,
   studyExit,
   StudySlide,
-  SupernoolSlide,
   twistedTreesWander,
   WalkSlide,
   WhiteboardSlide,
@@ -1085,7 +1083,7 @@ export const outline: (Slide | Heading)[] = [
 
       ---
 
-      But it also has a continuous drag to change start and end times. A continuous drag has an infinite number of possible destination states. You can't list them all.
+      But it also has a continuous drag to change start and end times. A continuous drag has an infinite number of possible destination states, so you can't just list them.
 
       ---
 
@@ -1105,7 +1103,14 @@ export const outline: (Slide | Heading)[] = [
             demoId="scheduler"
           >
             <schedulerDemo.Component />
-            <StepToggles byStep={[{}, {}, {}, { showVaryVisualizer: true }]} />
+            <StepToggles
+              byStep={[
+                {},
+                {},
+                {},
+                { showVaryVisualizer: true, showDebugOverlay: true },
+              ]}
+            />
           </DemoSlide>
           <CodeCallout from={2}>
             {"d."}
@@ -1145,7 +1150,6 @@ export const outline: (Slide | Heading)[] = [
             demoId="lists-in-lists"
           >
             <ListsInListsClean />
-            <StepToggles byStep={[{}, {}, {}, { showDropZones: true }]} />
           </DemoSlide>
           <CodeCallout>
             {"d."}
@@ -1228,12 +1232,12 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 3,
     notes: `
-      Here, "between" is composed with two more operators.
+      In this draggable algebra expression tree, "between" is composed with two more operators.
 
       ---
 
       // tracks come on
-      Each "between" makes a track to one destination state. The "closest", which we've seen before, reappears to combine these tracks together.
+      Each "between" makes a track to one destination state. The "closest" operator reappears to combine these tracks together.
 
       ---
 
@@ -1359,36 +1363,33 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     steps: 3,
     notes: `
-      // Rails: fidget with cheap and ladder, then scroll down
+      // Video: cheap's branches flip, ladder's lets slide around
       Since writing our paper, we've incorporated declarative dragging into some existing projects.
 
       Most of my research is on Hazel, a programming environment where every edit keeps your code meaningful. Using declarative dragging, we've made Hazel's refactorings physical: code moves along meaning-preserving paths.
 
       ---
 
-      // drag bluex in blend's parameters
+      // Video: blend's first two parameters swap, and mixture's arguments
       For example, I can reorder a function's parameters, and its call sites follow.
 
       ---
 
-      // grab price * rate / 100 in checkout
+      // Video: price * rate / 100 is extracted, hoisted, then lifted to a helper
       Or I can pull an expression out into its own variable, and if I keep pulling up, even extract it into a new helper function.
 
       To tell you about the other place declarative dragging has found a home, we need to go back to the year 2022.
     `,
-    // In rails mode, hazel-demo.mp4 (d2-talk/recorder/clips/hazel-demo.js)
-    content: (
-      <RailsVideo name="hazel-demo.mp4" stops={[0, 15.56, 20.2]}>
-        <HazelSlide />
-      </RailsVideo>
-    ),
+    // Andrew's recording of the live Hazel demo (Screen Recording 2026-10-29
+    // at 6.45 PM, without its sound), paused at each stage's end
+    content: <StagedVideo name="hazel-demo.mp4" stops={[0, 19.6, 25]} />,
   },
 
   { heading: "Origins" },
   {
     transition: "fade-white",
     notes: `
-      I had a prototype of a tangible math game. It had a lot to say for it, but the fundamental mechanic, based on selecting transformations from a menu, lacked the tactility I craved.
+      I had a prototype of a tangible math game. It played okay, but the fundamental mechanic, based on selecting transformations from a menu, lacked the tactility I craved.
     `,
     content: <NoolClassicSlide />,
   },
@@ -1396,11 +1397,11 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade",
     steps: 3,
     notes: `
-      I eventually came up with a  scheme to make it draggable,
+      Eventually I came up with a scheme to make it, and things like it, draggable,
 
       ---
 
-      but implementing it seemed daunting,
+      but implementing that seemed daunting,
 
       ---
 
@@ -1453,30 +1454,17 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
-    // Supernool takes focus and keys once shown
-    preload: false,
-    steps: 3,
     notes: `
-      // Live: Space runs supernool's own beats; Escape, then Ctrl+→ moves on
-      // Rails: the title spins away to the clearing
+      // Video, on Space: the tree is possessed, five drags simplify it, the ghost leaves and the tree regrows
       Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype using declarative dragging.
 
-      ---
-
-      // Rails: the traveller walks in and the tree wakes
       Invigorated by the new physicality I quickly moved off the 2D canvas into a 3D world, in which innocent trees are possessed by mathematical ghosts.
 
-      ---
-
-      // Rails: five drags simplify it, and the ghost leaves
       In this encounter, I drag to simplify expressions, which, now exorcised, return to the platonic realm.
     `,
-    // In rails mode, supernool-demo.mp4 (d2-talk/recorder/clips/supernool-demo.js)
-    content: (
-      <RailsVideo name="supernool-demo.mp4" stops={[0, 4.06, 9.32]}>
-        <SupernoolSlide />
-      </RailsVideo>
-    ),
+    // The first 27 s of uist-nool-v2.mov (Andrew's Screenshots), cropped to
+    // 16:9, without its sound
+    content: <StagedVideo name="supernool-demo.mp4" />,
   },
 
   { heading: "Close" },
@@ -1491,10 +1479,6 @@ export const outline: (Slide | Heading)[] = [
       Our study suggests people from diverse disciplines want the same thing: from educators, to game designers, to mathematicians, to creative tool builders.
 
       We hope declarative dragging will let them work in the semantic worlds they live in, helping them turn the rules of their worlds into rich tangible  interactions in ours.
-
-      ---
-
-      Without wrestling with tween states, transitions, and trigonometry... what might they build?
     `,
     content: <ClosingMontageSlide />,
   },

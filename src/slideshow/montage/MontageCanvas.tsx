@@ -36,12 +36,17 @@ export type MontageCanvasProps = {
   layout?: MontageLayout;
   /** Hold the clips at their first frames */
   paused?: boolean;
+  /**
+   * Fill the box with the view, letting what doesn't fit run off its edges,
+   * rather than fit all of the view inside it (default false)
+   */
+  cover?: boolean;
 };
 
-/** The scale and center that fit `view` in a width×height box */
-function cameraFor(view: Rect, width: number, height: number) {
+/** The scale and center that fit `view` in (or with `cover`, over) a width×height box */
+function cameraFor(view: Rect, width: number, height: number, cover = false) {
   return {
-    scale: Math.min(width / view.w, height / view.h),
+    scale: (cover ? Math.max : Math.min)(width / view.w, height / view.h),
     cx: view.x + view.w / 2,
     cy: view.y + view.h / 2,
   };
@@ -74,9 +79,10 @@ export function MontageCanvas({
   height = STAGE_H,
   layout = montageLayout,
   paused = false,
+  cover = false,
 }: MontageCanvasProps) {
   const bare = layout.tileStyle === "bare";
-  const target = cameraFor(resolveView(layout, view), width, height);
+  const target = cameraFor(resolveView(layout, view), width, height, cover);
   const panView =
     pan && (typeof pan.to !== "string" || pan.to in layout.views)
       ? cameraFor(resolveView(layout, pan.to), width, height)
@@ -220,6 +226,8 @@ export type MontageStep = {
   pan?: { to: string | Rect; ms: number };
   highlight?: string | null;
   cycle?: { groups: string[]; ms: number; thenAll?: boolean };
+  /** Fill the stage with the view (see MontageCanvasProps.cover) */
+  cover?: boolean;
 };
 
 /**
@@ -241,14 +249,18 @@ export const MONTAGE_PLAN_TIMED: MontageStep[] = [
     pan: OPENING_PAN,
     cycle: { groups: groupIds, ms: 2000, thenAll: true },
   },
-  { view: "all" },
+  // Pulled back over every tile (no view is named "tiles"), filling the
+  // stage and running off its edges, to show how many there are
+  { view: "tiles", cover: true },
 ];
 
 /** The same, but a step per group, so each one waits for a click */
 export const MONTAGE_PLAN_SPLIT: MontageStep[] = [
   { view: "start", pan: OPENING_PAN },
   ...groupIds.map((g) => ({ view: "start", pan: OPENING_PAN, highlight: g })),
-  { view: "all" },
+  // Pulled back over every tile (no view is named "tiles"), filling the
+  // stage and running off its edges, to show how many there are
+  { view: "tiles", cover: true },
 ];
 
 /**
@@ -278,7 +290,13 @@ export function MontagePlayer({
   const s = plan[Math.max(0, Math.min(step, plan.length - 1))];
   const highlight = useCycle(s, step);
   return (
-    <MontageCanvas view={s.view} pan={s.pan} highlight={highlight} {...rest} />
+    <MontageCanvas
+      view={s.view}
+      pan={s.pan}
+      cover={s.cover}
+      highlight={highlight}
+      {...rest}
+    />
   );
 }
 

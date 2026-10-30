@@ -221,168 +221,187 @@ function ChainingToggle({
   );
 }
 
-export const draggable: Draggable<State> = ({
-  state,
-  d,
-  draggedId,
-  setState,
-}) => (
-  <g>
-    {state.showLinks && (
-      <g id="links" dragologyZIndex={-1}>
-        {state.notes.map((note, i) => {
-          if (i === 0) return null;
-          const prev = state.notes[i - 1];
-          return (
+/**
+ * The sticky notes. `marks` draws, while a note is dragged, ticks on the
+ * canvas edges for where it's going and where it is; `links` draws the
+ * chain's links; `chainingToggle` shows the checkbox (when hidden, it's still
+ * there to click from code).
+ */
+export function makeDraggable({
+  marks = true,
+  links = true,
+  chainingToggle = true,
+}: {
+  marks?: boolean;
+  links?: boolean;
+  chainingToggle?: boolean;
+} = {}): Draggable<State> {
+  return ({ state, d, draggedId, setState }) => (
+    <g>
+      {links && state.showLinks && (
+        <g id="links" dragologyZIndex={-1}>
+          {state.notes.map((note, i) => {
+            if (i === 0) return null;
+            const prev = state.notes[i - 1];
+            return (
+              <line
+                id={`link-${i}`}
+                x1={prev.x + NOTE_W / 2}
+                y1={prev.y + NOTE_H / 2}
+                x2={note.x + NOTE_W / 2}
+                y2={note.y + NOTE_H / 2}
+                stroke="#94a3b8"
+                strokeWidth={2}
+                strokeDasharray="6 4"
+              />
+            );
+          })}
+        </g>
+      )}
+      {state.notes.map((note) =>
+        marks && draggedId === note.id ? (
+          <g id={`${note.id}-ticks`} dragologyZIndex={-1}>
             <line
-              id={`link-${i}`}
-              x1={prev.x + NOTE_W / 2}
-              y1={prev.y + NOTE_H / 2}
+              x1={note.destX + NOTE_W / 2}
+              y1={-16}
+              x2={note.destX + NOTE_W / 2}
+              y2={0}
+              stroke={COLORS[note.color]}
+              strokeWidth={3}
+            />
+            <line
+              x1={note.destX + NOTE_W / 2}
+              y1={540}
+              x2={note.destX + NOTE_W / 2}
+              y2={540 + 16}
+              stroke={COLORS[note.color]}
+              strokeWidth={3}
+            />
+            <line
+              x1={-16}
+              y1={note.destY + NOTE_H / 2}
+              x2={0}
+              y2={note.destY + NOTE_H / 2}
+              stroke={COLORS[note.color]}
+              strokeWidth={3}
+            />
+            <line
+              x1={960}
+              y1={note.destY + NOTE_H / 2}
+              x2={960 + 16}
+              y2={note.destY + NOTE_H / 2}
+              stroke={COLORS[note.color]}
+              strokeWidth={3}
+            />
+            {/* current position ticks */}
+            <line
+              x1={note.x + NOTE_W / 2}
+              y1={-16}
               x2={note.x + NOTE_W / 2}
+              y2={0}
+              stroke="#94a3b8"
+              strokeWidth={2}
+            />
+            <line
+              x1={note.x + NOTE_W / 2}
+              y1={540}
+              x2={note.x + NOTE_W / 2}
+              y2={540 + 16}
+              stroke="#94a3b8"
+              strokeWidth={2}
+            />
+            <line
+              x1={-16}
+              y1={note.y + NOTE_H / 2}
+              x2={0}
               y2={note.y + NOTE_H / 2}
               stroke="#94a3b8"
               strokeWidth={2}
-              strokeDasharray="6 4"
             />
-          );
-        })}
-      </g>
-    )}
-    {state.notes.map((note) =>
-      draggedId === note.id ? (
-        <g id={`${note.id}-ticks`} dragologyZIndex={-1}>
-          <line
-            x1={note.destX + NOTE_W / 2}
-            y1={-16}
-            x2={note.destX + NOTE_W / 2}
-            y2={0}
-            stroke={COLORS[note.color]}
-            strokeWidth={3}
-          />
-          <line
-            x1={note.destX + NOTE_W / 2}
-            y1={540}
-            x2={note.destX + NOTE_W / 2}
-            y2={540 + 16}
-            stroke={COLORS[note.color]}
-            strokeWidth={3}
-          />
-          <line
-            x1={-16}
-            y1={note.destY + NOTE_H / 2}
-            x2={0}
-            y2={note.destY + NOTE_H / 2}
-            stroke={COLORS[note.color]}
-            strokeWidth={3}
-          />
-          <line
-            x1={960}
-            y1={note.destY + NOTE_H / 2}
-            x2={960 + 16}
-            y2={note.destY + NOTE_H / 2}
-            stroke={COLORS[note.color]}
-            strokeWidth={3}
-          />
-          {/* current position ticks */}
-          <line
-            x1={note.x + NOTE_W / 2}
-            y1={-16}
-            x2={note.x + NOTE_W / 2}
-            y2={0}
-            stroke="#94a3b8"
-            strokeWidth={2}
-          />
-          <line
-            x1={note.x + NOTE_W / 2}
-            y1={540}
-            x2={note.x + NOTE_W / 2}
-            y2={540 + 16}
-            stroke="#94a3b8"
-            strokeWidth={2}
-          />
-          <line
-            x1={-16}
-            y1={note.y + NOTE_H / 2}
-            x2={0}
-            y2={note.y + NOTE_H / 2}
-            stroke="#94a3b8"
-            strokeWidth={2}
-          />
-          <line
-            x1={960}
-            y1={note.y + NOTE_H / 2}
-            x2={960 + 16}
-            y2={note.y + NOTE_H / 2}
-            stroke="#94a3b8"
-            strokeWidth={2}
-          />
-        </g>
-      ) : null,
-    )}
-    {state.notes.map((note, i) => (
-      <g
-        id={note.id}
-        transform={translate(note.x, note.y)}
-        dragologyZIndex={draggedId === note.id ? "/1" : false}
-        dragologyOnDrag={() => {
-          const spec = d.vary(state, [
-            param("notes", i, "x"),
-            param("notes", i, "y"),
-          ]);
-          if (state.showLinks) {
-            const linkLengths = computeLinkLengths(state.notes);
-            const W = 960;
-            return spec
-              .during((s) => enforceSequential(s, i, linkLengths))
-              .withChaining({ transition: false })
-              .changeFrame(({ pointer }) =>
-                pointer.x > W
-                  ? {
-                      pointer: Vec2(W + (pointer.x - W) * 5, pointer.y),
-                    }
-                  : {},
-              );
-          }
-          const snappedState = produce(state, (draft) => {
-            draft.notes[i] = {
-              ...draft.notes[i],
-              x: note.destX,
-              y: note.destY,
-            };
-          });
+            <line
+              x1={960}
+              y1={note.y + NOTE_H / 2}
+              x2={960 + 16}
+              y2={note.y + NOTE_H / 2}
+              stroke="#94a3b8"
+              strokeWidth={2}
+            />
+          </g>
+        ) : null,
+      )}
+      {state.notes.map((note, i) => (
+        <g
+          id={note.id}
+          transform={translate(note.x, note.y)}
+          dragologyZIndex={draggedId === note.id ? "/1" : false}
+          dragologyOnDrag={() => {
+            const spec = d.vary(state, [
+              param("notes", i, "x"),
+              param("notes", i, "y"),
+            ]);
+            if (state.showLinks) {
+              const linkLengths = computeLinkLengths(state.notes);
+              const W = 960;
+              return spec
+                .during((s) => enforceSequential(s, i, linkLengths))
+                .withChaining({ transition: false })
+                .changeFrame(({ pointer }) =>
+                  pointer.x > W
+                    ? {
+                        pointer: Vec2(W + (pointer.x - W) * 5, pointer.y),
+                      }
+                    : {},
+                );
+            }
+            const snappedState = produce(state, (draft) => {
+              draft.notes[i] = {
+                ...draft.notes[i],
+                x: note.destX,
+                y: note.destY,
+              };
+            });
 
-          // return spec.withDropTransition(100);
+            // return spec.withDropTransition(100);
 
-          return d
-            .fixed(snappedState)
-            .whenFar(spec, { gap: 25 })
-            .withBranchTransition(400)
-            .withDropTransition(100);
-        }}
-      >
-        <rect
-          width={NOTE_W}
-          height={NOTE_H}
-          fill={COLORS[note.color]}
-          style={{
-            filter:
-              draggedId === note.id
-                ? "drop-shadow(0 4px 6px rgba(0,0,0,0.4))"
-                : "drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
+            return d
+              .fixed(snappedState)
+              .whenFar(spec, { gap: 25 })
+              .withBranchTransition(400)
+              .withDropTransition(100);
           }}
+        >
+          <rect
+            width={NOTE_W}
+            height={NOTE_H}
+            fill={COLORS[note.color]}
+            style={{
+              filter:
+                draggedId === note.id
+                  ? "drop-shadow(0 4px 6px rgba(0,0,0,0.4))"
+                  : "drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
+            }}
+          />
+          <foreignObject width={NOTE_W} height={NOTE_H}>
+            <NoteContent html={note.content} />
+          </foreignObject>
+        </g>
+      ))}
+      <foreignObject
+        x={880}
+        y={10}
+        width={70}
+        height={30}
+        style={chainingToggle ? undefined : { display: "none" }}
+      >
+        <ChainingToggle
+          checked={state.showLinks}
+          onToggle={() =>
+            setState((prev) => ({ ...prev, showLinks: !prev.showLinks }))
+          }
         />
-        <foreignObject width={NOTE_W} height={NOTE_H}>
-          <NoteContent html={note.content} />
-        </foreignObject>
-      </g>
-    ))}
-    <foreignObject x={880} y={10} width={70} height={30}>
-      <ChainingToggle
-        checked={state.showLinks}
-        onToggle={() =>
-          setState((prev) => ({ ...prev, showLinks: !prev.showLinks }))
-        }
-      />
-    </foreignObject>
-  </g>
-);
+      </foreignObject>
+    </g>
+  );
+}
+
+export const draggable = makeDraggable();

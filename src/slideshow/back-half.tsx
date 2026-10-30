@@ -2,7 +2,15 @@
 // the ideas came from, and the close). The slides themselves are in the
 // outline in slides.tsx, where their notes can be edited in place.
 
-import { type ReactNode, useContext, useEffect, useRef, useState } from "react";
+import qrcode from "qrcode-generator";
+import {
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   DemoContext,
   DemoDraggable,
@@ -10,12 +18,13 @@ import {
 } from "../demo/ui";
 import "../studio/shantell-sans";
 import {
+  makeDraggable as makeStickyNotes,
   initialState as stickyInitialState,
-  draggable as stickyNotes,
 } from "../studio/sticky-notes";
 import { EmbedSlide } from "./EmbedSlide";
 import hazelProgram from "./hazel-demo-program.txt?raw";
-import { type Sample, useRailsMode } from "./rails";
+import { MONTAGE_PLAN_TIMED, MontagePlayer } from "./montage/MontageCanvas";
+import { type Sample, useCue } from "./rails";
 import {
   DemoSlide,
   slideFileUrl,
@@ -23,6 +32,7 @@ import {
   useSlideShown,
   useSlideStep,
 } from "./slide";
+import { sourceSans } from "./source-sans";
 
 const HIGHLIGHT = "#d5e5a3";
 const EASE = "cubic-bezier(0.45, 0, 0.25, 1)";
@@ -190,50 +200,38 @@ export function ClipVideo({
   );
 }
 
-/** The videos in public/slides/back-half, found at build time (only the names) */
-const backHalfVideos = new Set(
-  Object.keys(import.meta.glob("/public/slides/back-half/*.mp4")).map((p) =>
-    p.replace(/^.*\//, ""),
-  ),
-);
-
 /**
- * A slide that is live in live mode and a recording in rails mode (R): each
- * step plays the video `name` (in public/slides/back-half) from `stops[step]`
- * to the next stop, or to the end at the last one, and holds there. Steps past
- * the last stop hold too. Until the video exists, rails mode shows the live
- * slide as well.
+ * A recording played in sections, one a step: the video `name` (in
+ * public/slides/back-half) plays from `stops[step]` to the next stop, or to
+ * the end at the last one. It arrives still, on its first frame, and starts
+ * on the first → or Space. Moving on before a section ends carries straight
+ * on into the next one; a section that ends first waits at its stop. Going
+ * back a step, or jumping in, plays that step's section afresh.
  */
-export function RailsVideo({
+export function StagedVideo({
   name,
   stops = [0],
-  children,
 }: {
   name: string;
   stops?: number[];
-  children: ReactNode;
 }) {
-  const railsMode = useRailsMode();
-  const recorded = railsMode === "rails" && backHalfVideos.has(name);
-  return recorded ? (
-    <SteppedVideo name={name} stops={stops} />
-  ) : (
-    <>{children}</>
-  );
-}
-
-function SteppedVideo({ name, stops }: { name: string; stops: number[] }) {
   const ref = useRef<HTMLVideoElement>(null);
   const step = useSlideStep();
   const current = useSlideCurrent();
+  const cue = useCue(current);
   // Read when the step changes, not watched: a re-render with an equal (new)
   // array mustn't replay a section that has finished
   const stopsRef = useRef(stops);
   stopsRef.current = stops;
+  // The step it last played for, or null when it isn't on screen
+  const playedRef = useRef<number | null>(null);
   useEffect(() => {
     const video = ref.current!;
     const stops = stopsRef.current;
+    const last = playedRef.current;
+    playedRef.current = current ? step : null;
     if (!current) {
+      cue.current = null;
       video.pause();
       video.currentTime = stops[0];
       return;
@@ -241,9 +239,15 @@ function SteppedVideo({ name, stops }: { name: string; stops: number[] }) {
     if (step >= stops.length) return;
     const start = stops[step];
     const end = stops[step + 1] ?? Infinity;
-    // Carry straight on from the previous step's stop, without a seek
-    if (Math.abs(video.currentTime - start) > 0.1) video.currentTime = start;
-    video.play()?.catch(() => {});
+    // The same step again (Fast Refresh re-running this) leaves it be. On
+    // from the step before, it carries on from wherever it's got to.
+    if (last !== step) {
+      cue.current = null;
+      if (last !== step - 1) video.currentTime = start;
+      const go = () => void video.play()?.catch(() => {});
+      if (last === null && step === 0) cue.current = go;
+      else go();
+    }
     let frame = 0;
     const check = () => {
       if (video.currentTime >= end) {
@@ -255,7 +259,7 @@ function SteppedVideo({ name, stops }: { name: string; stops: number[] }) {
     };
     frame = video.requestVideoFrameCallback(check);
     return () => video.cancelVideoFrameCallback(frame);
-  }, [current, step]);
+  }, [current, step, cue]);
   return (
     <video
       ref={ref}
@@ -280,16 +284,34 @@ function SteppedVideo({ name, stops }: { name: string; stops: number[] }) {
 // The study's findings as sticky notes, from the studio section the
 // submission video was shot from. There the notes start below the canvas,
 // out of shot; here they peek up from the bottom edge, ready to drag in. Each
-// snaps to its place on the board once it's dragged near it.
-const STUDY_NOTE_PEEK = 56;
+// snaps to its place on the board once it's dragged near it. They wait in
+// groups, in the order they're brought in (yellow, green, orange, blue),
+// each peeking up a little differently.
+const STUDY_NOTE_REST = [
+  { x: 10, peek: 50 },
+  { x: 222, peek: 62 },
+  { x: 282, peek: 50 },
+  { x: 342, peek: 58 },
+  { x: 556, peek: 54 },
+  { x: 758, peek: 60 },
+  { x: 800, peek: 48 },
+];
 const studyInitialState = {
   ...stickyInitialState,
   notes: stickyInitialState.notes.map((note, i) => ({
     ...note,
-    x: 6 + i * 128,
-    y: 540 - STUDY_NOTE_PEEK,
+    x: STUDY_NOTE_REST[i].x,
+    y: 540 - STUDY_NOTE_REST[i].peek,
   })),
 };
+
+// Without the studio's drag marks, chain links and chaining checkbox (still
+// there, hidden, for the exit to tick)
+const studyNotes = makeStickyNotes({
+  marks: false,
+  links: false,
+  chainingToggle: false,
+});
 
 /** The user study, its findings on sticky notes dragged onto the board */
 export function StudySlide() {
@@ -304,7 +326,7 @@ export function StudySlide() {
     >
       <DemoSlide width={960} height={540}>
         <DemoDraggable
-          draggable={stickyNotes}
+          draggable={studyNotes}
           initialState={studyInitialState}
           width={960}
           height={540}
@@ -759,70 +781,91 @@ export function SupernoolSlide() {
   );
 }
 
+/** Where the closing slide's QR code goes */
+const SITE_URL = "https://declarative-dragging.github.io/";
+
 /**
- * The close: where to find Dragology, and thanks, written on the whiteboard
- * the drag ideas haunted, now wiped clean.
+ * How the closing slide's montage sits behind its card: "dim" darkens it,
+ * "fade" washes it out toward white
+ */
+const CLOSE_BACKDROP: "dim" | "fade" = "dim";
+
+/** A QR code, drawn as crisp squares with a quiet zone around it */
+function QrCode({ text, size }: { text: string; size: number }) {
+  const { n, path } = useMemo(() => {
+    const qr = qrcode(0, "M");
+    qr.addData(text);
+    qr.make();
+    const n = qr.getModuleCount();
+    let path = "";
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (qr.isDark(r, c)) path += `M${c} ${r}h1v1h-1z`;
+      }
+    }
+    return { n, path };
+  }, [text]);
+  const quiet = 2;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`${-quiet} ${-quiet} ${n + 2 * quiet} ${n + 2 * quiet}`}
+      shapeRendering="crispEdges"
+    >
+      <path d={path} fill="#111827" />
+    </svg>
+  );
+}
+
+/**
+ * The close: the montage of what people might build, zoomed all the way out
+ * as the slide before ends, behind a card with a QR code for the site and our
+ * names.
  */
 export function CallToActionSlide() {
-  const ink = "#1f3a8a";
+  const shown = useSlideShown();
+  const last = MONTAGE_PLAN_TIMED.length - 1;
   return (
     <div className="absolute inset-0" style={{ overflow: "hidden" }}>
-      <Picture name="empty-wb.jpg" fit="cover" />
-      {/* The board's face: 440–1450 × 280–1080 in the 1920×1440 photo,
-          whose top 180px the stage crops off */}
+      <MontagePlayer plan={MONTAGE_PLAN_TIMED} step={last} paused={!shown} />
       <div
+        className="absolute inset-0"
         style={{
-          position: "absolute",
-          left: 440,
-          top: 100,
-          width: 1010,
-          height: 800,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "'Shantell Sans', cursive",
-          color: ink,
-          transform: "rotate(-0.6deg)",
-          whiteSpace: "nowrap",
+          background:
+            CLOSE_BACKDROP === "dim"
+              ? "rgba(15, 23, 42, 0.55)"
+              : "rgba(255, 255, 255, 0.65)",
         }}
-      >
+      />
+      <div className="absolute inset-0 flex items-center justify-center">
         <div
+          className="bg-white flex flex-col items-center"
           style={{
-            width: 240,
-            height: 240,
-            border: `6px dashed ${ink}`,
-            borderRadius: 12,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 44,
-            opacity: 0.7,
+            boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
+            padding: "36px 40px 32px",
+            gap: 14,
+            fontFamily: sourceSans,
+            color: "#1f2937",
           }}
         >
-          QR
-        </div>
-        <div style={{ fontSize: 88, fontWeight: 700, marginTop: 28 }}>
-          Dragology
-        </div>
-        <div style={{ fontSize: 50, fontWeight: 500 }}>
-          declarative-dragging.github.io
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            gap: 90,
-            marginTop: 56,
-            fontSize: 76,
-            fontWeight: 600,
-          }}
-        >
-          <div style={{ color: "#b91c1c", transform: "rotate(-3deg)" }}>
-            Thanks!
+          <QrCode text={SITE_URL} size={280} />
+          <div style={{ fontSize: 28, fontWeight: 600, whiteSpace: "nowrap" }}>
+            {SITE_URL.replace(/^https:\/\/|\/$/g, "")}
           </div>
-          <div style={{ color: "#047857", transform: "rotate(2deg)" }}>
-            Questions?
+          <div
+            style={{
+              alignSelf: "stretch",
+              textAlign: "right",
+              fontSize: 30,
+              lineHeight: 1.3,
+              marginTop: 6,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <div>Joshua Horowitz</div>
+            <div>Andrew Blinn</div>
+            <div>Jeffrey Heer</div>
           </div>
         </div>
       </div>
