@@ -3,14 +3,19 @@ import { slides } from "./slides";
 
 /**
  * Every content slide at once, each on a half-size stage, for
- * snapshot-slides.sh to screenshot. (Video slides are left out: the outline
- * shows their frames directly.)
+ * snapshot-slides.ts to screenshot. (Video slides are left out: the outline
+ * shows their frames directly.) With `?only=3,7` before the hash, just those
+ * slides.
  */
 export function SlideshowSnapshotPage() {
+  const only = new URLSearchParams(window.location.search)
+    .get("only")
+    ?.split(",")
+    .map(Number);
   return (
-    <div>
+    <div data-slides-page>
       {slides.map((s, i) =>
-        "content" in s ? (
+        "content" in s && (!only || only.includes(i + 1)) ? (
           <div
             key={i}
             data-slide={i + 1}
