@@ -31,6 +31,7 @@ const HOTKEY_SECTIONS: { title: string; hotkeys: Hotkey[] }[] = [
       { combos: [["⌃", "⇧", "A"]], does: "Share with audience window" },
       { combos: [["⌃", "⇧", "F"]], does: "Fullscreen" },
       { combos: [["⌃", "⇧", "S"]], does: "Stage only" },
+      { combos: [["⌃", "⇧", "B"]], does: "Stage in its own window" },
       { combos: [["⌃", "⇧", "R"]], does: "Reload this slide" },
       { combos: [["⌃", "⇧", "D"]], does: "Demo settings bars" },
       { combos: [["⌃", "⇧", "T"]], does: "Time a run-through" },

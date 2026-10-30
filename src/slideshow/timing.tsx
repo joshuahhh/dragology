@@ -52,12 +52,15 @@ export function runSeconds(
  * `timing` in slides.tsx (vite-plugin-slide-notes.ts). Slides the run didn't
  * reach keep the times they had. The run is kept in localStorage until it's
  * saved, so a reload doesn't lose it (and counts toward the step it's on).
+ * Only one window should time: one that isn't `enabled` leaves the stored run
+ * alone, and never has one.
  */
 export function useTimingRun(
   pos: { slide: number; step: number },
   showError: (title: string, error?: unknown) => void,
+  enabled = true,
 ) {
-  const [run, setRun] = useState(loadRun);
+  const [run, setRun] = useState(() => (enabled ? loadRun() : null));
   const [saving, setSaving] = useState(false);
   const runRef = useRef(run);
   runRef.current = run;
@@ -65,13 +68,14 @@ export function useTimingRun(
   posRef.current = pos;
 
   useEffect(() => {
+    if (!enabled) return;
     try {
       if (run) localStorage.setItem(RUN_KEY, JSON.stringify(run));
       else localStorage.removeItem(RUN_KEY);
     } catch {
       // A reload will lose it, then
     }
-  }, [run]);
+  }, [run, enabled]);
 
   const { slide, step } = pos;
   useEffect(() => {

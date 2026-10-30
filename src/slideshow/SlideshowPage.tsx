@@ -20,6 +20,7 @@ import {
   type SaveResponse,
 } from "./notesApi";
 import { NotesEditor } from "./NotesEditor";
+import { useStagePopout } from "./popout";
 import { useRailsMode } from "./rails";
 import {
   adjacentPresented,
@@ -619,12 +620,14 @@ function StepBar({ steps, step }: { steps: number; step: number | null }) {
 }
 
 export function SlideshowPage() {
-  useTitle("Dragology — Slideshow");
   const { slideNum } = useParams();
   const navigate = useNavigate();
-  // Just the stage, filling the window, as for the audience's screen
   const [searchParams] = useSearchParams();
-  const stageOnly = searchParams.has("stage");
+  // This window is the stage, popped out of the presenter's (⌃⇧B)
+  const isStageWindow = searchParams.has("popout");
+  useTitle(isStageWindow ? "Dragology — Stage" : "Dragology — Slideshow");
+  // Just the stage, filling the window, as for the audience's screen
+  const stageOnly = searchParams.has("stage") || isStageWindow;
   const [panelOpen, setPanelOpen] = usePanelOpen();
 
   const [pos, setPos] = useState(() => parseSlidePos(slideNum));
@@ -658,20 +661,32 @@ export function SlideshowPage() {
     showError,
     dismissError,
   } = useAudienceFeed(stageRef);
-  const timing = useTimingRun(pos, showError);
+  const timing = useTimingRun(pos, showError, !isStageWindow);
   const timingRef = useRef(timing);
   timingRef.current = timing;
+
+  // The Ctrl+Shift commands other than going forward and back, by key code;
+  // false if there's no such command
+  const commandRef = useRef<(code: string) => boolean>(() => false);
+  const popout = useStagePopout({
+    isStageWindow,
+    pos,
+    setPos,
+    stageUrl: `#/slideshow/${formatSlidePos(pos)}?popout`,
+    onCommand: (code) => commandRef.current(code),
+    showError,
+  });
 
   useEffect(() => {
     navigate(
       `/slideshow/${formatSlidePos({ slide: currentSlide, step: currentStep })}${
-        stageOnly ? "?stage" : ""
+        isStageWindow ? "?popout" : stageOnly ? "?stage" : ""
       }`,
       {
         replace: true,
       },
     );
-  }, [currentSlide, currentStep, stageOnly, navigate]);
+  }, [currentSlide, currentStep, stageOnly, isStageWindow, navigate]);
 
   /**
    * The step to show a slide at: a slide other than the current one is
@@ -873,6 +888,50 @@ export function SlideshowPage() {
     );
   }, []);
 
+  // With the stage popped out, the presenter's commands pressed in the stage
+  // window go to the presenter's, and the stage's pressed in the presenter's
+  // go to the stage's.
+  commandRef.current = (code) => {
+    if (isStageWindow && ["KeyP", "KeyT", "KeyO"].includes(code)) {
+      popout.sendCommand(code);
+      return true;
+    }
+    if (popout.poppedOut && ["KeyR", "KeyD"].includes(code)) {
+      popout.sendCommand(code);
+      return true;
+    }
+    if (code === "KeyB") popout.toggle();
+    else if (code === "KeyP") setPanelOpen((open) => !open);
+    else if (code === "KeyA") {
+      // Sharing is the presenter's window's to start, with its stage
+      if (isStageWindow) return true;
+      if (popout.poppedOut) {
+        showError(
+          "The stage is in its own window: share that, or press ⌃⇧B to bring it back here",
+        );
+      } else shareWithAudience();
+    } else if (code === "KeyD") toggleDemoBars();
+    else if (code === "KeyF") toggleFullscreen(showError);
+    else if (code === "KeyT" && timingEnabled) {
+      const { run, start, stop } = timingRef.current;
+      if (run) stop();
+      else start();
+    } else if (code === "KeyR") {
+      const { slide } = posRef.current;
+      setReloads((prev) =>
+        new Map(prev).set(slide, (prev.get(slide) ?? 0) + 1),
+      );
+    } else if (code === "KeyS") {
+      if (isStageWindow) return true;
+      const path = `/slideshow/${formatSlidePos(posRef.current)}`;
+      navigate(stageOnly ? path : `${path}?stage`, { replace: true });
+    } else if (code === "KeyO") {
+      if (notesUnsavedRef.current && !confirmLeave()) return true;
+      navigate("/slideshow-outline");
+    } else return false;
+    return true;
+  };
+
   useEffect(() => {
     // Ctrl+Shift+<key> shortcuts always work: caught on the way down, before
     // a focused editor or an embedded demo can take them, and while typing.
@@ -883,27 +942,7 @@ export function SlideshowPage() {
       if (!e.ctrlKey || e.metaKey || e.altKey) return;
       if (NEXT_KEYS.includes(e.key)) goNext();
       else if (PREV_KEYS.includes(e.key)) goPrev();
-      else if (!e.shiftKey) return;
-      else if (e.code === "KeyP") setPanelOpen((open) => !open);
-      else if (e.code === "KeyA") shareWithAudience();
-      else if (e.code === "KeyD") toggleDemoBars();
-      else if (e.code === "KeyF") toggleFullscreen(showError);
-      else if (e.code === "KeyT" && timingEnabled) {
-        const { run, start, stop } = timingRef.current;
-        if (run) stop();
-        else start();
-      } else if (e.code === "KeyR") {
-        const { slide } = posRef.current;
-        setReloads((prev) =>
-          new Map(prev).set(slide, (prev.get(slide) ?? 0) + 1),
-        );
-      } else if (e.code === "KeyS") {
-        const path = `/slideshow/${formatSlidePos(posRef.current)}`;
-        navigate(stageOnly ? path : `${path}?stage`, { replace: true });
-      } else if (e.code === "KeyO") {
-        if (notesUnsavedRef.current && !confirmLeave()) return;
-        navigate("/slideshow-outline");
-      } else return;
+      else if (!e.shiftKey || !commandRef.current(e.code)) return;
       e.preventDefault();
       e.stopPropagation();
     };
@@ -925,15 +964,7 @@ export function SlideshowPage() {
       window.removeEventListener("keydown", forced, { capture: true });
       window.removeEventListener("keydown", bare);
     };
-  }, [
-    goNext,
-    goPrev,
-    navigate,
-    stageOnly,
-    setPanelOpen,
-    shareWithAudience,
-    showError,
-  ]);
+  }, [goNext, goPrev]);
 
   const { zoom: stageZoom, wide } = useStageLayout(stageOnly);
 
@@ -1036,109 +1067,118 @@ export function SlideshowPage() {
           {/* The stage. Layout and paint containment make it the containing block
           for position: fixed descendants (e.g. DemoSettingsBar), so they stay
           inside the stage rather than pinning to the window. */}
-          <div
-            ref={stageRef}
-            className="bg-white flex flex-col"
-            style={{
-              position: "relative",
-              width: STAGE_W,
-              height: STAGE_H,
-              flexShrink: 0,
-              zoom: stageZoom,
-              contain: "layout paint",
-            }}
-          >
-            {/* Preloaded video elements (hidden when not on a video slide) */}
-            {videoFiles.map((file) => {
-              const opacity = videoOpacity.get(file) ?? 0;
-              return (
-                <video
-                  key={file}
-                  ref={(el) => {
-                    if (el) videoEls.current.set(file, el);
-                  }}
-                  src={slideFileUrl(file)}
-                  preload="auto"
-                  muted
-                  playsInline
-                  onSeeked={() =>
-                    setSeekedFiles((prev) =>
-                      prev.has(file) ? prev : new Set(prev).add(file),
-                    )
-                  }
-                  onPlay={updatePlaying}
-                  onPause={updatePlaying}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    background: "white",
-                    visibility: opacity > 0 ? "visible" : "hidden",
-                    opacity,
-                    transition: transitioning
-                      ? `opacity ${transitionMs}ms linear`
-                      : "none",
-                    pointerEvents: opacity > 0 ? "auto" : "none",
-                    zIndex: 5,
-                  }}
-                />
-              );
-            })}
-
-            {/* Main slide area — slides stacked via CSS grid so all get identical layout */}
+          {popout.poppedOut ? (
+            <div className="self-stretch shrink-0 border-b border-gray-800 px-4 py-2 text-sm text-gray-400">
+              The stage is in its own window. ⌃⇧B brings it back.
+            </div>
+          ) : (
             <div
-              className="flex-1 min-h-0"
-              style={{ display: "grid", isolation: "isolate" }}
+              ref={stageRef}
+              className="bg-white flex flex-col"
+              style={{
+                position: "relative",
+                width: STAGE_W,
+                height: STAGE_H,
+                flexShrink: 0,
+                zoom: stageZoom,
+                contain: "layout paint",
+              }}
             >
-              {stageSlides.map((slideIdx) => {
-                const s = slides[slideIdx];
-                const isActive = slideIdx === displaySlide;
-                const opacity = stageSlideOpacity.get(slideIdx)!;
-                const visible = opacity > 0 || isActive;
+              {/* Preloaded video elements (hidden when not on a video slide) */}
+              {videoFiles.map((file) => {
+                const opacity = videoOpacity.get(file) ?? 0;
                 return (
-                  <div
-                    key={slideIdx}
+                  <video
+                    key={file}
+                    ref={(el) => {
+                      if (el) videoEls.current.set(file, el);
+                      else videoEls.current.delete(file);
+                    }}
+                    src={slideFileUrl(file)}
+                    preload="auto"
+                    muted
+                    playsInline
+                    onSeeked={() =>
+                      setSeekedFiles((prev) =>
+                        prev.has(file) ? prev : new Set(prev).add(file),
+                      )
+                    }
+                    onPlay={updatePlaying}
+                    onPause={updatePlaying}
                     style={{
-                      gridArea: "1 / 1",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      position: "relative",
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      background: "white",
+                      visibility: opacity > 0 ? "visible" : "hidden",
                       opacity,
                       transition: transitioning
                         ? `opacity ${transitionMs}ms linear`
                         : "none",
-                      mixBlendMode: "plus-lighter",
-                      pointerEvents: isActive ? "auto" : "none",
-                      visibility: visible ? "visible" : "hidden",
+                      pointerEvents: opacity > 0 ? "auto" : "none",
+                      zIndex: 5,
                     }}
-                  >
-                    {"content" in s && (
-                      <SlidePresenceContext.Provider
-                        key={reloads.get(slideIdx) ?? 0}
-                        value={{
-                          shown: visible,
-                          current: slideIdx === currentSlide,
-                          arrivedForward: arrival.forward,
-                        }}
-                      >
-                        <SlideStepContext.Provider
-                          value={contentStep(s, stepOf(slideIdx))}
-                        >
-                          <StatusBarSlotContext.Provider value={statusBarSlot}>
-                            {s.content}
-                          </StatusBarSlotContext.Provider>
-                        </SlideStepContext.Provider>
-                      </SlidePresenceContext.Provider>
-                    )}
-                  </div>
+                  />
                 );
               })}
+
+              {/* Main slide area — slides stacked via CSS grid so all get identical layout */}
+              <div
+                className="flex-1 min-h-0"
+                style={{ display: "grid", isolation: "isolate" }}
+              >
+                {stageSlides.map((slideIdx) => {
+                  const s = slides[slideIdx];
+                  const isActive = slideIdx === displaySlide;
+                  const opacity = stageSlideOpacity.get(slideIdx)!;
+                  const visible = opacity > 0 || isActive;
+                  return (
+                    <div
+                      key={slideIdx}
+                      style={{
+                        gridArea: "1 / 1",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        position: "relative",
+                        opacity,
+                        transition: transitioning
+                          ? `opacity ${transitionMs}ms linear`
+                          : "none",
+                        mixBlendMode: "plus-lighter",
+                        pointerEvents: isActive ? "auto" : "none",
+                        visibility: visible ? "visible" : "hidden",
+                      }}
+                    >
+                      {"content" in s && (
+                        <SlidePresenceContext.Provider
+                          key={reloads.get(slideIdx) ?? 0}
+                          value={{
+                            shown: visible,
+                            current: slideIdx === currentSlide,
+                            arrivedForward: arrival.forward,
+                          }}
+                        >
+                          <SlideStepContext.Provider
+                            value={contentStep(s, stepOf(slideIdx))}
+                          >
+                            <StatusBarSlotContext.Provider
+                              value={statusBarSlot}
+                            >
+                              {s.content}
+                            </StatusBarSlotContext.Provider>
+                          </SlideStepContext.Provider>
+                        </SlidePresenceContext.Provider>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {!stageOnly && (
             <SlideNotes
