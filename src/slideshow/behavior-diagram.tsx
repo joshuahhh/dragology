@@ -53,21 +53,6 @@ function beadsDraggable(title: string) {
 
 type Output<T> = { preview: LayeredSvgx; dropState: T };
 
-/**
- * What a draggable's drag behavior gives, a moment into a drag: the dragged
- * element grabbed at its origin, then the pointer moved to `pointer`. The
- * behavior is the dragged element's own, or `spec`'s if it's given.
- */
-function behaviorOutput<T extends object>(
-  draggable: Draggable<T>,
-  state: T,
-  draggedId: string,
-  pointer: Vec2,
-  spec?: (d: DragSpecBuilder<T>) => DragSpecData<T>,
-): Output<T> {
-  return runBehavior(startBehavior(draggable, state, draggedId, spec), pointer);
-}
-
 function runBehavior<T extends object>(
   behavior: DragBehavior<T>,
   pointer: Vec2,
@@ -317,18 +302,6 @@ const SHRINK = "700ms cubic-bezier(0.4, 0, 0.2, 1)";
 const MOVE = "900ms cubic-bezier(0.4, 0, 0.2, 1)";
 
 /**
- * The expression tree of the live-coded ring's last behavior, each node
- * showing the preview its behavior gives for the pointer position shown
- */
-export function BehaviorTreeSlide() {
-  return (
-    <DiagramStage>
-      <CompositionTree />
-    </DiagramStage>
-  );
-}
-
-/**
  * A white stage, its SVG with the diagrams' markers and filters, between
  * HTML `backdrop` and `overlay`
  */
@@ -378,158 +351,6 @@ function DiagramStage({
   );
 }
 
-// The composition tree, top to bottom: the states' behaviors, into closest;
-// it and the removed state's behavior into whenFar; that into withFloating
-const TREE = {
-  spineX: STAGE_W / 2,
-  leaf: { size: 140, gap: 24, y: 30, pad: 8 },
-  node: { thumb: 140, pad: 12 },
-  // The tops of closest's, whenFar's and withFloating's boxes
-  levels: [300, 580, 860],
-  // Where the removed state's behavior sits, right of closest
-  removedDX: 330,
-  // An operator's pill sits on the wire into the box of the behavior it makes
-  pill: { h: 60, size: 44, padX: 28, gap: 16 },
-  code: { size: 34, gap: 64 },
-};
-const NODE_W = TREE.node.thumb + 2 * TREE.node.pad;
-const NODE_H = NODE_W;
-
-/** Every state with bead `idx` moved to some index (as the snippet's helper) */
-function reinsertions(state: BeadsState, idx: number): BeadsState[] {
-  return state.beads.map((_, targetIdx) => {
-    const beads = [...state.beads];
-    const [bead] = beads.splice(idx, 1);
-    beads.splice(targetIdx, 0, bead);
-    return { beads };
-  });
-}
-
-/** The state with bead `idx` taken out (as the snippet's helper) */
-function removed(state: BeadsState, idx: number): BeadsState {
-  return { beads: state.beads.filter((_, i) => i !== idx) };
-}
-
-function CompositionTree() {
-  const tree = useMemo(() => {
-    const ring = beadsDraggable("ring of beads: static");
-    const idx = ring.state.beads.indexOf(DRAGGED);
-    const states = reinsertions(ring.state, idx);
-    const gone = removed(ring.state, idx);
-    const run = (
-      spec: (d: DragSpecBuilder<BeadsState>) => DragSpecData<BeadsState>,
-    ) => behaviorOutput(ring.draggable, ring.state, DRAGGED, POINTER, spec);
-    return {
-      size: Vec2(ring.width, ring.height),
-      leaves: states.map((s) => run((d) => d.fixed(s))),
-      removed: run((d) => d.fixed(gone)),
-      closest: run((d) => d.closest(states)),
-      whenFar: run((d) => d.closest(states).whenFar(gone)),
-      floating: run((d) => d.closest(states).whenFar(gone).withFloating()),
-    };
-  }, []);
-
-  const { spineX, leaf, levels, pill } = TREE;
-  const leafX = (i: number) =>
-    spineX + (i - (tree.leaves.length - 1) / 2) * (leaf.size + leaf.gap);
-  const leafBottom = leaf.y + leaf.size;
-  const pillTop = (level: number) => levels[level] - pill.gap - pill.h;
-  const removedX = spineX + TREE.removedDX;
-  const removedY = levels[0] + (NODE_H - leaf.size) / 2;
-  const codeX = spineX - NODE_W / 2 - TREE.code.gap;
-
-  return (
-    <g>
-      {/* Wires first, under the boxes and pills */}
-      {tree.leaves.map((_, i) => (
-        <TreeWire
-          key={i}
-          from={Vec2(leafX(i), leafBottom)}
-          to={Vec2(spineX + (i - 2) * 26, pillTop(0) + 6)}
-        />
-      ))}
-      <TreeWire
-        from={Vec2(spineX, levels[0] + NODE_H)}
-        to={Vec2(spineX - 30, pillTop(1) + 6)}
-      />
-      <TreeWire
-        from={Vec2(removedX, removedY + leaf.size)}
-        to={Vec2(spineX + 30, pillTop(1) + 6)}
-      />
-      <TreeWire
-        from={Vec2(spineX, levels[1] + NODE_H)}
-        to={Vec2(spineX, pillTop(2) + 6)}
-      />
-      {levels.map((top, i) => (
-        <TreeWire
-          key={i}
-          from={Vec2(spineX, pillTop(i) + pill.h / 2)}
-          to={Vec2(spineX, top)}
-        />
-      ))}
-
-      {tree.leaves.map((output, i) => (
-        <LeafBehavior
-          key={i}
-          x={leafX(i) - leaf.size / 2}
-          y={leaf.y}
-          size={tree.size}
-          output={output}
-        />
-      ))}
-      <LeafBehavior
-        x={removedX - leaf.size / 2}
-        y={removedY}
-        size={tree.size}
-        output={tree.removed}
-      />
-
-      <OpNode
-        name="closest"
-        top={levels[0]}
-        size={tree.size}
-        output={tree.closest}
-      />
-      <OpNode
-        name="whenFar"
-        top={levels[1]}
-        size={tree.size}
-        output={tree.whenFar}
-      />
-      <OpNode
-        name="withFloating"
-        top={levels[2]}
-        size={tree.size}
-        output={tree.floating}
-      />
-
-      {/* The code that builds each operator's node, beside it */}
-      {OP_CODE.map((code, i) => (
-        <CodeLine
-          key={code}
-          code={code}
-          right={codeX}
-          y={levels[i] + NODE_H / 2}
-          size={TREE.code.size}
-        />
-      ))}
-      <Caption
-        x={leafX(0) - leaf.size / 2 - CAPTION_GAP}
-        y={leaf.y + leaf.size / 2}
-        anchor="end"
-      >
-        states
-      </Caption>
-      <Caption
-        x={removedX + leaf.size / 2 + CAPTION_GAP}
-        y={removedY + leaf.size / 2}
-      >
-        removed
-      </Caption>
-    </g>
-  );
-}
-
 /** A vertical S-curve from one point down to another */
 function TreeWire({ from, to }: { from: Vec2; to: Vec2 }) {
   const k = (to.y - from.y) * 0.5;
@@ -541,163 +362,6 @@ function TreeWire({ from, to }: { from: Vec2; to: Vec2 }) {
       strokeWidth={4}
       strokeLinecap="round"
     />
-  );
-}
-
-/** A preview, the pointer drawn on it */
-function PreviewThumb({
-  x,
-  y,
-  thumb,
-  size,
-  preview,
-}: {
-  x: number;
-  y: number;
-  thumb: number;
-  size: Vec2;
-  preview: LayeredSvgx;
-}) {
-  return (
-    <svg
-      x={x}
-      y={y}
-      width={thumb}
-      height={thumb}
-      viewBox={`0 0 ${size.x} ${size.y}`}
-      overflow="visible"
-    >
-      {drawLayered(preview)}
-      <Cursor at={POINTER} scale={0.75 / (thumb / size.x)} />
-    </svg>
-  );
-}
-
-/** A state's behavior: a box around the state, which is all it previews */
-function LeafBehavior({
-  x,
-  y,
-  size,
-  output,
-}: {
-  x: number;
-  y: number;
-  size: Vec2;
-  output: Output<BeadsState>;
-}) {
-  const { leaf } = TREE;
-  return (
-    <g>
-      <rect
-        x={x}
-        y={y}
-        width={leaf.size}
-        height={leaf.size}
-        rx={18}
-        fill="white"
-        stroke={INK}
-        strokeWidth={3}
-      />
-      <svg
-        x={x + leaf.pad}
-        y={y + leaf.pad}
-        width={leaf.size - 2 * leaf.pad}
-        height={leaf.size - 2 * leaf.pad}
-        viewBox={`0 0 ${size.x} ${size.y}`}
-      >
-        {drawLayered(output.preview)}
-      </svg>
-    </g>
-  );
-}
-
-/**
- * The behavior an operator makes, on the spine: a box showing its preview,
- * the operator on the wire just above it
- */
-function OpNode({
-  name,
-  top,
-  size,
-  output,
-}: {
-  name: string;
-  top: number;
-  size: Vec2;
-  output: Output<BeadsState>;
-}) {
-  const { spineX, node, pill } = TREE;
-  const left = spineX - NODE_W / 2;
-  return (
-    <g>
-      <rect
-        x={left}
-        y={top}
-        width={NODE_W}
-        height={NODE_H}
-        rx={22}
-        fill="white"
-        stroke={INK}
-        strokeWidth={3}
-      />
-      <PreviewThumb
-        x={left + node.pad}
-        y={top + node.pad}
-        thumb={node.thumb}
-        size={size}
-        preview={output.preview}
-      />
-      <OpPill
-        name={name}
-        x={spineX}
-        y={top - pill.gap - pill.h / 2}
-        h={pill.h}
-        size={pill.size}
-        padX={pill.padX}
-      />
-    </g>
-  );
-}
-
-/** An operator's name in a pill, centered on (x, y) */
-function OpPill({
-  name,
-  x,
-  y,
-  h,
-  size,
-  padX,
-  width,
-  style,
-}: {
-  name: string;
-  x: number;
-  y: number;
-  h: number;
-  size: number;
-  padX: number;
-  /** Its width, if not the name's with `padX` either side */
-  width?: number;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <foreignObject
-      x={x - 400}
-      y={y - h / 2}
-      width={800}
-      height={h}
-      style={style}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          height: "100%",
-        }}
-      >
-        <div style={pillStyle({ size, h, padX, width })}>{name}</div>
-      </div>
-    </foreignObject>
   );
 }
 
@@ -728,36 +392,6 @@ function pillStyle({
   };
 }
 
-/** A line of code, its right end at `right`, centered on `y` */
-function CodeLine({
-  code,
-  right,
-  y,
-  size,
-}: {
-  code: string;
-  right: number;
-  y: number;
-  size: number;
-}) {
-  return (
-    <foreignObject x={0} y={y - 40} width={right} height={80}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          height: "100%",
-          fontSize: size,
-          color: "#3f3f46",
-        }}
-      >
-        <Code code={code} />
-      </div>
-    </foreignObject>
-  );
-}
-
 // The same tree, schematically: the states named as in the code, and the
 // operators' behaviors just the wires out of them
 const SCHEMA = {
@@ -782,8 +416,6 @@ const SCHEMA = {
   // The code, in the bottom left corner
   code: { size: 34, x: 80, bottom: 70 },
 };
-
-const OP_CODE = ["d.closest(states)", ".whenFar(removed)", ".withFloating()"];
 
 // Closest's pill, sized so the behavior panel can shrink into it exactly
 const CLOSEST_PILL = {

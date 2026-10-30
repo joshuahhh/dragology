@@ -34,7 +34,7 @@ import {
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
-import { BehaviorDiagramSlide, BehaviorTreeSlide } from "./behavior-diagram";
+import { BehaviorDiagramSlide } from "./behavior-diagram";
 import { beadsSubject } from "./model-driven/beads";
 import { script as modelDrivenScript } from "./model-driven/ModelDrivenScene";
 import {
@@ -1116,12 +1116,6 @@ export const outline: (Slide | Heading)[] = [
       Andrew's going to share some examples of what these building blocks can do when you put them together.
     `,
     content: <BehaviorDiagramSlide />,
-  },
-  {
-    // For reference: the tree on the slide before, each node showing its
-    // behavior's preview
-    skip: true,
-    content: <BehaviorTreeSlide />,
   },
   {
     steps: 2,
