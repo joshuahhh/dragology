@@ -145,7 +145,7 @@ export function setTimings(
     );
 }
 
-function parse(text: string) {
+export function parse(text: string) {
   return ts.createSourceFile(
     SLIDES,
     text,
@@ -156,7 +156,7 @@ function parse(text: string) {
 }
 
 /** `outline`'s array literal */
-function outlineArray(sf: ts.SourceFile) {
+export function outlineArray(sf: ts.SourceFile) {
   let outline: ts.Expression | undefined;
   sf.forEachChild(function visit(node) {
     if (ts.isVariableDeclaration(node) && node.name.getText(sf) === "outline") {
