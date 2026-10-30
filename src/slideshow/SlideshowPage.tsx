@@ -22,6 +22,7 @@ import {
 import { NotesEditor } from "./NotesEditor";
 import { useRailsMode } from "./rails";
 import {
+  adjacentPresented,
   contentStep,
   type Heading,
   NEXT_KEYS,
@@ -38,7 +39,12 @@ import {
   StatusBarSlotContext,
 } from "./slide";
 import { numberedOutline, outlineIndexOfSlide, slides } from "./slides";
-import { SlideThumb, TodoCorner, useSlideSnapshots } from "./SlideThumb";
+import {
+  SkipBadge,
+  SlideThumb,
+  TodoCorner,
+  useSlideSnapshots,
+} from "./SlideThumb";
 import {
   SlideTimeBadge,
   TimingClock,
@@ -552,6 +558,7 @@ function SlideOutline({
                 >
                   <SlideThumb slide={slide} num={num} />
                   {slideHasTodo(slide) && <TodoCorner />}
+                  {slide.skip && <SkipBadge />}
                   <SlideTimeBadge slide={slide} slideIdx={i} run={run} />
                   {slideSteps(slide) > 1 && (
                     <StepBar
@@ -835,25 +842,25 @@ export function SlideshowPage() {
   notesUnsavedRef.current = notesUnsaved;
   useConfirmLeave(notesUnsaved);
 
+  // Going forward and back pass over slides that aren't presented
   const goNext = useCallback(() => {
-    setPos(({ slide, step }) =>
-      step < slideSteps(slides[slide]) - 1
-        ? { slide, step: step + 1 }
-        : slide < slides.length - 1
-          ? { slide: slide + 1, step: 0 }
-          : { slide, step },
-    );
+    setPos(({ slide, step }) => {
+      if (step < slideSteps(slides[slide]) - 1)
+        return { slide, step: step + 1 };
+      const next = adjacentPresented(slides, slide, 1);
+      return next === null ? { slide, step } : { slide: next, step: 0 };
+    });
   }, []);
 
   // Going back to a slide with steps lands on its last step
   const goPrev = useCallback(() => {
-    setPos(({ slide, step }) =>
-      step > 0
-        ? { slide, step: step - 1 }
-        : slide > 0
-          ? { slide: slide - 1, step: slideSteps(slides[slide - 1]) - 1 }
-          : { slide, step },
-    );
+    setPos(({ slide, step }) => {
+      if (step > 0) return { slide, step: step - 1 };
+      const prev = adjacentPresented(slides, slide, -1);
+      return prev === null
+        ? { slide, step }
+        : { slide: prev, step: slideSteps(slides[prev]) - 1 };
+    });
   }, []);
 
   // Going to the slide we're on cycles through its steps
@@ -952,7 +959,7 @@ export function SlideshowPage() {
   }
 
   // The slides on the stage, each with its opacity: those the layers show,
-  // and, hidden, the one after the current one, so that its images and videos
+  // and, hidden, the one going forward goes to, so that its images and videos
   // have loaded by the time we go on to it. Each is keyed by its index, not by
   // layer, so a preloaded slide isn't remounted when a layer comes to show it.
   // (Nor when we've gone on to it but the layers haven't caught up, so the
@@ -964,14 +971,12 @@ export function SlideshowPage() {
     const prev = stageSlideOpacity.get(layerSlides[i]) ?? 0;
     stageSlideOpacity.set(layerSlides[i], Math.max(prev, op));
   }
-  for (const i of [currentSlide, currentSlide + 1]) {
+  const nextSlide = adjacentPresented(slides, currentSlide, 1);
+  for (const i of nextSlide === null
+    ? [currentSlide]
+    : [currentSlide, nextSlide]) {
     const s = slides[i];
-    if (
-      s &&
-      "content" in s &&
-      s.preload !== false &&
-      !stageSlideOpacity.has(i)
-    ) {
+    if ("content" in s && s.preload !== false && !stageSlideOpacity.has(i)) {
       stageSlideOpacity.set(i, 0);
     }
   }

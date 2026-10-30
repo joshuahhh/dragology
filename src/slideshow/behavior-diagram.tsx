@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { DragInitContext, dragSpecToBehavior } from "../DragBehavior";
+import { DragSpecBuilder, DragSpecData } from "../DragSpec";
 import {
   Draggable,
   getOnDragCallbackOnElement,
@@ -16,6 +17,7 @@ import { CODE_FONT, LETTER_FONT } from "../talk/fonts";
 import { OP_NAMES } from "../talk/opMarks";
 import { snippets } from "../talk/snippets";
 import { assertDefined } from "../utils/assert";
+import { BEAD_INK } from "./model-driven/beads";
 import { Cursor } from "./model-driven/ModelDrivenScene";
 import { STAGE_H, STAGE_W, useSlideStep } from "./slide";
 import { sourceSans } from "./source-sans";
@@ -37,30 +39,33 @@ function beadsDraggable(title: string) {
   };
 }
 
+type Output<T> = { preview: LayeredSvgx; dropState: T };
+
 /**
  * What a draggable's drag behavior gives, a moment into a drag: the dragged
- * element grabbed at its origin, then the pointer moved to `pointer`.
+ * element grabbed at its origin, then the pointer moved to `pointer`. The
+ * behavior is the dragged element's own, or `spec`'s if it's given.
  */
 function behaviorOutput<T extends object>(
   draggable: Draggable<T>,
   state: T,
   draggedId: string,
   pointer: Vec2,
-): { preview: LayeredSvgx; dropState: T } {
-  const tree = assignPaths(
-    draggable(
-      makeDraggableProps({
-        state,
-        draggedId,
-        setState: () => {},
-        isTracking: true,
-      }),
-    ),
-  );
+  spec?: (d: DragSpecBuilder<T>) => DragSpecData<T>,
+): Output<T> {
+  const props = makeDraggableProps({
+    state,
+    draggedId,
+    setState: () => {},
+    isTracking: true,
+  });
+  const tree = assignPaths(draggable(props));
   const found = assertDefined(
     findElement(tree, (el) => el.props.id === draggedId),
   );
-  const callback = assertDefined(getOnDragCallbackOnElement<T>(found.element));
+  const callback = spec
+    ? () => spec(props.d)
+    : assertDefined(getOnDragCallbackOnElement<T>(found.element));
   const ctx: DragInitContext<T> = {
     draggable,
     draggedPath: assertDefined(getPath(found.element)),
@@ -84,22 +89,12 @@ const INK = "#1d1d24";
 const MUTED = "#71717a";
 const WIRE = "#52525b";
 const PANEL_FILL = "#f2f2f4";
-// The bright beads' ink colors (talk/snippets.ts)
-const BEAD_INK: Record<string, string> = {
-  A: "#b91c1c",
-  B: "#1d4ed8",
-  C: "#a16207",
-  D: "#15803d",
-  E: "#6d28d9",
-};
 const MONO_ADVANCE = 0.602; // DejaVu Sans Mono's characters are all this wide
 
 const PANEL_W = 1660;
 const PANEL_H = 330;
 const PANEL_X = (STAGE_W - PANEL_W) / 2;
-const GAP = 270;
-const TOP_Y = (STAGE_H - 2 * PANEL_H - GAP) / 2;
-const BOTTOM_Y = TOP_Y + PANEL_H + GAP;
+const PANEL_Y = (STAGE_H - PANEL_H) / 2;
 
 // Within a panel
 const MID_Y = PANEL_H / 2;
@@ -110,19 +105,17 @@ const CHIP = { x: 970, h: 60, size: 26, padX: 20 };
 const CHIP_Y = THUMB.y + THUMB.size + 22;
 const CAPTION_GAP = 32;
 
-const OP = { h: 92, size: 54, padX: 44 };
-
 /**
- * A drag behavior (pointer position in, preview and drop state out), and
- * below it, an operator that turns it into another. The behaviors are the
- * ring of beads', really run: their previews and drop states are what they
- * give for the pointer position shown.
+ * A drag behavior (pointer position in, preview and drop state out); then,
+ * on the second step, the expression tree that the live-coded ring's last
+ * behavior is built from, drawn schematically. The behavior is the ring of
+ * beads', really run: its preview and drop state are what it gives for the
+ * pointer position shown.
  */
 export function BehaviorDiagramSlide() {
   const step = useSlideStep();
   const outputs = useMemo(() => {
     const closest = beadsDraggable("ring of beads: closest");
-    const floating = beadsDraggable("ring of beads: floating");
     return {
       size: Vec2(closest.width, closest.height),
       closest: behaviorOutput(
@@ -131,20 +124,51 @@ export function BehaviorDiagramSlide() {
         DRAGGED,
         POINTER,
       ),
-      floating: behaviorOutput(
-        floating.draggable,
-        floating.state,
-        DRAGGED,
-        POINTER,
-      ),
     };
   }, []);
 
-  // The operator sits on a heavy spine from one behavior's panel to the other
-  const spineX = STAGE_W / 2;
-  const opY = TOP_Y + PANEL_H + (GAP - OP.h) / 2;
-  const SPINE_GAP = 14;
+  return (
+    <DiagramStage>
+      <g
+        transform={`translate(${PANEL_X} ${PANEL_Y})`}
+        style={{
+          opacity: step === 0 ? 1 : 0,
+          transition: "opacity 500ms ease",
+        }}
+      >
+        <BehaviorPanel
+          spec={["d.closest(states)"]}
+          size={outputs.size}
+          output={outputs.closest}
+        />
+      </g>
 
+      <g
+        style={{
+          opacity: step >= 1 ? 1 : 0,
+          transition: "opacity 500ms ease",
+        }}
+      >
+        <SchematicTree />
+      </g>
+    </DiagramStage>
+  );
+}
+
+/**
+ * The expression tree of the live-coded ring's last behavior, each node
+ * showing the preview its behavior gives for the pointer position shown
+ */
+export function BehaviorTreeSlide() {
+  return (
+    <DiagramStage>
+      <CompositionTree />
+    </DiagramStage>
+  );
+}
+
+/** A white stage, its SVG with the diagrams' markers and filters */
+function DiagramStage({ children }: { children: React.ReactNode }) {
   return (
     <div
       data-behavior-diagram
@@ -174,77 +198,468 @@ export function BehaviorDiagramSlide() {
             <feDropShadow dx={0} dy={2} stdDeviation={5} floodOpacity={0.1} />
           </filter>
         </defs>
-
-        <g transform={`translate(${PANEL_X} ${TOP_Y})`}>
-          <BehaviorPanel
-            spec={["d.closest(states)"]}
-            size={outputs.size}
-            output={outputs.closest}
-          />
-        </g>
-
-        <g
-          style={{
-            opacity: step >= 1 ? 1 : 0,
-            transition: "opacity 500ms ease",
-          }}
-        >
-          <g transform={`translate(${PANEL_X} ${BOTTOM_Y})`}>
-            <BehaviorPanel
-              spec={["d.closest(states)", ".withFloating()"]}
-              size={outputs.size}
-              output={outputs.floating}
-            />
-          </g>
-          <HeavyArrow
-            x={spineX}
-            y0={TOP_Y + PANEL_H + SPINE_GAP}
-            y1={opY - SPINE_GAP}
-          />
-          <HeavyArrow
-            x={spineX}
-            y0={opY + OP.h + SPINE_GAP}
-            y1={BOTTOM_Y - SPINE_GAP}
-          />
-          <foreignObject x={0} y={opY} width={STAGE_W} height={OP.h}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                height: "100%",
-              }}
-            >
-              <div
-                style={{
-                  ...PAPER_OP_STYLE,
-                  position: "relative",
-                  display: "flex",
-                  alignItems: "center",
-                  fontSize: OP.size,
-                  padding: `0 ${OP.padX}px`,
-                  borderRadius: OP.h / 2,
-                }}
-              >
-                withFloating
-                <div
-                  style={{
-                    position: "absolute",
-                    left: `calc(100% + ${CAPTION_GAP}px)`,
-                    whiteSpace: "nowrap",
-                    fontFamily: sourceSans,
-                    fontWeight: 400,
-                    fontSize: 38,
-                    color: MUTED,
-                  }}
-                >
-                  an operator
-                </div>
-              </div>
-            </div>
-          </foreignObject>
-        </g>
+        {children}
       </svg>
     </div>
+  );
+}
+
+// The composition tree, top to bottom: the states' behaviors, into closest;
+// it and the removed state's behavior into whenFar; that into withFloating
+const TREE = {
+  spineX: STAGE_W / 2,
+  leaf: { size: 140, gap: 24, y: 30, pad: 8 },
+  node: { thumb: 140, pad: 12 },
+  // The tops of closest's, whenFar's and withFloating's boxes
+  levels: [300, 580, 860],
+  // Where the removed state's behavior sits, right of closest
+  removedDX: 330,
+  // An operator's pill sits on the wire into the box of the behavior it makes
+  pill: { h: 60, size: 44, padX: 28, gap: 16 },
+  code: { size: 34, gap: 64 },
+};
+const NODE_W = TREE.node.thumb + 2 * TREE.node.pad;
+const NODE_H = NODE_W;
+
+/** Every state with bead `idx` moved to some index (as the snippet's helper) */
+function reinsertions(state: BeadsState, idx: number): BeadsState[] {
+  return state.beads.map((_, targetIdx) => {
+    const beads = [...state.beads];
+    const [bead] = beads.splice(idx, 1);
+    beads.splice(targetIdx, 0, bead);
+    return { beads };
+  });
+}
+
+/** The state with bead `idx` taken out (as the snippet's helper) */
+function removed(state: BeadsState, idx: number): BeadsState {
+  return { beads: state.beads.filter((_, i) => i !== idx) };
+}
+
+function CompositionTree() {
+  const tree = useMemo(() => {
+    const ring = beadsDraggable("ring of beads: static");
+    const idx = ring.state.beads.indexOf(DRAGGED);
+    const states = reinsertions(ring.state, idx);
+    const gone = removed(ring.state, idx);
+    const run = (
+      spec: (d: DragSpecBuilder<BeadsState>) => DragSpecData<BeadsState>,
+    ) => behaviorOutput(ring.draggable, ring.state, DRAGGED, POINTER, spec);
+    return {
+      size: Vec2(ring.width, ring.height),
+      leaves: states.map((s) => run((d) => d.fixed(s))),
+      removed: run((d) => d.fixed(gone)),
+      closest: run((d) => d.closest(states)),
+      whenFar: run((d) => d.closest(states).whenFar(gone)),
+      floating: run((d) => d.closest(states).whenFar(gone).withFloating()),
+    };
+  }, []);
+
+  const { spineX, leaf, levels, pill } = TREE;
+  const leafX = (i: number) =>
+    spineX + (i - (tree.leaves.length - 1) / 2) * (leaf.size + leaf.gap);
+  const leafBottom = leaf.y + leaf.size;
+  const pillTop = (level: number) => levels[level] - pill.gap - pill.h;
+  const removedX = spineX + TREE.removedDX;
+  const removedY = levels[0] + (NODE_H - leaf.size) / 2;
+  const codeX = spineX - NODE_W / 2 - TREE.code.gap;
+
+  return (
+    <g>
+      {/* Wires first, under the boxes and pills */}
+      {tree.leaves.map((_, i) => (
+        <TreeWire
+          key={i}
+          from={Vec2(leafX(i), leafBottom)}
+          to={Vec2(spineX + (i - 2) * 26, pillTop(0) + 6)}
+        />
+      ))}
+      <TreeWire
+        from={Vec2(spineX, levels[0] + NODE_H)}
+        to={Vec2(spineX - 30, pillTop(1) + 6)}
+      />
+      <TreeWire
+        from={Vec2(removedX, removedY + leaf.size)}
+        to={Vec2(spineX + 30, pillTop(1) + 6)}
+      />
+      <TreeWire
+        from={Vec2(spineX, levels[1] + NODE_H)}
+        to={Vec2(spineX, pillTop(2) + 6)}
+      />
+      {levels.map((top, i) => (
+        <TreeWire
+          key={i}
+          from={Vec2(spineX, pillTop(i) + pill.h / 2)}
+          to={Vec2(spineX, top)}
+        />
+      ))}
+
+      {tree.leaves.map((output, i) => (
+        <LeafBehavior
+          key={i}
+          x={leafX(i) - leaf.size / 2}
+          y={leaf.y}
+          size={tree.size}
+          output={output}
+        />
+      ))}
+      <LeafBehavior
+        x={removedX - leaf.size / 2}
+        y={removedY}
+        size={tree.size}
+        output={tree.removed}
+      />
+
+      <OpNode
+        name="closest"
+        top={levels[0]}
+        size={tree.size}
+        output={tree.closest}
+      />
+      <OpNode
+        name="whenFar"
+        top={levels[1]}
+        size={tree.size}
+        output={tree.whenFar}
+      />
+      <OpNode
+        name="withFloating"
+        top={levels[2]}
+        size={tree.size}
+        output={tree.floating}
+      />
+
+      {/* The code that builds each operator's node, beside it */}
+      {OP_CODE.map((code, i) => (
+        <CodeLine
+          key={code}
+          code={code}
+          right={codeX}
+          y={levels[i] + NODE_H / 2}
+          size={TREE.code.size}
+        />
+      ))}
+      <Caption
+        x={leafX(0) - leaf.size / 2 - CAPTION_GAP}
+        y={leaf.y + leaf.size / 2}
+        anchor="end"
+      >
+        states
+      </Caption>
+      <Caption
+        x={removedX + leaf.size / 2 + CAPTION_GAP}
+        y={removedY + leaf.size / 2}
+      >
+        removed
+      </Caption>
+    </g>
+  );
+}
+
+/** A vertical S-curve from one point down to another */
+function TreeWire({ from, to }: { from: Vec2; to: Vec2 }) {
+  const k = (to.y - from.y) * 0.5;
+  return (
+    <path
+      d={`M ${from.x} ${from.y} C ${from.x} ${from.y + k} ${to.x} ${to.y - k} ${to.x} ${to.y}`}
+      fill="none"
+      stroke={WIRE}
+      strokeWidth={4}
+      strokeLinecap="round"
+    />
+  );
+}
+
+/** A preview, the pointer drawn on it */
+function PreviewThumb({
+  x,
+  y,
+  thumb,
+  size,
+  preview,
+}: {
+  x: number;
+  y: number;
+  thumb: number;
+  size: Vec2;
+  preview: LayeredSvgx;
+}) {
+  return (
+    <svg
+      x={x}
+      y={y}
+      width={thumb}
+      height={thumb}
+      viewBox={`0 0 ${size.x} ${size.y}`}
+      overflow="visible"
+    >
+      {drawLayered(preview)}
+      <Cursor at={POINTER} scale={0.75 / (thumb / size.x)} />
+    </svg>
+  );
+}
+
+/** A state's behavior: a box around the state, which is all it previews */
+function LeafBehavior({
+  x,
+  y,
+  size,
+  output,
+}: {
+  x: number;
+  y: number;
+  size: Vec2;
+  output: Output<BeadsState>;
+}) {
+  const { leaf } = TREE;
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={leaf.size}
+        height={leaf.size}
+        rx={18}
+        fill="white"
+        stroke={INK}
+        strokeWidth={3}
+      />
+      <svg
+        x={x + leaf.pad}
+        y={y + leaf.pad}
+        width={leaf.size - 2 * leaf.pad}
+        height={leaf.size - 2 * leaf.pad}
+        viewBox={`0 0 ${size.x} ${size.y}`}
+      >
+        {drawLayered(output.preview)}
+      </svg>
+    </g>
+  );
+}
+
+/**
+ * The behavior an operator makes, on the spine: a box showing its preview,
+ * the operator on the wire just above it
+ */
+function OpNode({
+  name,
+  top,
+  size,
+  output,
+}: {
+  name: string;
+  top: number;
+  size: Vec2;
+  output: Output<BeadsState>;
+}) {
+  const { spineX, node, pill } = TREE;
+  const left = spineX - NODE_W / 2;
+  return (
+    <g>
+      <rect
+        x={left}
+        y={top}
+        width={NODE_W}
+        height={NODE_H}
+        rx={22}
+        fill="white"
+        stroke={INK}
+        strokeWidth={3}
+      />
+      <PreviewThumb
+        x={left + node.pad}
+        y={top + node.pad}
+        thumb={node.thumb}
+        size={size}
+        preview={output.preview}
+      />
+      <OpPill
+        name={name}
+        x={spineX}
+        y={top - pill.gap - pill.h / 2}
+        h={pill.h}
+        size={pill.size}
+        padX={pill.padX}
+      />
+    </g>
+  );
+}
+
+/** An operator's name in a pill, centered on (x, y) */
+function OpPill({
+  name,
+  x,
+  y,
+  h,
+  size,
+  padX,
+}: {
+  name: string;
+  x: number;
+  y: number;
+  h: number;
+  size: number;
+  padX: number;
+}) {
+  return (
+    <foreignObject x={x - 400} y={y - h / 2} width={800} height={h}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          height: "100%",
+        }}
+      >
+        <div
+          style={{
+            ...PAPER_OP_STYLE,
+            display: "flex",
+            alignItems: "center",
+            fontSize: size,
+            padding: `0 ${padX}px`,
+            borderRadius: h / 2,
+          }}
+        >
+          {name}
+        </div>
+      </div>
+    </foreignObject>
+  );
+}
+
+/** A line of code, its right end at `right`, centered on `y` */
+function CodeLine({
+  code,
+  right,
+  y,
+  size,
+}: {
+  code: string;
+  right: number;
+  y: number;
+  size: number;
+}) {
+  return (
+    <foreignObject x={0} y={y - 40} width={right} height={80}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          height: "100%",
+          fontSize: size,
+          color: "#3f3f46",
+        }}
+      >
+        <Code code={code} />
+      </div>
+    </foreignObject>
+  );
+}
+
+// The same tree, schematically: the states in plain boxes, and the
+// operators' behaviors just the wires out of them
+const SCHEMA = {
+  spineX: STAGE_W / 2,
+  leaf: { w: 170, h: 84, gap: 30, y: 150, size: 44 },
+  // The centers of closest's, whenFar's and withFloating's pills
+  levels: [440, 680, 900],
+  // Where the removed state sits, between closest and whenFar
+  removed: { dx: 380, y: 540 },
+  pill: { h: 84, size: 64, padX: 40 },
+  code: { size: 40, gap: 270 },
+};
+
+const OP_CODE = ["d.closest(states)", ".whenFar(removed)", ".withFloating()"];
+
+function SchematicTree() {
+  const { spineX, leaf, levels, removed, pill } = SCHEMA;
+  const n = 5;
+  const leafX = (i: number) => spineX + (i - (n - 1) / 2) * (leaf.w + leaf.gap);
+  const pillTop = (y: number) => y - pill.h / 2 + 8;
+  const pillBottom = (y: number) => y + pill.h / 2 - 8;
+  const removedX = spineX + removed.dx;
+  return (
+    <g>
+      {Array.from({ length: n }, (_, i) => (
+        <TreeWire
+          key={i}
+          from={Vec2(leafX(i), leaf.y + leaf.h)}
+          to={Vec2(spineX + (i - 2) * 30, pillTop(levels[0]))}
+        />
+      ))}
+      <TreeWire
+        from={Vec2(spineX, pillBottom(levels[0]))}
+        to={Vec2(spineX - 36, pillTop(levels[1]))}
+      />
+      <TreeWire
+        from={Vec2(removedX, removed.y + leaf.h / 2)}
+        to={Vec2(spineX + 36, pillTop(levels[1]))}
+      />
+      <TreeWire
+        from={Vec2(spineX, pillBottom(levels[1]))}
+        to={Vec2(spineX, pillTop(levels[2]))}
+      />
+
+      {Array.from({ length: n }, (_, i) => (
+        <StateBox key={i} x={leafX(i)} y={leaf.y + leaf.h / 2} />
+      ))}
+      <StateBox x={removedX} y={removed.y} />
+      <Caption x={removedX + leaf.w / 2 + CAPTION_GAP} y={removed.y}>
+        removed
+      </Caption>
+
+      {["closest", "whenFar", "withFloating"].map((name, i) => (
+        <OpPill
+          key={name}
+          name={name}
+          x={spineX}
+          y={levels[i]}
+          h={pill.h}
+          size={pill.size}
+          padX={pill.padX}
+        />
+      ))}
+      {OP_CODE.map((code, i) => (
+        <CodeLine
+          key={code}
+          code={code}
+          right={spineX - SCHEMA.code.gap}
+          y={levels[i]}
+          size={SCHEMA.code.size}
+        />
+      ))}
+    </g>
+  );
+}
+
+/** A state, as a behavior: a plain box, centered on (x, y) */
+function StateBox({ x, y }: { x: number; y: number }) {
+  const { w, h, size } = SCHEMA.leaf;
+  return (
+    <g>
+      <rect
+        x={x - w / 2}
+        y={y - h / 2}
+        width={w}
+        height={h}
+        rx={18}
+        fill="white"
+        stroke={INK}
+        strokeWidth={3}
+      />
+      <text
+        x={x}
+        y={y}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontFamily={sourceSans}
+        fontSize={size}
+        fill={INK}
+      >
+        state
+      </text>
+    </g>
   );
 }
 
@@ -267,22 +682,6 @@ function Code({ code }: { code: string }) {
         ),
       )}
     </span>
-  );
-}
-
-/** A thick downward arrow, its tip at y1 */
-function HeavyArrow({ x, y0, y1 }: { x: number; y0: number; y1: number }) {
-  const head = { w: 36, h: 26 };
-  return (
-    <g fill={INK}>
-      <rect x={x - 5} y={y0} width={10} height={y1 - y0 - head.h + 2} />
-      <path
-        d={`M ${x - head.w / 2} ${y1 - head.h} H ${x + head.w / 2} L ${x} ${y1} Z`}
-        strokeLinejoin="round"
-        stroke={INK}
-        strokeWidth={3}
-      />
-    </g>
   );
 }
 

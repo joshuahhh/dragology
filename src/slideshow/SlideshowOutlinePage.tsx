@@ -2,7 +2,12 @@ import { Link } from "react-router-dom";
 import { useTitle } from "../useTitle";
 import { type Slide, slideHasTodo, slideSteps } from "./slide";
 import { numberedOutline } from "./slides";
-import { SlideThumb, TodoCorner, useSlideSnapshots } from "./SlideThumb";
+import {
+  SkipBadge,
+  SlideThumb,
+  TodoCorner,
+  useSlideSnapshots,
+} from "./SlideThumb";
 import { SlideTimeBadge } from "./timing";
 
 export function SlideshowOutlinePage() {
@@ -31,6 +36,7 @@ export function SlideshowOutlinePage() {
               >
                 <SlideThumb slide={item.slide} num={item.num} />
                 {slideHasTodo(item.slide) && <TodoCorner />}
+                {item.slide.skip && <SkipBadge />}
                 <SlideTimeBadge
                   slide={item.slide}
                   slideIdx={item.num - 1}

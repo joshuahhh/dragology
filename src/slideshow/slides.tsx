@@ -33,7 +33,7 @@ import {
   WalkSlide,
   WhiteboardSlide,
 } from "./back-half";
-import { BehaviorDiagramSlide } from "./behavior-diagram";
+import { BehaviorDiagramSlide, BehaviorTreeSlide } from "./behavior-diagram";
 import { beadsSubject } from "./model-driven/beads";
 import { script as modelDrivenScript } from "./model-driven/ModelDrivenScene";
 import {
@@ -863,6 +863,7 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Intro" },
   {
     content: <ImageSlide src="earth.jpg" />,
+    timing: [16],
     notes: `
       A photograph is a portal into another place on Earth.
 
@@ -870,6 +871,7 @@ export const outline: (Slide | Heading)[] = [
     `,
   },
   {
+    timing: [15, 23],
     notes: `
       // prob 38 sec total
 
@@ -891,8 +893,9 @@ export const outline: (Slide | Heading)[] = [
     steps: 4,
     transition: "fade-white",
     content: <DeclarativeDraggingIntro />,
+    timing: [13, 9, 11, 15],
     notes: `
-      // Design concept: endless array of animated demos scrolls right to left in background, as we show insets: “Declarative Dragging”, “Model-Driven”, and “Composable”, “Dragology”
+      // TODO: consider fading background or something
 
       So we’d like to share **Declarative Dragging**, a new approach which makes it possible to build higher quality drag-and-drop interfaces with less work.
 
@@ -920,6 +923,7 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     // Then the drag code you'd write without a library, over the ring
     steps: 2,
+    timing: [5, 8],
     notes: `
       We’ll start with a simple drag-and-drop interface for reordering beads in a ring.
 
@@ -944,12 +948,14 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
+    timing: [9],
     notes: `
       First, the interface developer implements a static version of the interface as a function from a model state to a view tree, like in React.
     `,
     content: <ModelDrivenSlide from={0} />,
   },
   {
+    timing: [16],
     notes: `
       Next, they specify, for each draggable element, a set of new model states the user should be able to **access** by dragging that element.
 
@@ -958,6 +964,7 @@ export const outline: (Slide | Heading)[] = [
     content: <ModelDrivenSlide from={7.5} to={9} />,
   },
   {
+    timing: [6],
     notes: `
       When a drag starts, an engine speculatively renders each of these states to a view...
     `,
@@ -967,6 +974,7 @@ export const outline: (Slide | Heading)[] = [
     // The dragged element singled out in each view; then the views line up
     // and send its positions down onto one ring
     steps: 2,
+    timing: [8, 3],
     notes: `
       ... and examines where the dragged element ends up in each of these hypothetical future worlds.
 
@@ -978,6 +986,7 @@ export const outline: (Slide | Heading)[] = [
     content: <ModelDrivenSlide from={17.5} stops={[20.6]} to={23} />,
   },
   {
+    timing: [7, 10],
     notes: `
       // These views and positions provide 
       ... the engine has enough information to run a high-quality animated drag-and-drop interaction.
@@ -996,6 +1005,7 @@ export const outline: (Slide | Heading)[] = [
   {
     // The ring glides over from the live drag
     transition: "fade",
+    timing: [10],
     notes: `
       To show you how this works in practice, and introduce the complementary concept of composable dragging, we’ll make this ring demo using our library Dragology.
     `,
@@ -1007,15 +1017,16 @@ export const outline: (Slide | Heading)[] = [
     // shows just the drag spec, with the spec tree, in the studio's
     // layout.
     steps: 3,
+    timing: [22, 56, 29, 24, 28],
     notes: `
       This "draggable" is a function that, given a model state, returns a static view.
       Here’s the line that draws the background ring…
       And this SVG group renders each of the beads, in a loop.
-      This interface isn't draggable yet. [demonstrate]
-      We want to make each of these beads draggable.
       [next stage to turn off highlight]
 
       ---
+      This interface isn't draggable yet. [demonstrate]
+      We want to make each of these beads draggable.
       So we'll go to the beads and add a special attribute, called “dragologyOnDrag”.
       We'll set it to a handler function with two parts.
       First, we'll compute the set of states reachable by dragging the bead.
@@ -1051,19 +1062,27 @@ export const outline: (Slide | Heading)[] = [
   {
     transition: "fade-white",
     steps: 2,
+    timing: [17, 5],
     notes: `
       So what are these "d-dot" things we're returning from dragologyOnDrag? They're what we call **drag behaviors**: functions that run every frame during a drag, that take a changing pointer position and say what should be shown on the screen as a preview, and what state should be transitioned to on drop.
 
       ---
-
       As we apply operators like "withFloating", we're producing new behaviors from old ones.
     `,
     content: <BehaviorDiagramSlide />,
   },
   {
+    // For reference: the tree on the slide before, each node showing its
+    // behavior's preview
+    skip: true,
+    content: <BehaviorTreeSlide />,
+  },
+  {
     steps: 2,
+    timing: [10, 16],
     notes: `
-      You can actually make your own Dragology operators, but we've developed a core set that you can plug together in different ways to create a surprising variety of interactions. [TODO]
+      You can actually make your own Dragology operators, but we've developed a core set that you can plug together in different ways to create a surprising variety of interactions.
+      // TODO: new graphics here
 
       ---
       Because this approach is centered around composing behaviors, we call it composable dragging.
@@ -1461,6 +1480,10 @@ export const outline: (Slide | Heading)[] = [
       Invigorated by the new physicality I quickly moved off the 2D canvas into a 3D world, in which innocent trees are possessed by mathematical ghosts.
 
       In this encounter, I drag to simplify expressions, which, now exorcised, return to the platonic realm.
+
+      // TODO: josh draft:
+      Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype as a 3d game where innocent trees are possessed by mathematical ghosts. 
+      Declarative dragging powers an interaction to simplify expressions, which, now exorcised, return to the platonic realm.
     `,
     // The first 27 s of uist-nool-v2.mov (Andrew's Screenshots), cropped to
     // 16:9, without its sound

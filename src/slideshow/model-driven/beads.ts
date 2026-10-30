@@ -15,11 +15,28 @@ const live = compileLiveCode(
 
 const draggedId = "A";
 
-/** `{ beads: [ A, B, C, D, E ]}`, over three lines, with the dragged bead marked */
+/** The bright beads' ink colors, as their letters are drawn */
+export const BEAD_INK: Record<string, string> = {
+  A: "#b91c1c",
+  B: "#1d4ed8",
+  C: "#a16207",
+  D: "#15803d",
+  E: "#6d28d9",
+};
+
+/**
+ * `{ beads: [ A, B, C, D, E ]}`, over three lines, each bead in its color and
+ * the dragged one marked
+ */
 function formatState(state: BeadsState): CodeLine[] {
   const beads: CodeLine = state.beads.flatMap((bead, i) => [
     ...(i > 0 ? [{ text: ", " }] : []),
-    { text: bead, mark: bead === draggedId },
+    {
+      text: bead,
+      mark: bead === draggedId,
+      color: BEAD_INK[bead],
+      bold: bead === draggedId,
+    },
   ]);
   return [
     [{ text: "{ beads: [" }],

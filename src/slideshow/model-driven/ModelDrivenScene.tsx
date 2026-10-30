@@ -29,7 +29,12 @@ import {
 } from "./anim";
 
 /** A line of code, in segments; marked segments are underlined. */
-export type CodeLine = { text: string; mark?: boolean }[];
+export type CodeLine = {
+  text: string;
+  mark?: boolean;
+  color?: string;
+  bold?: boolean;
+}[];
 
 /** What the explainer explains: a drag of one element of a draggable. */
 export type ExplainerSubject<T extends object> = {
@@ -745,7 +750,15 @@ function CodeBox({
               fill="#1a1a1a"
               style={{ whiteSpace: "pre" }}
             >
-              {line.map((seg) => seg.text).join("")}
+              {line.map((seg, si) => (
+                <tspan
+                  key={si}
+                  fill={seg.color}
+                  fontWeight={seg.bold ? 700 : seg.color ? 500 : undefined}
+                >
+                  {seg.text}
+                </tspan>
+              ))}
             </text>
             {marks.map((m, mi) => (
               <rect

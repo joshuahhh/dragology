@@ -54,6 +54,11 @@ export type Slide = {
    * wait until it's shown, like taking focus.
    */
   preload?: boolean;
+  /**
+   * Not presented: kept for reference, to look at from the outlines, but
+   * going forward or back passes over it.
+   */
+  skip?: boolean;
 } & ({ content: ReactNode } | { video: VideoClip });
 
 /**
@@ -149,6 +154,21 @@ function stripNotesComment(line: string): string {
 }
 
 /** Whether a slide's notes say there's something left to do. */
+/**
+ * The slide that going forward (`dir` 1) or back (-1) from slide `from` goes
+ * to, passing over those not presented; null if there are none.
+ */
+export function adjacentPresented(
+  slides: Slide[],
+  from: number,
+  dir: 1 | -1,
+): number | null {
+  for (let i = from + dir; i >= 0 && i < slides.length; i += dir) {
+    if (!slides[i].skip) return i;
+  }
+  return null;
+}
+
 export function slideHasTodo(slide: Slide): boolean {
   return !!slide.notes && /\bto-?do\b/i.test(slide.notes);
 }
