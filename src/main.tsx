@@ -10,6 +10,7 @@ import { NaturalNeighborTestPage } from "./NaturalNeighborTestPage";
 import { RetroPage } from "./retro/RetroPage";
 import { ModelDrivenPage } from "./slideshow/model-driven/ModelDrivenPage";
 import { MontageEditorPage } from "./slideshow/montage/MontageEditorPage";
+import { MontageVariantsPage } from "./slideshow/montage/variants/MontageVariantsPage";
 import { SlideshowAudiencePage } from "./slideshow/SlideshowAudiencePage";
 import { SlideshowOutlinePage } from "./slideshow/SlideshowOutlinePage";
 import { SlideshowPage } from "./slideshow/SlideshowPage";
@@ -59,6 +60,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         {autoRoute("/slideshow-snapshot", SlideshowSnapshotPage)}
         {autoRoute("/slideshow-timing", SlideshowTimingPage)}
         {autoRoute("/montage-editor", MontageEditorPage)}
+        {autoRoute("/montage-variants", MontageVariantsPage)}
         {autoRoute("/model-driven", ModelDrivenPage)}
         {autoRoute("/studio", StudioPage)}
         {autoRoute("/studio/:filter", StudioPage)}

@@ -85,6 +85,18 @@ if (!plan || toShoot.size > 0) {
       );
       for (let i = 0; i < 2; i++) await new Promise(requestAnimationFrame);
     });
+    // Slides that fetch their videos themselves (the closing montage's
+    // variants) may not have them yet: let the fetching finish, and give
+    // every video a moment to show a frame
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.evaluate(async () => {
+      const until = performance.now() + 10_000;
+      while (
+        performance.now() < until &&
+        [...document.querySelectorAll("video")].some((v) => v.readyState < 2)
+      )
+        await new Promise((r) => setTimeout(r, 200));
+    });
     nums = await page.$$eval("[data-slide]", (els) =>
       els.map((el) => (el as HTMLElement).dataset.slide!),
     );
