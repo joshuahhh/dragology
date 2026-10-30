@@ -866,8 +866,8 @@ const SITE_URL = "https://declarative-dragging.github.io/";
  */
 const CLOSE_BACKDROP: "dim" | "fade" = "dim";
 
-/** A QR code, drawn as crisp squares with a quiet zone around it */
-function QrCode({ text, size }: { text: string; size: number }) {
+/** A QR code, drawn as crisp squares filling its width; leave a quiet zone around it */
+function QrCode({ text }: { text: string }) {
   const { n, path } = useMemo(() => {
     const qr = qrcode(0, "M");
     qr.addData(text);
@@ -881,13 +881,11 @@ function QrCode({ text, size }: { text: string; size: number }) {
     }
     return { n, path };
   }, [text]);
-  const quiet = 2;
   return (
     <svg
-      width={size}
-      height={size}
-      viewBox={`${-quiet} ${-quiet} ${n + 2 * quiet} ${n + 2 * quiet}`}
+      viewBox={`0 0 ${n} ${n}`}
       shapeRendering="crispEdges"
+      style={{ display: "block", width: "100%", aspectRatio: "1" }}
     >
       <path d={path} fill="#111827" />
     </svg>
@@ -916,16 +914,22 @@ export function CallToActionSlide() {
       />
       <div className="absolute inset-0 flex items-center justify-center">
         <div
-          className="bg-white flex flex-col items-center"
+          // One column as wide as the address, which the QR code spans exactly
+          className="bg-white"
           style={{
-            boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
-            padding: "36px 40px 32px",
-            gap: 14,
+            display: "grid",
+            gridTemplateColumns: "max-content",
+            boxShadow:
+              "0 36px 90px rgba(0,0,0,0.55), 0 10px 28px rgba(0,0,0,0.3)",
+            border: "1px solid #e5e7eb",
+            borderRadius: 24,
+            padding: "44px 44px 36px",
+            rowGap: 14,
             fontFamily: sourceSans,
             color: "#1f2937",
           }}
         >
-          <QrCode text={SITE_URL} size={280} />
+          <QrCode text={SITE_URL} />
           <div style={{ fontSize: 28, fontWeight: 600, whiteSpace: "nowrap" }}>
             {SITE_URL.replace(/^https:\/\/|\/$/g, "")}
           </div>
