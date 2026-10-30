@@ -1346,7 +1346,7 @@ export const outline: (Slide | Heading)[] = [
   // Study (from the submission video, 3:59–4:26)
   {
     transition: "fade-white",
-    steps: 5,
+    steps: 4,
     notes: `
       // drag in the yellow note
       We ran a study where thirteen participants got hands-on experience using Dragology.
@@ -1358,20 +1358,16 @@ export const outline: (Slide | Heading)[] = [
 
       ---
 
-      // drag in the orange note
-      The study also revealed some learnability challenges related to state-space reasoning.
-
-      ---
-
-      // drag in the blue notes
-      But despite this challenge, participants across diverse domains saw Dragology as a way to bring their abstractions to life.
+      // drag in the orange note, then the blue ones
+      The study also revealed some learnability challenges related to state-space reasoning. But despite this challenge, participants across diverse domains
 
       ---
 
       // scripted: the notes chain up and are dragged off to the right
+      saw Dragology as a way to bring their abstractions to life.
     `,
     content: (
-      <Rails id="study" script={{ 4: studyExit }}>
+      <Rails id="study" script={{ 3: studyExit }}>
         <StudySlide />
       </Rails>
     ),

@@ -443,16 +443,17 @@ export function studyExit(frame: HTMLElement): Sample[] | null {
     (mid(Math.max(r.top, f.top), Math.min(r.bottom, f.bottom)) - f.top) /
     f.height;
 
-  // Hover, press (after chaining has re-rendered), then pull away with an
-  // ease-in, to well past the edge: the diagram pulls 5× harder out there
-  const PRESS = 400;
+  // Hover, press (after chaining has re-rendered), then pull away, under way
+  // at once and speeding up, to well past the edge: the diagram pulls 5×
+  // harder out there
+  const PRESS = 250;
   const PULL = 2400;
   const END_X = 1.6;
   const pull: Sample[] = Array.from({ length: 48 }, (_, i) => {
     const u = (i + 1) / 48;
     return {
       t: PRESS + 100 + u * PULL,
-      x: x + (END_X - x) * u * u,
+      x: x + (END_X - x) * (0.45 * u + 0.55 * u * u),
       y,
       down: true,
     };
