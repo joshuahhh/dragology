@@ -1001,6 +1001,8 @@ export const outline: (Slide | Heading)[] = [
     `,
     content: <LiveCodeSlide />,
   },
+
+  { heading: "Behaviors & operators" },
   {
     transition: "fade-white",
     steps: 3,
@@ -1297,6 +1299,8 @@ export const outline: (Slide | Heading)[] = [
       </Rails>
     ),
   },
+
+  { heading: "User study" },
   // Study (from the submission video, 3:59–4:26)
   {
     transition: "fade-white",
