@@ -1066,7 +1066,7 @@ export const outline: (Slide | Heading)[] = [
           <DemoSlide
             width={560}
             height={212}
-            overlayTitle="Alex’s Scheduler"
+            overlayTitle="Schedule Shuffler"
             demoId="scheduler"
           >
             <schedulerDemo.Component />
