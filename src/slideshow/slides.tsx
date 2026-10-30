@@ -43,6 +43,7 @@ import {
 import { ClosingMontageSlide } from "./montage/MontageCanvas";
 import { Rails } from "./rails";
 import { robotoMono } from "./roboto-mono";
+import { ART_CENTER_X, SideArt, STEP_EASE } from "./side-art";
 import {
   DemoLink,
   DemoSlide,
@@ -170,34 +171,6 @@ const TITLE_GLIDE = "700ms cubic-bezier(0.4, 0, 0.2, 1)";
 /** Long enough for the crossfade in, and the beads settling */
 const RING_GLIDE_DELAY_MS = 350;
 const TITLE_IN_DELAY_MS = 650;
-
-// The Model-Driven and Composable Dragging art (model-driven.png is
-// 1125×1620, composable.png the same shape smaller), as the live drag and
-// operators slides show it on the right on their second steps
-const ART_H = 820;
-const ART_W = (ART_H * 1125) / 1620;
-const ART_CENTER_X = 1459;
-const STEP_EASE = "600ms cubic-bezier(0.4, 0, 0.2, 1)";
-
-function SideArt({ src, shown }: { src: string; shown: boolean }) {
-  return (
-    <img
-      src={slideFileUrl(src)}
-      alt=""
-      draggable={false}
-      style={{
-        position: "absolute",
-        top: (STAGE_H - ART_H) / 2,
-        left: ART_CENTER_X - ART_W / 2,
-        height: ART_H,
-        opacity: shown ? 1 : 0,
-        // Its white background vanishes on the explainer's off-white
-        mixBlendMode: "multiply",
-        transition: `opacity ${STEP_EASE}`,
-      }}
-    />
-  );
-}
 
 /**
  * The ring of beads, live; on the second step it moves left and the drag code
@@ -1030,13 +1003,18 @@ export const outline: (Slide | Heading)[] = [
   },
   {
     transition: "fade-white",
-    steps: 2,
+    steps: 3,
     timing: [17, 5],
     notes: `
-      So what are these "d-dot" things we're returning from dragologyOnDrag? They're what we call **drag behaviors**: functions that run every frame during a drag, that take a changing pointer position and say what should be shown on the screen as a preview, and what state should be transitioned to on drop.
+      So what is this thing we're building and returning from dragologyOnDrag? It's a **drag behavior**: a function that runs every frame during a drag, reading in a changing pointer position and producing a preview to be shown on screen and a state to be transitioned to on drop.
 
       ---
-      And as we apply operators like "whenFar" and "withFloating, we're building new drag behaviors from old ones.
+      As we apply operators like "whenFar" and "withFloating, we create new drag behaviors from old ones.
+      This is composable dragging: incrementally building refined interactions atop the semantic simplicity of model-driven dragging.
+
+      ---
+      In Dragology, we've developed a core set of operators that you can combine to create a surprising variety of interactions.
+      Andrew's going to share some examples of what these building blocks can do when you put them together.
     `,
     content: <BehaviorDiagramSlide />,
   },
