@@ -1351,15 +1351,8 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     timing: [26],
     notes: `
-      // Video, on Space: the tree is possessed, five drags simplify it, the ghost leaves and the tree regrows
-      Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype using declarative dragging.
-
-      Invigorated by the new physicality I quickly moved off the 2D canvas into a 3D world, in which innocent trees are possessed by mathematical ghosts.
-
-      In this encounter, I drag to simplify expressions, which, now exorcised, return to the platonic realm.
-
-      // TODO: josh draft:
-      Not long after we submitted the paper, I went back to my math game, rebuilding my last prototype as a 3d game where innocent trees are possessed by mathematical ghosts. 
+      Not long after we submitted the paper, I went back to my math game, 
+      rebuilding my prototype as a 3d game where innocent trees are possessed by mathematical ghosts. 
       Declarative dragging powers an interaction to simplify expressions, which, now exorcised, return to the platonic realm.
     `,
     // uist-nool-v2.mov (Andrew's Screenshots), cut and sped up by
