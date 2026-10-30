@@ -19,6 +19,10 @@
 // Playback works by dispatching synthetic PointerEvents where the recorded
 // pointer was, which DraggableRenderer handles like real ones, and drawing a
 // cursor there.
+//
+// Tracks are measured against the stage, or against an anchor (say, the
+// demo's svg) if the slide names one, so that they follow the demo when the
+// slide's layout moves it.
 
 import {
   Fragment,
@@ -78,7 +82,7 @@ const POINTER_EVENTS = [
   "click",
 ] as const;
 
-/** A moment of a track. x and y are fractions of the stage. */
+/** A moment of a track. x and y are fractions of the stage (or the anchor). */
 export type Sample = { t: number; x: number; y: number; down: boolean };
 
 /** Tracks by step */
@@ -161,6 +165,7 @@ export function Rails({
   id,
   script,
   loop = false,
+  anchor,
   children,
 }: {
   id: string;
@@ -168,6 +173,11 @@ export function Rails({
   script?: Record<number, (frame: HTMLElement) => Sample[] | null>;
   /** Play scripted steps over and over, making each track afresh */
   loop?: boolean;
+  /**
+   * A selector for the element on the slide whose box tracks are fractions
+   * of, in place of the stage's
+   */
+  anchor?: string;
   children: ReactNode;
 }) {
   const step = useSlideStep();
@@ -182,7 +192,14 @@ export function Rails({
   // Bumped to start the demo over, from its initial state
   const [generation, setGeneration] = useState(0);
 
-  const [runner] = useState(() => new Runner(frameRef, cursorRef));
+  const anchorRef = useRef(anchor);
+  anchorRef.current = anchor;
+  const [runner] = useState(
+    () =>
+      new Runner(frameRef, cursorRef, () =>
+        trackBox(frameRef.current!, anchorRef.current),
+      ),
+  );
   // The step the demo has played up to (its track may still be playing), or
   // null when it's been started over and has played nothing
   const playedRef = useRef<number | null>(null);
@@ -324,7 +341,7 @@ export function Rails({
     const samples: Sample[] = [];
     const record = (e: PointerEvent) => {
       if (!e.isTrusted) return;
-      const rect = frame.getBoundingClientRect();
+      const rect = trackBox(frame, anchor);
       samples.push({
         t: Math.round(performance.now() - start),
         x: round4((e.clientX - rect.left) / rect.width),
@@ -386,6 +403,12 @@ export function Rails({
 
 type Ref<T> = { readonly current: T | null };
 
+/** The box tracks are fractions of: the anchor's, if it's on the stage, or the frame's */
+function trackBox(frame: HTMLElement, anchor: string | undefined): DOMRect {
+  const el = anchor ? frame.parentElement?.querySelector(anchor) : null;
+  return (el ?? frame).getBoundingClientRect();
+}
+
 type Queued = { make: () => Sample[] | null; rush: boolean; loop: boolean };
 
 /** Plays tracks one after another, a frame apart. */
@@ -396,12 +419,14 @@ class Runner {
   private raf = 0;
   /** Frames to wait before starting the next track */
   private wait = 0;
-  /** Where the cursor was left, still showing, by the last track (stage fractions) */
+  /** Where the cursor was left, still showing, by the last track (fractions of the box) */
   private rest: { x: number; y: number } | null = null;
 
   constructor(
     private frame: Ref<HTMLElement>,
     private cursor: Ref<HTMLElement>,
+    /** The box tracks are fractions of, where it is now */
+    private box: () => DOMRect,
   ) {}
 
   /**
@@ -463,13 +488,20 @@ class Runner {
       let track = next.make();
       // On from the last track, the cursor carries on from where it was
       if (track?.length && this.rest && !next.loop) {
-        track = glideFrom(this.rest, track);
+        const box = this.box();
+        track = glideFrom(this.rest, track, box.height / box.width);
       }
       this.rest = null;
       const frame = this.frame.current;
       const cursor = this.cursor.current;
       if (track && track.length > 0 && frame && cursor) {
-        this.player = new TrackPlayer(track, frame, cursor, next.rush);
+        this.player = new TrackPlayer(
+          track,
+          frame,
+          cursor,
+          this.box,
+          next.rush,
+        );
         this.playing = next;
       }
     }
@@ -483,14 +515,19 @@ class Runner {
  * speeding up and then slowing down (minimum jerk), bowed a little, taking
  * longer the further it goes, and settling a moment before pressing.
  */
-function glideFrom(from: { x: number; y: number }, track: Sample[]): Sample[] {
+function glideFrom(
+  from: { x: number; y: number },
+  track: Sample[],
+  /** The box's height over its width */
+  aspect: number,
+): Sample[] {
   const press = track.findIndex((s) => s.down);
   const to = track[Math.max(0, press)];
   const rest = press >= 0 ? track.slice(press) : track;
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  // In stage widths (the stage is 16:9)
-  const dist = Math.hypot(dx, (dy * 9) / 16);
+  // In box widths
+  const dist = Math.hypot(dx, dy * aspect);
   const glide: Sample[] = [];
   let t = 0;
   if (dist > 0.003) {
@@ -503,8 +540,8 @@ function glideFrom(from: { x: number; y: number }, track: Sample[]): Sample[] {
       const bow = 0.06 * Math.sin(Math.PI * e);
       glide.push({
         t: Math.round((u * ms) | 0),
-        x: from.x + dx * e - dy * (9 / 16) * bow,
-        y: from.y + dy * e + dx * (16 / 9) * bow,
+        x: from.x + dx * e - dy * aspect * bow,
+        y: from.y + dy * e + (dx / aspect) * bow,
         down: false,
       });
     }
@@ -532,6 +569,7 @@ class TrackPlayer {
     private track: Sample[],
     private frame: HTMLElement,
     private cursor: HTMLElement,
+    private box: () => DOMRect,
     /** Play fast: catching up, not for watching */
     public rush = false,
   ) {}
@@ -585,9 +623,9 @@ class TrackPlayer {
   }
 
   private dispatch(s: Sample) {
-    const rect = this.frame.getBoundingClientRect();
-    const clientX = rect.left + s.x * rect.width;
-    const clientY = rect.top + s.y * rect.height;
+    const box = this.box();
+    const clientX = box.left + s.x * box.width;
+    const clientY = box.top + s.y * box.height;
     const under = document.elementFromPoint(clientX, clientY);
     const type =
       s.down && !this.down
@@ -621,6 +659,7 @@ class TrackPlayer {
     this.down = s.down;
 
     // The cursor, in the frame's own (unzoomed) pixels
+    const rect = this.frame.getBoundingClientRect();
     const scale = rect.width / this.frame.offsetWidth;
     const grabbable =
       under instanceof Element &&

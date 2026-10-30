@@ -1276,12 +1276,14 @@ export const outline: (Slide | Heading)[] = [
       So, to be clear, this is an interface made with Dragology, for composing Dragology behaviors. If you saw this coming, you may just be a computer scientist.
     `,
     content: (
-      <Rails id="drag-spec-designer">
+      // Its track is in the demo's own coordinates, so it can move
+      <Rails id="drag-spec-designer" anchor="[data-demo-slide] svg">
         <DemoSlide
           width={600}
           height={400}
           overlayTitle="Drag-Spec Designer"
           demoId="drag-spec-designer"
+          offsetY={120}
         >
           <dragSpecDesignerDemo.Component />
         </DemoSlide>

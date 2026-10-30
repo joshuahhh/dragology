@@ -255,6 +255,7 @@ export function DemoSlide({
   height = 400,
   overlayTitle,
   demoId,
+  offsetY = 0,
 }: {
   children: ReactNode;
   width?: number;
@@ -262,6 +263,11 @@ export function DemoSlide({
   overlayTitle?: string;
   /** The demo's id on the demos page, to link to it */
   demoId?: string;
+  /**
+   * Stage px to move the demo down by, for a demo whose canvas is empty at
+   * the bottom (it's cut off there)
+   */
+  offsetY?: number;
 }) {
   const padX = 64;
   const padY = overlayTitle ? 120 : 64;
@@ -288,8 +294,14 @@ export function DemoSlide({
       )}
       {demoId && <DemoLink demoId={demoId} />}
       <div
+        data-demo-slide
         className="flex items-center justify-center"
-        style={{ zoom, marginTop: overlayTitle ? 40 : 0 }}
+        style={{
+          zoom,
+          marginTop: overlayTitle ? 40 : 0,
+          // Zoomed, like the margin
+          ...(offsetY ? { position: "relative", top: offsetY / zoom } : {}),
+        }}
       >
         {children}
       </div>
