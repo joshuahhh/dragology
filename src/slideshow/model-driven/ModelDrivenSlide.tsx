@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useArrivalGlide, useSlideCurrent, useSlideStep } from "../slide";
 import { cubicBezier } from "./anim";
-import { beadsSubject } from "./beads";
+import { beadsReorderSubject, beadsSubject } from "./beads";
 import {
   type Frame,
   lerpFrame,
@@ -69,8 +69,8 @@ const ARRIVE_DELAY_MS = 350;
 const LOOP_LEAD = 0.5;
 
 /**
- * Just the explainer's live drag, at `frame`, going round and round from the
- * moment the slide comes up. Put it in a stage-sized box. With `aside`, it
+ * The explainer's live drag, reordering the beads again and again (with
+ * drags that drop), at `frame`, from the moment the slide comes up. Put it in a stage-sized box. With `aside`, it
  * moves over to where the explainer sets its own live drag aside (animated).
  */
 export function LiveDragLoop({
@@ -83,13 +83,13 @@ export function LiveDragLoop({
   const current = useSlideCurrent();
   const t = usePlayhead(
     current,
-    beadsSubject.track[0][0] - LOOP_LEAD,
+    beadsReorderSubject.track[0][0] - LOOP_LEAD,
     Infinity,
   );
   const frame = lerpFrame(home, script.bigAside, useTween(aside ? 1 : 0));
   return (
     <LiveDrag
-      subject={beadsSubject}
+      subject={beadsReorderSubject}
       frame={frame}
       t={t}
       drive={current}
