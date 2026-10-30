@@ -1096,7 +1096,7 @@ export const outline: (Slide | Heading)[] = [
   // Scheduler (130-155s)
   {
     transition: "fade-white",
-    steps: 4,
+    steps: 3,
     notes: `
       Thanks Josh. This diagram of a scheduling problem uses a discrete drag, like we've seen before, to move meetings between rooms.
 
@@ -1122,14 +1122,13 @@ export const outline: (Slide | Heading)[] = [
               byStep={[
                 {},
                 {},
-                {},
                 { showVaryVisualizer: true, showDebugOverlay: true },
               ]}
             />
           </DemoSlide>
           <CodeCallout from={2}>
             {"d."}
-            <Hl at={[2, 3]}>vary</Hl>
+            <Hl at={[2]}>vary</Hl>
             {'(state, param("meetings", i, "end"))'}
           </CodeCallout>
         </>

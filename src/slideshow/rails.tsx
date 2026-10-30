@@ -10,8 +10,10 @@
 // presenter can't make, like dragging past the edge of the screen.
 //
 // Recording: in dev, with the slide shown, press Shift+R to start recording
-// the current step, fidget with the demo, and press Shift+R again to stop. The track is
-// saved to src/slideshow/rails/<id>.json (or, without the dev server, to
+// the current step and drag with the real mouse; → saves that take and goes
+// on to record the next step, and Shift+R again stops. Nothing plays while
+// recording, and a step left without a drag keeps its track. Tracks are saved
+// to src/slideshow/rails/<id>.json (or, without the dev server, to
 // localStorage and the clipboard).
 //
 // Playback works by dispatching synthetic PointerEvents where the recorded
@@ -197,12 +199,19 @@ export function Rails({
   // before. Arriving at the start, a recorded first step waits for its cue.
   // Scripted steps play in live mode too.
   useEffect(() => {
-    const ranFor = [active, railsMode, step, tracks];
+    const ranFor = [active, railsMode, step, tracks, recording];
     if (ranFor.every((v, i) => v === ranForRef.current[i])) return;
     ranForRef.current = ranFor;
     cue.current = null;
     if (!active) {
       runner.clear();
+      playedRef.current = null;
+      return;
+    }
+    // Recording: nothing plays (what's playing hurries to its end), and on
+    // stopping, the demo is caught up afresh and the new take played
+    if (recording) {
+      runner.rushAll();
       playedRef.current = null;
       return;
     }
@@ -235,7 +244,7 @@ export function Rails({
     }
     // Not on `script`, which is made anew on each render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, railsMode, step, tracks]);
+  }, [active, railsMode, step, tracks, recording]);
 
   // Rails: the real pointer stays out of the demo, so that a presenter's hand
   // on the mouse can't grab, nudge or drop what a track is dragging: no real
@@ -302,12 +311,19 @@ export function Rails({
     return () => window.removeEventListener("keydown", onKey);
   }, [active]);
 
+  // A take is the real pointer from starting (or moving on to a step) until
+  // stopping (or moving on again), so → while recording moves on to
+  // recording the next step. Only a take with a press in it is kept: moving
+  // on past a step without dragging leaves its track as it was.
+  const tracksRef = useRef(tracks);
+  tracksRef.current = tracks;
   useEffect(() => {
     if (!recording) return;
     const frame = frameRef.current!;
     const start = performance.now();
     const samples: Sample[] = [];
     const record = (e: PointerEvent) => {
+      if (!e.isTrusted) return;
       const rect = frame.getBoundingClientRect();
       samples.push({
         t: Math.round(performance.now() - start),
@@ -324,18 +340,20 @@ export function Rails({
       window.removeEventListener("pointermove", record, opts);
       window.removeEventListener("pointerdown", record, opts);
       window.removeEventListener("pointerup", record, opts);
+      if (!samples.some((s) => s.down)) return;
       // Start a beat before the first thing that happened
-      const lead = Math.max(0, (samples[0]?.t ?? 0) - 250);
+      const lead = Math.max(0, samples[0].t - 250);
       const next = {
-        ...tracks,
+        ...tracksRef.current,
         [step]: samples.map((s) => ({ ...s, t: s.t - lead })),
       };
+      tracksRef.current = next;
       setTracks(next);
       saveTracks(id, next);
     };
-    // Only on starting and stopping a recording
+    // On starting and stopping a recording, and moving on a step while one goes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recording]);
+  }, [recording, step]);
 
   return (
     <>
@@ -378,6 +396,8 @@ class Runner {
   private raf = 0;
   /** Frames to wait before starting the next track */
   private wait = 0;
+  /** Where the cursor was left, still showing, by the last track (stage fractions) */
+  private rest: { x: number; y: number } | null = null;
 
   constructor(
     private frame: Ref<HTMLElement>,
@@ -408,6 +428,7 @@ class Runner {
   /** Drops what's playing (letting go, if pressed) and what's queued */
   clear(waitFrames = 0) {
     this.player?.abandon();
+    this.rest = null;
     this.player = null;
     this.queue = [];
     this.wait = waitFrames;
@@ -430,6 +451,7 @@ class Runner {
       this.wait--;
     } else if (this.player) {
       if (!this.player.advance()) {
+        this.rest = this.player.resting();
         if (this.playing?.loop && !this.player.rush) {
           this.queue.unshift(this.playing);
         }
@@ -438,7 +460,12 @@ class Runner {
     } else {
       const next = this.queue.shift();
       if (!next) return;
-      const track = next.make();
+      let track = next.make();
+      // On from the last track, the cursor carries on from where it was
+      if (track?.length && this.rest && !next.loop) {
+        track = glideFrom(this.rest, track);
+      }
+      this.rest = null;
       const frame = this.frame.current;
       const cursor = this.cursor.current;
       if (track && track.length > 0 && frame && cursor) {
@@ -448,6 +475,48 @@ class Runner {
     }
     this.kick();
   };
+}
+
+/**
+ * A track led into by a glide from where the cursor rests, in place of the
+ * track's own way to its first press: straight there as a hand moves,
+ * speeding up and then slowing down (minimum jerk), bowed a little, taking
+ * longer the further it goes, and settling a moment before pressing.
+ */
+function glideFrom(from: { x: number; y: number }, track: Sample[]): Sample[] {
+  const press = track.findIndex((s) => s.down);
+  const to = track[Math.max(0, press)];
+  const rest = press >= 0 ? track.slice(press) : track;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  // In stage widths (the stage is 16:9)
+  const dist = Math.hypot(dx, (dy * 9) / 16);
+  const glide: Sample[] = [];
+  let t = 0;
+  if (dist > 0.003) {
+    const ms = Math.min(1000, 250 + 900 * dist);
+    const n = Math.max(2, Math.round(ms / 16));
+    for (let k = 1; k <= n; k++) {
+      const u = k / n;
+      const e = u * u * u * (10 - 15 * u + 6 * u * u);
+      // Bowed sideways by up to 6% of the distance
+      const bow = 0.06 * Math.sin(Math.PI * e);
+      glide.push({
+        t: Math.round((u * ms) | 0),
+        x: from.x + dx * e - dy * (9 / 16) * bow,
+        y: from.y + dy * e + dx * (16 / 9) * bow,
+        down: false,
+      });
+    }
+    t = ms;
+  }
+  const settle = press >= 0 ? 90 : 0;
+  const t0 = rest[0].t;
+  return [
+    { t: 0, x: from.x, y: from.y, down: false },
+    ...glide,
+    ...rest.map((s) => ({ ...s, t: s.t - t0 + t + settle })),
+  ];
 }
 
 /** Plays a track: dispatches its pointer events, in time, and moves the cursor. */
@@ -502,9 +571,17 @@ class TrackPlayer {
       this.next++;
     }
     if (last) this.dispatch(last);
-    const more = this.next < this.track.length;
-    if (!more) this.cursor.style.display = "none";
-    return more;
+    return this.next < this.track.length;
+  }
+
+  /** Where the track left the cursor, if it left it up (and so showing) */
+  resting(): { x: number; y: number } | null {
+    const end = this.track[this.track.length - 1];
+    if (end.down) {
+      this.cursor.style.display = "none";
+      return null;
+    }
+    return { x: end.x, y: end.y };
   }
 
   private dispatch(s: Sample) {
