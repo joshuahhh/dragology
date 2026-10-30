@@ -10,13 +10,17 @@ const SNAPSHOT_PAGE = "src/slideshow/SlideshowSnapshotPage.tsx";
  * page has been opened, re-runs snapshot-slides.ts on any change to a file the
  * slides are rendered from. One run at a time: changes during a run queue one
  * more run after it.
+ *
+ * Each run is a headless browser rendering every slide, which is heavy on
+ * the CPU. A dev server started with SLIDE_SNAPSHOTS=off doesn't take them,
+ * e.g. one an agent edits slides under.
  */
 export function slideSnapshots(): Plugin {
   return {
     name: "slide-snapshots",
     apply: "serve",
     configureServer(server) {
-      if (process.env.VITEST) return;
+      if (process.env.VITEST || process.env.SLIDE_SNAPSHOTS === "off") return;
       const root = server.config.root;
       const snapshotPage = path.join(root, SNAPSHOT_PAGE);
       let active = false;
