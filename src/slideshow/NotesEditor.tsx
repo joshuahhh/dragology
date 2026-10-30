@@ -359,11 +359,19 @@ export function NotesEditor({
       ),
     });
   }, [view, stagesCurrent, stagesCount, stagesTimes]);
-  // A stage scrolls into view as it becomes current
+  // A stage scrolls into view as it becomes current, and the one after it
+  // too, as much of it as fits below, so what's coming can be read ahead
   useEffect(() => {
     if (!view || stagesCurrent === undefined) return;
-    const { from, to } = stageRange(view.state.doc, stagesCurrent);
-    revealRange(view, from, to);
+    const { doc } = view.state;
+    const { from, to } = stageRange(doc, stagesCurrent);
+    const hasNext =
+      stagesCount !== undefined && stagesCurrent + 1 < stagesCount;
+    revealRange(
+      view,
+      from,
+      hasNext ? stageRange(doc, stagesCurrent + 1).to : to,
+    );
   }, [view, stagesCurrent, stagesCount]);
 
   const extensions = useMemo(

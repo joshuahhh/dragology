@@ -1243,18 +1243,12 @@ export const outline: (Slide | Heading)[] = [
   // Permutation Playground
   {
     transition: "fade-white",
-    steps: 3,
-    timing: [15, 4, 2],
+    timing: [21],
     notes: `
+      // On Space, one continuous tour: the matrix, the tiles, the permutohedron
       We found Dragology to be particularly suited to interfaces that combine parallel representations, where you see the same system from different perspectives.
       This is a playground for experimenting with permutations. Interacting with any of these representations
-
-      ---
-
       fluidly updates the others, even halfway through a drag,
-
-      ---
-
       showing their relationships in real time.
     `,
     content: (
@@ -1273,16 +1267,11 @@ export const outline: (Slide | Heading)[] = [
   // Drag-Spec Designer (230-240s)
   {
     transition: "fade-white",
-    steps: 3,
-    timing: [8, 4, 9],
+    timing: [21],
     notes: `
+      // On Space, one continuous take: the spec is assembled, then its preview dragged
       And as a recursive finale, this block-based programming interface lets a user assemble operators
-
-      ---
-
       to define a Dragology drag spec for a simple three-state interface.
-
-      ---
 
       So, to be clear, this is an interface made with Dragology, for composing Dragology behaviors. If you saw this coming, you may just be a computer scientist.
     `,
