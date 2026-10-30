@@ -1498,18 +1498,14 @@ export const outline: (Slide | Heading)[] = [
 
       Our study suggests people from diverse disciplines want the same thing: from educators, to game designers, to mathematicians, to creative tool builders.
 
-      We hope declarative dragging will let them work in the semantic worlds they live in, helping them turn the rules of their worlds into rich tangible  interactions in ours.
+      We hope declarative dragging will let them work in the semantic worlds they live in, helping them turn the rules of their worlds into rich tangible interactions in ours.
     `,
     content: <ClosingMontageSlide />,
   },
   {
     transition: "fade-white",
     notes: `
-      TODO: awe continues. Inset with: names. QR code. Thanks. No Questions.
-
-      If you give Dragology a try we'd love to here about it, or even just your ideas of what you dream about making.
-
-      Thanks a bunch.
+      Thanks!
     `,
     content: <CallToActionSlide />,
   },
