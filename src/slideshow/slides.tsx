@@ -1245,7 +1245,6 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     timing: [21],
     notes: `
-      // On Space, one continuous tour: the matrix, the tiles, the permutohedron
       We found Dragology to be particularly suited to interfaces that combine parallel representations, where you see the same system from different perspectives.
       This is a playground for experimenting with permutations. Interacting with any of these representations
       fluidly updates the others, even halfway through a drag,
