@@ -20,6 +20,7 @@ import {
 } from "../talk/LiveCodePage";
 import { slideSnippet } from "../talk/snippets";
 import {
+  CallToActionCard,
   CallToActionSlide,
   CodeCallout,
   ElliotSlide,
@@ -40,7 +41,7 @@ import {
   LiveDragLoop,
   ModelDrivenSlide,
 } from "./model-driven/ModelDrivenSlide";
-import { ClosingMontageSlide } from "./montage/MontageCanvas";
+import { ClosingMontage } from "./montage/closing";
 import { Rails } from "./rails";
 import { robotoMono } from "./roboto-mono";
 import { ART_CENTER_X, SideArt, STEP_EASE } from "./side-art";
@@ -1432,8 +1433,8 @@ export const outline: (Slide | Heading)[] = [
   { heading: "Close" },
   {
     transition: "fade-white",
-    steps: 3,
-    timing: [7, 18, 3],
+    steps: 4,
+    timing: [7, 18, 3, 0],
     notes: `
       In our own work, declarative dragging has helped us make the digital graspable without being bogged down in implementation.
 
@@ -1444,10 +1445,22 @@ export const outline: (Slide | Heading)[] = [
       ---
 
       We hope declarative dragging will let them work in the semantic worlds they inhabit, helping them turn the rules of their worlds into rich tangible interactions in ours.
+
+      ---
+
+      Thanks!
     `,
-    content: <ClosingMontageSlide />,
+    // The card comes in over the montage, still moving, on the last step
+    content: (
+      <div className="absolute inset-0">
+        <ClosingMontage />
+        <CallToActionCard fromStep={3} />
+      </div>
+    ),
   },
   {
+    // Presented as the closing montage's last step instead (above)
+    skip: true,
     transition: "fade-white",
     timing: [0],
     notes: `

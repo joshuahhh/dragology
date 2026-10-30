@@ -130,13 +130,6 @@ export function MontageCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetKey, panKey, panMs, width, height, cameraMs]);
 
-  const groupLabel = layout.groups.find((g) => g.id === highlight)?.label;
-  // Keep the last label while the caption fades out
-  const [shownLabel, setShownLabel] = useState(groupLabel);
-  useEffect(() => {
-    if (groupLabel) setShownLabel(groupLabel);
-  }, [groupLabel]);
-
   return (
     <div
       style={{
@@ -182,35 +175,63 @@ export function MontageCanvas({
         })}
       </div>
       {caption && (
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: height * 0.07,
-            display: "flex",
-            justifyContent: "center",
-            pointerEvents: "none",
-            opacity: groupLabel ? 1 : 0,
-            transform: groupLabel ? "translateY(0)" : "translateY(12px)",
-            transition: "opacity 400ms ease, transform 400ms ease",
-          }}
-        >
-          <div
-            style={{
-              fontSize: height * 0.052,
-              padding: `${height * 0.012}px ${height * 0.035}px`,
-              borderRadius: 999,
-              background: "rgba(255,255,255,0.94)",
-              color: "#18181b",
-              boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
-              fontStyle: "italic",
-            }}
-          >
-            {shownLabel}
-          </div>
-        </div>
+        <GroupCaption
+          highlight={highlight}
+          height={height}
+          groups={layout.groups}
+        />
       )}
+    </div>
+  );
+}
+
+/**
+ * The highlighted group's label, in a pill low on the stage; it fades in and
+ * out as groups light up and go dark.
+ */
+export function GroupCaption({
+  highlight,
+  height,
+  groups = montageLayout.groups,
+}: {
+  highlight: string | null;
+  height: number;
+  groups?: MontageLayout["groups"];
+}) {
+  const groupLabel = groups.find((g) => g.id === highlight)?.label;
+  // Keep the last label while the caption fades out
+  const [shown, setShown] = useState(groupLabel);
+  useEffect(() => {
+    if (groupLabel) setShown(groupLabel);
+  }, [groupLabel]);
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: height * 0.07,
+        display: "flex",
+        justifyContent: "center",
+        pointerEvents: "none",
+        opacity: groupLabel ? 1 : 0,
+        transform: groupLabel ? "translateY(0)" : "translateY(12px)",
+        transition: "opacity 400ms ease, transform 400ms ease",
+      }}
+    >
+      <div
+        style={{
+          fontSize: height * 0.052,
+          padding: `${height * 0.012}px ${height * 0.035}px`,
+          borderRadius: 999,
+          background: "rgba(255,255,255,0.94)",
+          color: "#18181b",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+          fontStyle: "italic",
+        }}
+      >
+        {shown}
+      </div>
     </div>
   );
 }
@@ -301,7 +322,7 @@ export function MontagePlayer({
 }
 
 /** The highlighted group at a step, running the step's cycle if it has one */
-function useCycle(s: MontageStep, step: number): string | null {
+export function useCycle(s: MontageStep, step: number): string | null {
   const [cycleState, setCycleState] = useState({ step, i: 0 });
   const cycle = s.cycle;
   useEffect(() => {

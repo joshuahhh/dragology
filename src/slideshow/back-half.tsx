@@ -30,7 +30,7 @@ import { CODE_FONT } from "../talk/fonts";
 import { OP_NAMES } from "../talk/opMarks";
 import { EmbedSlide } from "./EmbedSlide";
 import hazelProgram from "./hazel-demo-program.txt?raw";
-import { MONTAGE_PLAN_TIMED, MontagePlayer } from "./montage/MontageCanvas";
+import { ClosingMontageBackdrop } from "./montage/closing";
 import { type Sample, useCue } from "./rails";
 import {
   DemoSlide,
@@ -975,16 +975,15 @@ function QrCode({ text }: { text: string }) {
 }
 
 /**
- * The close: the montage of what people might build, zoomed all the way out
- * as the slide before ends, behind a card with a QR code for the site and our
- * names.
+ * A card with a QR code for the site and our names, over a veil that dims
+ * whatever's behind it. With `fromStep`, it waits for that step of its
+ * slide (from 0), then the veil darkens and the card fades in.
  */
-export function CallToActionSlide() {
-  const shown = useSlideShown();
-  const last = MONTAGE_PLAN_TIMED.length - 1;
+export function CallToActionCard({ fromStep }: { fromStep?: number }) {
+  const step = useSlideStep();
+  const shown = fromStep === undefined || step >= fromStep;
   return (
-    <div className="absolute inset-0" style={{ overflow: "hidden" }}>
-      <MontagePlayer plan={MONTAGE_PLAN_TIMED} step={last} paused={!shown} />
+    <div className="absolute inset-0" style={{ pointerEvents: "none" }}>
       <div
         className="absolute inset-0"
         style={{
@@ -992,9 +991,20 @@ export function CallToActionSlide() {
             CLOSE_BACKDROP === "dim"
               ? "rgba(15, 23, 42, 0.55)"
               : "rgba(255, 255, 255, 0.65)",
+          opacity: shown ? 1 : 0,
+          transition: "opacity 900ms ease",
         }}
       />
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div
+        className="absolute inset-0 flex items-center justify-center"
+        style={{
+          opacity: shown ? 1 : 0,
+          transform: shown ? "scale(1)" : "scale(0.94)",
+          transition: shown
+            ? "opacity 600ms ease 250ms, transform 600ms ease 250ms"
+            : "opacity 400ms ease, transform 400ms ease",
+        }}
+      >
         <div
           // One column as wide as the address; the QR code a little narrower
           className="bg-white"
@@ -1033,6 +1043,20 @@ export function CallToActionSlide() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The close as a slide of its own: the montage of what people might build,
+ * zoomed all the way out, behind the card. (Presented as the closing
+ * montage's last step instead, so its canvas carries on.)
+ */
+export function CallToActionSlide() {
+  return (
+    <div className="absolute inset-0" style={{ overflow: "hidden" }}>
+      <ClosingMontageBackdrop />
+      <CallToActionCard />
     </div>
   );
 }
