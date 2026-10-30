@@ -469,6 +469,9 @@ export function CodeEditor({
             syntaxHighlighting(syntaxThemes[syntaxThemeRef.current].style),
           ),
           keymap.of([
+            // Swallow save, so a reflexive Cmd-S doesn't open the browser's
+            // save dialog.
+            { key: "Mod-s", run: () => true },
             ...closeBracketsKeymap,
             ...completionKeymap,
             ...historyKeymap,
