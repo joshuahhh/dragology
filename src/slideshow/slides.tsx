@@ -345,11 +345,6 @@ function MontageSlide() {
 // The Declarative Dragging slide: two rows of demo videos scroll endlessly in
 // opposite directions behind an inset that changes with each step.
 
-/** Every video in public/slides/awe, found at build time (only the names). */
-const reelFiles = Object.keys(import.meta.glob("/public/slides/awe/*.mp4"))
-  .map((p) => p.replace("/public/slides/", ""))
-  .sort();
-
 const REEL_ROW_H = 480;
 const REEL_GAP = 32;
 /** How fast the rows scroll, in stage pixels per second */
@@ -357,11 +352,57 @@ const REEL_SPEED = 60;
 /** How long a video's last frame takes to crossfade into its start */
 const REEL_CROSSFADE_S = 0.5;
 
-// Each row gets every other video
-const reelRows: { files: string[]; direction: "left" | "right" }[] = [
-  { files: reelFiles.filter((_, i) => i % 2 === 0), direction: "left" },
-  { files: reelFiles.filter((_, i) => i % 2 === 1), direction: "right" },
+/**
+ * The videos in each row, by name in public/slides/awe (without ".mp4").
+ * Each row starts with its first video at the stage's left edge, the next
+ * ones after it, so put favorites first.
+ */
+const reelRows: { names: string[]; direction: "left" | "right" }[] = [
+  {
+    direction: "left",
+    names: [
+      "nool-tree",
+      "nodes-and-noodles",
+      "gantt",
+      "regex-nfa-sync",
+      "lambda-beta",
+      "braid",
+      "spec-workshop",
+      "two-types-of-tree",
+    ],
+  },
+  {
+    direction: "right",
+    names: [
+      "catalan-explorer",
+      "interval-graph",
+      // "lists-of-lists",
+      "permutation-lab",
+      "proof-by-dragging",
+      "rotations-splay",
+      "pivot-table",
+      "tactile-tesselations",
+      "order-preserving",
+    ],
+  },
 ];
+
+{
+  // Every video in public/slides/awe, found at build time (only the names)
+  const inFolder = Object.keys(
+    import.meta.glob("/public/slides/awe/*.mp4"),
+  ).map((p) => p.replace("/public/slides/awe/", "").replace(/\.mp4$/, ""));
+  const listed = reelRows.flatMap((row) => row.names);
+  const missing = _.difference(listed, inFolder);
+  const unlisted = _.difference(inFolder, listed);
+  if (missing.length > 0)
+    console.warn("Reel videos not in public/slides/awe:", missing);
+  if (unlisted.length > 0)
+    console.warn(
+      "Videos in public/slides/awe not in either reel row:",
+      unlisted,
+    );
+}
 
 /** An inset drawn as a whole, margins and all, in an image in public/slides */
 function ImageInset({ src }: { src: string }) {
@@ -668,10 +709,11 @@ function DeclarativeDraggingIntro() {
         className="absolute inset-0 flex flex-col justify-center"
         style={{ gap: REEL_GAP }}
       >
-        {reelRows.map((row, i) => (
+        {reelRows.map(({ names, direction }, i) => (
           <VideoReelRow
             key={i}
-            {...row}
+            files={names.map((name) => `awe/${name}.mp4`)}
+            direction={direction}
             aspects={aspects}
             onAspect={onAspect}
           />
@@ -931,7 +973,7 @@ export const outline: (Slide | Heading)[] = [
   {
     timing: [8, 10],
     notes: `
-      // These views and positions provide 
+      // These views and positions provide
       ... the engine has enough information to run a high-quality animated drag-and-drop interaction.
 
       ---
@@ -1174,7 +1216,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 2,
     timing: [17, 6],
     notes: `
-      Our next operator, called "between", interpolates between previews as you drag. 
+      Our next operator, called "between", interpolates between previews as you drag.
       In this diagram of an order-preserving map between trees, the black dots can be dragged freely between the gray bubbles.
       As you drag, bubbles grow, anticipating the arrival of the dot.
 
@@ -1342,8 +1384,8 @@ export const outline: (Slide | Heading)[] = [
     transition: "fade-white",
     timing: [22],
     notes: `
-      I also returned to a long-running side project, 
-      a math game where the idea for model-driven dragging originated. 
+      I also returned to a long-running side project,
+      a math game where the idea for model-driven dragging originated.
       In this 3d landscape possessed by mathematical ghosts,
       declarative dragging powers algebraic exorcisms,
       letting me simplify expressions to return them to the platonic realm.
