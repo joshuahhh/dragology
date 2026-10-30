@@ -1067,7 +1067,7 @@ export const outline: (Slide | Heading)[] = [
       So what are these "d-dot" things we're returning from dragologyOnDrag? They're what we call **drag behaviors**: functions that run every frame during a drag, that take a changing pointer position and say what should be shown on the screen as a preview, and what state should be transitioned to on drop.
 
       ---
-      As we apply operators like "withFloating", we're producing new behaviors from old ones.
+      And as we apply operators like "whenFar" and "withFloating, we're building new drag behaviors from old ones.
     `,
     content: <BehaviorDiagramSlide />,
   },
@@ -1081,7 +1081,7 @@ export const outline: (Slide | Heading)[] = [
     steps: 2,
     timing: [10, 16],
     notes: `
-      You can actually make your own Dragology operators, but we've developed a core set that you can plug together in different ways to create a surprising variety of interactions.
+      We've developed a core set of operators that you can plug together in different ways to create a surprising variety of interactions. (And you can make your own if you like.)
       // TODO: new graphics here
 
       ---
